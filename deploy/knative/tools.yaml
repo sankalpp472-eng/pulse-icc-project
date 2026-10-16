@@ -1,0 +1,475 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: book-reservation
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: book_reservation
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: book_reservation
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: calculate
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: calculate
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: calculate
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: cancel-reservation
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: cancel_reservation
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: cancel_reservation
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: get-reservation-details
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: get_reservation_details
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: get_reservation_details
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: get-user-details
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: get_user_details
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: get_user_details
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: list-all-airports
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: list_all_airports
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: list_all_airports
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: search-direct-flight
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: search_direct_flight
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: search_direct_flight
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: search-onestop-flight
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: search_onestop_flight
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: search_onestop_flight
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: send-certificate
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: send_certificate
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: send_certificate
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: think
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: think
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: think
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: transfer-to-human-agents
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: transfer_to_human_agents
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: transfer_to_human_agents
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: update-reservation-baggages
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: update_reservation_baggages
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: update_reservation_baggages
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: update-reservation-flights
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: update_reservation_flights
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: update_reservation_flights
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: update-reservation-passengers
+  namespace: default
+  labels:
+    pulse/role: mcp-tool
+    pulse/tool: update_reservation_passengers
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "6s"
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: update_reservation_passengers
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi

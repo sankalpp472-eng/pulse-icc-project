@@ -10,6 +10,9 @@ functions:
     image: sankalps2003/pulse-cold-tool:0.2
     environment:
       WORK_MS: "100"
+    labels:
+      # Experiment: does CE accept a minimum of 0 replicas? (default min is 1)
+      com.openfaas.scale.min: "0"
     limits:
       memory: 128Mi
     requests:

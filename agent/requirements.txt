@@ -5,3 +5,7 @@ python-dotenv>=1.0.0
 langgraph>=1.0
 langchain-openai>=1.0
 langsmith>=0.4
+
+# MCP tool servers (mcp_server.py) and MCP client backend
+mcp>=2.3
+uvicorn>=0.30

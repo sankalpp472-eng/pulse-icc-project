@@ -3,6 +3,7 @@ Run the agent on tau-bench airline tasks and save traces.
 
   python run_tasks.py --tasks 0 1 2           # simulated customer
   python run_tasks.py --tasks 1 --impl langgraph   # LangGraph version of the agent
+  python run_tasks.py --tasks 1 --tools mcp        # tools called on MCP servers (start mcp_server.py first)
   python run_tasks.py --tasks 5 --user human  # you play the customer
   python run_tasks.py --list                  # show task ids + gold tool sequences
 
@@ -27,6 +28,8 @@ def main():
     p.add_argument("--max-steps", type=int, default=30)
     p.add_argument("--impl", choices=["plain", "langgraph"], default="plain",
                    help="plain loop (agent.py) or LangGraph (langgraph_agent.py)")
+    p.add_argument("--tools", choices=["local", "mcp"], default=None,
+                   help="where tools run: in-process (local) or on MCP servers (mcp). Default: TOOL_BACKEND or local")
     p.add_argument("--list", action="store_true")
     p.add_argument("-q", "--quiet", action="store_true")
     a = p.parse_args()
@@ -37,6 +40,9 @@ def main():
             print(f"{t['id']:>2}  {' -> '.join(x['name'] for x in t['actions']) or '(no actions)'}")
         return
 
+    if a.tools:
+        os.environ["TOOL_BACKEND"] = a.tools
+    tool_backend = os.getenv("TOOL_BACKEND", "local")
     import llm  # imported late so --list works without an API key
     if a.impl == "langgraph":
         from langgraph_agent import run_episode
@@ -45,13 +51,13 @@ def main():
 
     os.makedirs("runs", exist_ok=True)
     out_path = f"runs/{time.strftime('%Y%m%d-%H%M%S')}.jsonl"
-    print(f"impl={a.impl} backend={llm.BACKEND} model={llm.DEFAULT_MODEL} -> {out_path}")
+    print(f"impl={a.impl} tools={tool_backend} backend={llm.BACKEND} model={llm.DEFAULT_MODEL} -> {out_path}")
 
     results = []
     for tid in a.tasks:
         print(f"\n{'=' * 70}\nTask {tid}")
         ep = run_episode(tasks[tid], user=a.user, max_steps=a.max_steps, verbose=not a.quiet)
-        ep.update(impl=a.impl, backend=llm.BACKEND, model=llm.DEFAULT_MODEL)
+        ep.update(impl=a.impl, tools=tool_backend, backend=llm.BACKEND, model=llm.DEFAULT_MODEL)
         with open(out_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(ep) + "\n")
         results.append(ep)
@@ -63,7 +69,7 @@ def main():
         print(f"    gold actions: {' -> '.join(ep['gold_trajectory'])}")
 
     if len(results) > 1:
-        ok = sum(r["reward"] for r in results)
+        ok = sum(r["reward"] or 0 for r in results)
         print(f"\nSolved {ok:.0f}/{len(results)} tasks")
 
 

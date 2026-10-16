@@ -1,0 +1,18 @@
+# One image for all 14 MCP tool servers. Each Knative service runs it with
+# TOOLS=<one tool name>, so every tool is its own serverless function.
+#   docker build -f Dockerfile.mcp -t sankalps2003/pulse-mcp-tools:0.1 .
+FROM python:3.11-slim
+
+RUN pip install --no-cache-dir "mcp>=2.3" "uvicorn>=0.30"
+
+RUN useradd -m app
+WORKDIR /home/app
+COPY tau_airline/ tau_airline/
+COPY mcp_server.py .
+USER app
+
+ENV PYTHONUNBUFFERED=1 \
+    PORT=8080 \
+    TOOLS=all
+EXPOSE 8080
+CMD ["python", "mcp_server.py"]

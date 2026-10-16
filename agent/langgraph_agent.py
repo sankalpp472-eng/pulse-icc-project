@@ -9,7 +9,7 @@ LangGraph version of the ReAct agent (same behaviour as agent.py, built as a gra
 The graph only describes the loop. The LLM still chooses every tool, so the
 next tool stays something the predictor has to guess.
 
-Tools run through the same LocalToolBackend as agent.py (later: MCP/serverless).
+Tools run through the same backend as agent.py: local, or MCP servers (TOOL_BACKEND).
 LangSmith tracing turns on automatically when LANGSMITH_TRACING=true and
 LANGSMITH_API_KEY are set; keep it off for latency experiments.
 """
@@ -28,7 +28,7 @@ from openai import RateLimitError
 import llm
 from agent import emit_hint, score
 from prompts import AGENT_SYSTEM_PROMPT
-from tools import TERMINATE_TOOLS, LocalToolBackend
+from tools import TERMINATE_TOOLS, make_tool_backend
 from user import STOP, HumanUser, SimulatedUser
 
 
@@ -65,7 +65,7 @@ def _invoke_with_rate_limit(model, messages, max_retries: int = 8):
             waited += wait
 
 
-def build_graph(episode_id: str, tools: LocalToolBackend, customer, max_steps: int,
+def build_graph(episode_id: str, tools, customer, max_steps: int,
                 verbose: bool, t_start: float):
     model = _make_model(tools.schemas)
 
@@ -140,7 +140,7 @@ def run_episode(task: dict, user: str = "sim", max_steps: int = 30,
                 verbose: bool = True) -> dict:
     """Same inputs and output format as agent.run_episode."""
     episode_id = f"task{task['id']}-{int(time.time())}"
-    tools = LocalToolBackend()
+    tools = make_tool_backend()
     customer = SimulatedUser(task["instruction"]) if user == "sim" else HumanUser(task["instruction"])
 
     t_start = time.perf_counter()

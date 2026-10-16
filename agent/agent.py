@@ -14,7 +14,7 @@ import time
 
 from llm import chat
 from prompts import AGENT_SYSTEM_PROMPT
-from tools import TERMINATE_TOOLS, LocalToolBackend
+from tools import TERMINATE_TOOLS, LocalToolBackend, make_tool_backend
 from user import STOP, HumanUser, SimulatedUser
 
 
@@ -37,7 +37,7 @@ def _assistant_msg(m) -> dict:
 def run_episode(task: dict, user: str = "sim", max_steps: int = 30,
                 verbose: bool = True) -> dict:
     episode_id = f"task{task['id']}-{int(time.time())}"
-    tools = LocalToolBackend()
+    tools = make_tool_backend()   # local or MCP (TOOL_BACKEND)
     customer = SimulatedUser(task["instruction"]) if user == "sim" else HumanUser(task["instruction"])
 
     t_start = time.perf_counter()
@@ -109,9 +109,12 @@ def run_episode(task: dict, user: str = "sim", max_steps: int = 30,
     }
 
 
-def score(task: dict, tools: LocalToolBackend, agent_texts: list[str]) -> dict:
+def score(task: dict, tools, agent_texts: list[str]) -> dict:
     """tau-bench reward: final DB must equal the DB after replaying the gold
-    actions, and every required output must appear in the agent's replies."""
+    actions, and every required output must appear in the agent's replies.
+    Only possible with the local backend (with MCP the DB lives in the servers)."""
+    if not isinstance(tools, LocalToolBackend):
+        return {"db_ok": None, "outputs_ok": None, "reward": None}
     gold = LocalToolBackend()
     for a in task["actions"]:
         if a["name"] not in TERMINATE_TOOLS:

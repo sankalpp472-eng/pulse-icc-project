@@ -1,14 +1,18 @@
 """
-Tool backend for the agent.
+Tool backends for the agent. Both have the same interface (`schemas`, `call`),
+so the agent loop does not change:
 
-Right now tools run in-process against a local copy of the tau-bench airline
-database. Later, an MCP backend with the same interface (`schemas`, `call`)
-will send each call to its OpenFaaS function instead -- the agent loop does
-not change.
+  LocalToolBackend -- tools run in-process on a fresh copy of the airline database
+  MCPToolBackend   -- each call goes to that tool's own MCP server (mcp_server.py),
+                      locally or as a serverless function on Knative
+
+Pick with TOOL_BACKEND=local|mcp (run_tasks.py --tools does this for you).
 """
 
+import asyncio
 import hashlib
 import json
+import os
 import time
 
 from tau_airline import ALL_TOOLS, load_data
@@ -41,3 +45,65 @@ class LocalToolBackend:
 
     def data_hash(self) -> str:
         return hashlib.sha256(json.dumps(self.data, sort_keys=True).encode()).hexdigest()
+
+
+class MCPToolBackend:
+    """Calls each tool on its own MCP server over Streamable HTTP.
+
+    URL per tool:  MCP_URL_TEMPLATE  (default http://127.0.0.1:9000/{tool}/mcp, i.e. mcp_server.py locally)
+    Host header:   MCP_HOST_TEMPLATE (optional, e.g. "{svc}.default.example.com" for Knative behind Kourier)
+    Placeholders:  {tool} = tool name (get_user_details), {svc} = DNS-safe name (get-user-details)
+
+    Tool schemas are static (the same tau-bench definitions the servers expose).
+    We never call list_tools up front: that would contact -- and wake -- every tool.
+    The database lives in the servers, so there is no local data_hash (no scoring).
+    """
+
+    def __init__(self):
+        # Import the MCP client here, not on the first call: the ~1 s import would
+        # otherwise be added to the first tool call and look like a cold start.
+        from mcp import ClientSession
+        from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
+        self._ClientSession, self._make_http, self._transport = \
+            ClientSession, create_mcp_http_client, streamable_http_client
+
+        self.schemas = [t.get_info() for t in ALL_TOOLS]
+        self._names = {s["function"]["name"] for s in self.schemas}
+        self.url_tpl = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:9000/{tool}/mcp")
+        self.host_tpl = os.getenv("MCP_HOST_TEMPLATE") or None
+
+    @property
+    def names(self) -> list[str]:
+        return [s["function"]["name"] for s in self.schemas]
+
+    def call(self, name: str, args: dict) -> tuple[str, float]:
+        """Run a tool on its MCP server. Returns (observation, latency_seconds)."""
+        if name not in self._names:
+            return f"Error: unknown tool {name}", 0.0
+        t0 = time.perf_counter()
+        try:
+            out = asyncio.run(self._call(name, args))
+        except Exception as e:  # server down, timeout ... -> the agent sees an error, run continues
+            out = f"Error: MCP call to {name} failed: {type(e).__name__}: {e}"
+        return out, time.perf_counter() - t0
+
+    async def _call(self, name: str, args: dict) -> str:
+        names = {"tool": name, "svc": name.replace("_", "-")}
+        headers = {"Host": self.host_tpl.format(**names)} if self.host_tpl else None
+        async with self._make_http(headers=headers) as http, \
+                self._transport(self.url_tpl.format(**names), http_client=http,
+                                terminate_on_close=False) as (read, write), \
+                self._ClientSession(read, write) as session:
+            await session.initialize()
+            res = await session.call_tool(name, args)
+        text = "".join(c.text for c in res.content if getattr(c, "type", None) == "text")
+        return f"Error: {text}" if res.is_error else text
+
+
+def make_tool_backend():
+    kind = os.getenv("TOOL_BACKEND", "local").lower()
+    if kind == "mcp":
+        return MCPToolBackend()
+    if kind == "local":
+        return LocalToolBackend()
+    raise ValueError(f"Unknown TOOL_BACKEND: {kind!r}. Use 'local' or 'mcp'.")

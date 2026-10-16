@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+runs/
+_old_text_react/
+.env
+*.pyc
