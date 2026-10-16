@@ -1,0 +1,33 @@
+# C0 configuration: scale-to-zero, no prewarming.
+# Same test image as the OpenFaaS test (~100 ms of work, reports first_request).
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: cold-tool
+  namespace: default
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"   # allowed to go to zero
+        autoscaling.knative.dev/window: "6s"     # shortest allowed idle window
+    spec:
+      containers:
+        - image: docker.io/sankalps2003/pulse-cold-tool:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: WORK_MS
+              value: "100"
+          # /_/ready passes only once handler.py answers. (/_/health passes as soon as
+          # the watchdog starts -> the first request can hit a not-yet-listening
+          # handler and get a 500.) No periodSeconds -> Knative probes aggressively.
+          readinessProbe:
+            httpGet:
+              path: /_/ready
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi

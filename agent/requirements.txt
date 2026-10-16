@@ -1,0 +1,7 @@
+openai>=1.40.0
+python-dotenv>=1.0.0
+
+# LangGraph agent (langgraph_agent.py)
+langgraph>=1.0
+langchain-openai>=1.0
+langsmith>=0.4

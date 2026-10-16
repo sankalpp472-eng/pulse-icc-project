@@ -1,0 +1,11 @@
+trial,config,cold_ms,cold_status,fresh_pod,time_to_zero_s,pod_created_s,scheduled_s,container_started_s,ready_s,node,warm_median_ms,warm_failures
+1,C0,1752,200,TRUE,41.1,-0.9,0.1,0.1,,pulse-kn-worker,110.3,0
+2,C0,1770.5,200,TRUE,38.9,-0.2,-0.2,0.8,,pulse-kn-worker,119,0
+3,C0,1686.9,200,TRUE,46.7,-0.4,-0.4,0.6,,pulse-kn-worker,112.3,0
+4,C0,2482.7,200,TRUE,40.4,-0.2,-0.2,0.8,,pulse-kn-worker,112.1,0
+5,C0,3248,200,TRUE,48.6,0,0,2,3,pulse-kn-worker,110.7,0
+6,C0,1526.3,200,TRUE,39.1,0,0,1,1,pulse-kn-worker,108.4,0
+7,C0,1726.3,200,TRUE,38.2,-0.5,-0.5,0.5,,pulse-kn-worker,113.2,0
+8,C0,1257.8,200,TRUE,39.4,-0.3,-0.3,0.7,,pulse-kn-worker,116,0
+9,C0,1296.9,200,TRUE,38.3,-0.6,-0.6,0.4,0.4,pulse-kn-worker,107.7,0
+10,C0,1276.7,200,TRUE,40.7,-0.3,-0.3,0.7,,pulse-kn-worker,106.5,0

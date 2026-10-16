@@ -1,0 +1,13 @@
+{
+  "config": "C0",
+  "trials": 10,
+  "cold_calls_ok": 10,
+  "cold_p50_ms": 1686.9,
+  "cold_p95_ms": 3248.0,
+  "cold_min_ms": 1257.8,
+  "cold_max_ms": 3248.0,
+  "warm_p50_ms": 110.7,
+  "warm_p95_ms": 119.0,
+  "cold_penalty_p50_ms": 1576.2,
+  "ready_s_median": 1.0
+}

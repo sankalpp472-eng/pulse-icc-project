@@ -1,0 +1,17 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+
+functions:
+  # OpenFaaS CE only accepts PUBLIC images -> pushed to Docker Hub (sankalps2003).
+  # The image is also side-loaded into kind, so cold starts never include a pull.
+  cold-tool:
+    image: sankalps2003/pulse-cold-tool:0.2
+    environment:
+      WORK_MS: "100"
+    limits:
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi

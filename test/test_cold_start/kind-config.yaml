@@ -1,0 +1,12 @@
+# Local 2-node cluster: functions get scheduled onto the worker, like on a real cluster.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: pulse
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # OpenFaaS gateway NodePort -> http://127.0.0.1:8080 on the laptop
+      - containerPort: 31112
+        hostPort: 8080
+        listenAddress: "127.0.0.1"
+  - role: worker
