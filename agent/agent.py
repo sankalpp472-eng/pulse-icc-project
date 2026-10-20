@@ -12,6 +12,7 @@ prewarmer will have once hints are wired to the predictor.
 import json
 import time
 
+from hints import send_hint
 from llm import chat
 from prompts import AGENT_SYSTEM_PROMPT
 from tools import TERMINATE_TOOLS, LocalToolBackend, make_tool_backend
@@ -19,9 +20,10 @@ from user import STOP, HumanUser, SimulatedUser
 
 
 def emit_hint(episode_id: str, trajectory: list[str]) -> None:
-    """Called right before every LLM step. No-op for now; later this sends
-    {workflow id, current tool, recent trajectory} to the predictor."""
-
+    """Called right before every LLM step. Sends {workflow id, current tool,
+    recent trajectory} to the predictor in the background (see hints.py).
+    Does nothing when PREDICTOR_URL is not set."""
+    send_hint(episode_id, trajectory)
 
 def _assistant_msg(m) -> dict:
     msg = {"role": "assistant", "content": m.content or ""}

@@ -1,0 +1,62 @@
+# PrewarmRequest: the contract between the predictor and the prewarming controller.
+#
+#   predictor  (Python, predictor/crd_writer.py)  WRITES  .spec   -- "please keep this tool warm"
+#   controller (Go, Nithish)                      READS   .spec, WRITES .status
+#
+# One object per tool, named after its Knative service (search-direct-flight).
+# A new prediction for the same tool UPDATES the object (new requestedAt -> TTL restarts);
+# it never creates a second one.
+#
+# Install once per cluster:
+#   kubectl apply -f deploy/prewarm/prewarmrequest-crd.yaml
+#   kubectl get prewarmrequests          # or: kubectl get pwr
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: prewarmrequests.pulse.iisc.ac.in
+spec:
+  group: pulse.iisc.ac.in
+  scope: Namespaced
+  names:
+    kind: PrewarmRequest
+    plural: prewarmrequests
+    singular: prewarmrequest
+    shortNames: [pwr]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - {name: Tool, type: string, jsonPath: .spec.tool}
+        - {name: P, type: number, jsonPath: .spec.probability}
+        - {name: TTL, type: integer, jsonPath: .spec.ttlSeconds}
+        - {name: Requested, type: date, jsonPath: .spec.requestedAt}
+        - {name: Phase, type: string, jsonPath: .status.phase}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [tool, service, probability, threshold, ttlSeconds, desiredReplicas, requestedAt]
+              properties:
+                tool:            {type: string, description: "MCP tool id, e.g. search_direct_flight"}
+                service:         {type: string, description: "Knative service to warm, e.g. search-direct-flight"}
+                probability:     {type: number, minimum: 0, maximum: 1, description: "predicted P(next tool)"}
+                threshold:       {type: number, minimum: 0, maximum: 1, description: "theta used for this decision"}
+                ttlSeconds:      {type: integer, minimum: 1, description: "evict if unused this long after requestedAt"}
+                desiredReplicas: {type: integer, minimum: 0, maximum: 5}
+                requestedAt:     {type: string, format: date-time, description: "time of the latest prediction (RFC 3339)"}
+                episodeId:       {type: string}
+                workflowId:      {type: string}
+            status:
+              type: object
+              description: "Owned by the controller."
+              properties:
+                phase:          {type: string, enum: [Pending, Warming, Ready, Evicted, Failed]}
+                readyAt:        {type: string, format: date-time}
+                expiresAt:      {type: string, format: date-time}
+                lastActivityAt: {type: string, format: date-time}
+                message:        {type: string}

@@ -1,0 +1,84 @@
+{
+  "workflow_id": "W2",
+  "nodes": [
+    "END",
+    "START",
+    "book_reservation",
+    "calculate",
+    "cancel_reservation",
+    "get_reservation_details",
+    "get_user_details",
+    "list_all_airports",
+    "search_direct_flight",
+    "search_onestop_flight",
+    "think",
+    "transfer_to_human_agents"
+  ],
+  "edges": {
+    "START": [
+      "get_user_details",
+      "list_all_airports",
+      "search_direct_flight"
+    ],
+    "book_reservation": [
+      "END",
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_user_details",
+      "search_direct_flight",
+      "think"
+    ],
+    "calculate": [
+      "book_reservation",
+      "calculate",
+      "think"
+    ],
+    "cancel_reservation": [
+      "book_reservation",
+      "search_direct_flight"
+    ],
+    "get_reservation_details": [
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "search_direct_flight",
+      "think",
+      "transfer_to_human_agents"
+    ],
+    "get_user_details": [
+      "book_reservation",
+      "get_reservation_details",
+      "list_all_airports",
+      "search_direct_flight",
+      "search_onestop_flight"
+    ],
+    "list_all_airports": [
+      "get_user_details",
+      "search_direct_flight"
+    ],
+    "search_direct_flight": [
+      "book_reservation",
+      "get_user_details",
+      "search_direct_flight",
+      "search_onestop_flight",
+      "think"
+    ],
+    "search_onestop_flight": [
+      "book_reservation",
+      "calculate",
+      "get_user_details",
+      "search_direct_flight",
+      "search_onestop_flight",
+      "think"
+    ],
+    "think": [
+      "book_reservation",
+      "calculate"
+    ],
+    "transfer_to_human_agents": [
+      "END"
+    ]
+  }
+}

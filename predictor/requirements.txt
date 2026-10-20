@@ -1,0 +1,9 @@
+scikit-learn
+pandas
+openpyxl
+fastapi
+uvicorn
+prometheus-client
+httpx
+pytest
+kubernetes

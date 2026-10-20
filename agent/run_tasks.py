@@ -15,7 +15,7 @@ import json
 import os
 import sys
 import time
-
+import llm
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from tau_airline import load_tasks
@@ -43,7 +43,7 @@ def main():
     if a.tools:
         os.environ["TOOL_BACKEND"] = a.tools
     tool_backend = os.getenv("TOOL_BACKEND", "local")
-    import llm  # imported late so --list works without an API key
+
     if a.impl == "langgraph":
         from langgraph_agent import run_episode
     else:

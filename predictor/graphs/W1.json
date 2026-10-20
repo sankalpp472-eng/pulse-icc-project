@@ -1,0 +1,185 @@
+{
+  "workflow_id": "W1",
+  "nodes": [
+    "END",
+    "START",
+    "book_reservation",
+    "calculate",
+    "cancel_reservation",
+    "get_reservation_details",
+    "get_user_details",
+    "list_all_airports",
+    "search_direct_flight",
+    "search_onestop_flight",
+    "send_certificate",
+    "think",
+    "transfer_to_human_agents",
+    "update_reservation_baggages",
+    "update_reservation_flights",
+    "update_reservation_passengers"
+  ],
+  "edges": {
+    "START": [
+      "END",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "get_user_details",
+      "list_all_airports",
+      "search_direct_flight",
+      "transfer_to_human_agents"
+    ],
+    "book_reservation": [
+      "END",
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "send_certificate",
+      "think",
+      "update_reservation_baggages"
+    ],
+    "calculate": [
+      "END",
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "search_onestop_flight",
+      "think",
+      "update_reservation_baggages",
+      "update_reservation_flights"
+    ],
+    "cancel_reservation": [
+      "END",
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "get_user_details",
+      "list_all_airports",
+      "search_direct_flight",
+      "search_onestop_flight",
+      "send_certificate",
+      "think",
+      "transfer_to_human_agents",
+      "update_reservation_flights"
+    ],
+    "get_reservation_details": [
+      "END",
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "get_user_details",
+      "list_all_airports",
+      "search_direct_flight",
+      "search_onestop_flight",
+      "send_certificate",
+      "think",
+      "transfer_to_human_agents",
+      "update_reservation_flights",
+      "update_reservation_passengers"
+    ],
+    "get_user_details": [
+      "END",
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "get_user_details",
+      "search_direct_flight",
+      "search_onestop_flight",
+      "send_certificate",
+      "think",
+      "transfer_to_human_agents",
+      "update_reservation_baggages",
+      "update_reservation_flights"
+    ],
+    "list_all_airports": [
+      "get_user_details",
+      "search_direct_flight"
+    ],
+    "search_direct_flight": [
+      "END",
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "get_user_details",
+      "list_all_airports",
+      "search_direct_flight",
+      "search_onestop_flight",
+      "think",
+      "transfer_to_human_agents",
+      "update_reservation_flights"
+    ],
+    "search_onestop_flight": [
+      "END",
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "get_user_details",
+      "search_direct_flight",
+      "search_onestop_flight",
+      "think",
+      "transfer_to_human_agents",
+      "update_reservation_baggages",
+      "update_reservation_flights"
+    ],
+    "send_certificate": [
+      "END",
+      "get_reservation_details",
+      "search_direct_flight",
+      "think",
+      "transfer_to_human_agents"
+    ],
+    "think": [
+      "END",
+      "book_reservation",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "get_user_details",
+      "list_all_airports",
+      "search_direct_flight",
+      "search_onestop_flight",
+      "send_certificate",
+      "think",
+      "transfer_to_human_agents",
+      "update_reservation_baggages",
+      "update_reservation_flights"
+    ],
+    "transfer_to_human_agents": [
+      "END"
+    ],
+    "update_reservation_baggages": [
+      "END",
+      "search_direct_flight",
+      "update_reservation_baggages",
+      "update_reservation_flights",
+      "update_reservation_passengers"
+    ],
+    "update_reservation_flights": [
+      "END",
+      "calculate",
+      "cancel_reservation",
+      "get_reservation_details",
+      "get_user_details",
+      "search_direct_flight",
+      "search_onestop_flight",
+      "send_certificate",
+      "think",
+      "transfer_to_human_agents",
+      "update_reservation_baggages",
+      "update_reservation_flights",
+      "update_reservation_passengers"
+    ],
+    "update_reservation_passengers": [
+      "END",
+      "update_reservation_baggages",
+      "update_reservation_flights"
+    ]
+  }
+}
