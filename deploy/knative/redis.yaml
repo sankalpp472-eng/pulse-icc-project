@@ -1,0 +1,48 @@
+# Shared airline database for the 14 MCP tools (reservations + users; flights are read-only).
+# In-memory only (no persistence): deploy.sh seeds it, the runners reset it between episodes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: default
+  labels:
+    pulse/role: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        pulse/role: database
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          args: ["--save", "", "--appendonly", "no"]
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: default
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379

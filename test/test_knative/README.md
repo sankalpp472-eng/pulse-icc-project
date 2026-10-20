@@ -1,5 +1,9 @@
 # C0 baseline on Knative (local kind cluster)
 
+> **Start here instead:** [C0_BASELINE_README.md](C0_BASELINE_README.md) is the full end-to-end guide
+> (install → cluster → MCP tools + shared database → W1 workload baseline). This page covers only the
+> single-function C0 test (its step 4).
+
 **C0 = scale-to-zero, no prewarming.** A tool that sits idle is removed by Knative itself.
 The next call is a real cold start: Knative's *activator* holds the request, starts a pod,
 and forwards the request once the pod is ready.

@@ -28,6 +28,9 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: {tool}
       annotations:
         autoscaling.knative.dev/min-scale: "{min_scale}"
         autoscaling.knative.dev/window: "{window}"
@@ -38,7 +41,7 @@ spec:
             - containerPort: 8080
           env:
             - name: TOOLS
-              value: {tool}
+              value: {tool}{redis_env}
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -55,17 +58,23 @@ spec:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--image", default="docker.io/sankalps2003/pulse-mcp-tools:0.1")
+    ap.add_argument("--image", default="docker.io/sankalps2003/pulse-mcp-tools:0.2")
+    ap.add_argument("--redis-url", default="redis://redis.default.svc.cluster.local:6379/0",
+                    help="shared database for all tools; '' = each pod keeps its own in-memory copy")
     ap.add_argument("--min-scale", type=int, default=0, help="0 = C0 (scale to zero), 1 = C1 (always warm)")
-    ap.add_argument("--window", default="6s", help="idle window before scale-down (min 6s)")
+    ap.add_argument("--window", default="60s", help="idle time before scale-down: 60s = Knative default (min 6s)")
     ap.add_argument("-o", "--out", default=str(Path(__file__).with_name("tools.yaml")))
     a = ap.parse_args()
 
     tools = [t.get_info()["function"]["name"] for t in ALL_TOOLS]
-    docs = [TEMPLATE.format(svc=t.replace("_", "-"), tool=t, image=a.image, min_scale=a.min_scale, window=a.window)
+    redis_env = ("\n            - name: REDIS_URL"
+                 f"\n              value: {a.redis_url}") if a.redis_url else ""
+    docs = [TEMPLATE.format(svc=t.replace("_", "-"), tool=t, image=a.image, min_scale=a.min_scale, window=a.window,
+                            redis_env=redis_env)
             for t in tools]
     Path(a.out).write_text("---\n".join(docs), encoding="utf-8")
-    print(f"wrote {a.out}: {len(tools)} services, min-scale={a.min_scale}, image={a.image}")
+    print(f"wrote {a.out}: {len(tools)} services, min-scale={a.min_scale}, image={a.image}, "
+          f"db={a.redis_url or 'in-memory per pod'}")
 
 
 if __name__ == "__main__":

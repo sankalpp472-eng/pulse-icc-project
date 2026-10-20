@@ -9,17 +9,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: book_reservation
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: book_reservation
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -43,17 +48,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: calculate
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: calculate
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -77,17 +87,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: cancel_reservation
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: cancel_reservation
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -111,17 +126,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: get_reservation_details
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: get_reservation_details
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -145,17 +165,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: get_user_details
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: get_user_details
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -179,17 +204,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: list_all_airports
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: list_all_airports
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -213,17 +243,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: search_direct_flight
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: search_direct_flight
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -247,17 +282,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: search_onestop_flight
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: search_onestop_flight
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -281,17 +321,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: send_certificate
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: send_certificate
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -315,17 +360,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: think
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: think
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -349,17 +399,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: transfer_to_human_agents
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: transfer_to_human_agents
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -383,17 +438,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: update_reservation_baggages
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: update_reservation_baggages
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -417,17 +477,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: update_reservation_flights
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: update_reservation_flights
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -451,17 +516,22 @@ metadata:
 spec:
   template:
     metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool
+        pulse/tool: update_reservation_passengers
       annotations:
         autoscaling.knative.dev/min-scale: "0"
-        autoscaling.knative.dev/window: "6s"
+        autoscaling.knative.dev/window: "60s"
     spec:
       containers:
-        - image: docker.io/sankalps2003/pulse-mcp-tools:0.1
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
           ports:
             - containerPort: 8080
           env:
             - name: TOOLS
               value: update_reservation_passengers
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:

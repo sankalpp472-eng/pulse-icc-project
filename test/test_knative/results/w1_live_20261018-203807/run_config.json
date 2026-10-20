@@ -1,0 +1,277 @@
+{
+  "started": "2026-10-18T20:38:09",
+  "workload": "W1 airline change/cancel (tau-bench)",
+  "task_ids": [
+    1,
+    6,
+    7,
+    14,
+    20,
+    27,
+    31,
+    43,
+    2,
+    22,
+    28,
+    30,
+    3,
+    4,
+    5,
+    8,
+    9,
+    10,
+    19,
+    23,
+    26,
+    33,
+    34
+  ],
+  "models": {
+    "backend": "groq",
+    "agent": "openai/gpt-oss-20b",
+    "user_simulator": "openai/gpt-oss-20b"
+  },
+  "config": "C0",
+  "knative": {
+    "version": "1.23.0",
+    "tool_min_scale": [
+      "0"
+    ],
+    "tool_window": [
+      "60s"
+    ],
+    "autoscaler_overrides": "none (Knative defaults: stable-window 60s, scale-to-zero-grace-period 30s, scale-to-zero-pod-retention-period 0s)",
+    "ingress": "http://127.0.0.1:8081/mcp",
+    "host_template": "{svc}.default.example.com"
+  },
+  "tools": [
+    {
+      "service": "book-reservation",
+      "revision": "book-reservation-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "calculate",
+      "revision": "calculate-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "cancel-reservation",
+      "revision": "cancel-reservation-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "get-reservation-details",
+      "revision": "get-reservation-details-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "get-user-details",
+      "revision": "get-user-details-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "list-all-airports",
+      "revision": "list-all-airports-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "search-direct-flight",
+      "revision": "search-direct-flight-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "search-onestop-flight",
+      "revision": "search-onestop-flight-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "send-certificate",
+      "revision": "send-certificate-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "think",
+      "revision": "think-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "transfer-to-human-agents",
+      "revision": "transfer-to-human-agents-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "update-reservation-baggages",
+      "revision": "update-reservation-baggages-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "update-reservation-flights",
+      "revision": "update-reservation-flights-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "update-reservation-passengers",
+      "revision": "update-reservation-passengers-00004",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    }
+  ],
+  "tool_images": [
+    "docker.io/sankalps2003/pulse-mcp-tools:0.2"
+  ],
+  "database": "redis (shared, reset per episode)",
+  "cluster": {
+    "context": "kind-pulse-kn",
+    "nodes": 2,
+    "kubernetes": "v1.37.0"
+  },
+  "measurement": {
+    "cold_if_latency_over_s": 1.0,
+    "pod_poll_interval_s": 1.0,
+    "db_reset_per_episode": true
+  },
+  "code": {
+    "git_commit": "bb689a3",
+    "uncommitted_changes": true
+  }
+}

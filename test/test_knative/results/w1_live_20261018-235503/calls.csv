@@ -1,0 +1,5 @@
+episode,task_id,task_set,call_idx,tool,t_start,latency_ms,cold,cold_by_pod,cold_by_latency,pod,idle_gap_s,think_s,rate_wait_s,transport_ok,tool_error
+w1-task1-1792347905,1,safe,0,get_user_details,1792347911.429,8060.6,True,True,True,get-user-details-00004-deployment-675b8555fb-b6n2q,,,,True,False
+w1-task1-1792347905,1,safe,1,get_reservation_details,1792347932.401,3561.8,True,True,True,get-reservation-details-00004-deployment-7949557ff9-jmvlr,,,,True,False
+w1-task1-1792347905,1,safe,2,get_reservation_details,1792348025.582,2339.3,True,True,True,get-reservation-details-00004-deployment-7949557ff9-ckrd8,89.6,,,True,False
+w1-task1-1792347905,1,safe,3,search_direct_flight,1792348051.245,2190.9,True,True,True,search-direct-flight-00004-deployment-749b966bfb-c2tmh,,,,True,False

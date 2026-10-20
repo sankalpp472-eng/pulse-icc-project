@@ -1,9 +1,9 @@
 # One image for all 14 MCP tool servers. Each Knative service runs it with
 # TOOLS=<one tool name>, so every tool is its own serverless function.
-#   docker build -f Dockerfile.mcp -t sankalps2003/pulse-mcp-tools:0.1 .
+#   docker build -f Dockerfile.mcp -t sankalps2003/pulse-mcp-tools:0.2 .
 FROM python:3.11-slim
 
-RUN pip install --no-cache-dir "mcp>=2.3" "uvicorn>=0.30"
+RUN pip install --no-cache-dir "mcp>=2.3" "uvicorn>=0.30" "redis>=5"
 
 RUN useradd -m app
 WORKDIR /home/app

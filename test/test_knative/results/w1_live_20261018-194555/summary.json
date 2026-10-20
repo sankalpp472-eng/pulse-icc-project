@@ -1,0 +1,45 @@
+{
+  "stop_reason": "Groq quota: rate limit needs 313s wait: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01jwgam24jegj813etas3jx7gy` service tier `on_demand` on tokens per day (TPD): Limit 200",
+  "episodes": 6,
+  "tool_calls": 42,
+  "transport_failures": 0,
+  "cold_calls": 35,
+  "cold_share": 0.833,
+  "cold_p50_ms": 4042.1,
+  "warm_p50_ms": 40.5,
+  "all_calls_p50_ms": 3858.9,
+  "signals_agree": 7,
+  "per_tool": {
+    "get_user_details": {
+      "calls": 5,
+      "cold": 5
+    },
+    "get_reservation_details": {
+      "calls": 8,
+      "cold": 6
+    },
+    "cancel_reservation": {
+      "calls": 1,
+      "cold": 1
+    },
+    "search_direct_flight": {
+      "calls": 18,
+      "cold": 13
+    },
+    "search_onestop_flight": {
+      "calls": 6,
+      "cold": 6
+    },
+    "update_reservation_flights": {
+      "calls": 3,
+      "cold": 3
+    },
+    "update_reservation_baggages": {
+      "calls": 1,
+      "cold": 1
+    }
+  },
+  "agent_model": "openai/gpt-oss-120b",
+  "user_model": "openai/gpt-oss-20b",
+  "database": "redis (shared, reset per episode)"
+}

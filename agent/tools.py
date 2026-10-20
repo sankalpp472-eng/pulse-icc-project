@@ -20,6 +20,10 @@ from tau_airline import ALL_TOOLS, load_data
 # Tools that end the conversation when called (same as tau-bench)
 TERMINATE_TOOLS = {"transfer_to_human_agents"}
 
+# Every MCP call, appended by MCPToolBackend: experiment runners read this to time calls
+# (absolute start time, latency) even when an episode stops midway. Clear it between episodes.
+CALL_LOG: list[dict] = []
+
 
 class LocalToolBackend:
     def __init__(self):
@@ -80,12 +84,16 @@ class MCPToolBackend:
         """Run a tool on its MCP server. Returns (observation, latency_seconds)."""
         if name not in self._names:
             return f"Error: unknown tool {name}", 0.0
-        t0 = time.perf_counter()
+        t_wall, t0 = time.time(), time.perf_counter()
+        transport_ok = True
         try:
             out = asyncio.run(self._call(name, args))
         except Exception as e:  # server down, timeout ... -> the agent sees an error, run continues
-            out = f"Error: MCP call to {name} failed: {type(e).__name__}: {e}"
-        return out, time.perf_counter() - t0
+            out, transport_ok = f"Error: MCP call to {name} failed: {type(e).__name__}: {e}", False
+        latency = time.perf_counter() - t0
+        CALL_LOG.append({"tool": name, "t_start": t_wall, "latency_s": latency, "transport_ok": transport_ok,
+                         "tool_error": out.startswith("Error"), "result_head": out[:80]})
+        return out, latency
 
     async def _call(self, name: str, args: dict) -> str:
         names = {"tool": name, "svc": name.replace("_", "-")}
