@@ -1,0 +1,14 @@
+episode,task_id,task_set,call_idx,tool,t_start,latency_ms,cold,cold_by_pod,cold_by_latency,pod,idle_gap_s,think_s,rate_wait_s,transport_ok,tool_error
+w1-task1-1792565502,1,safe,0,get_user_details,1792565507.815,10374.5,True,True,True,get-user-details-00004-deployment-675b8555fb-9qdgt,,,,True,False
+w1-task1-1792565502,1,safe,1,get_reservation_details,1792565524.383,3909.1,True,True,True,get-reservation-details-00004-deployment-7949557ff9-sjm6z,,,,True,False
+w1-task1-1792565502,1,safe,2,search_direct_flight,1792565587.536,5444.0,True,True,True,search-direct-flight-00004-deployment-749b966bfb-6v2j6,,,,True,False
+w1-task1-1792565502,1,safe,3,search_direct_flight,1792565618.998,383.3,False,False,False,,26.0,,,True,False
+w1-task1-1792565502,1,safe,4,cancel_reservation,1792565699.301,8940.4,True,True,True,cancel-reservation-00004-deployment-7978dd958c-vmgvd,,,,True,False
+w1-task1-1792565502,1,safe,5,book_reservation,1792565740.264,5123.6,True,True,True,book-reservation-00004-deployment-755695cb79-bjk5p,,,,True,True
+w1-task1-1792565502,1,safe,6,search_direct_flight,1792565783.211,5575.6,True,True,True,search-direct-flight-00004-deployment-749b966bfb-sntln,163.8,,,True,False
+w1-task1-1792565502,1,safe,7,book_reservation,1792565883.893,3736.9,True,True,True,book-reservation-00004-deployment-755695cb79-5s8hm,138.5,,,True,True
+w1-task1-1792565502,1,safe,8,search_direct_flight,1792565930.877,4508.0,True,True,True,search-direct-flight-00004-deployment-749b966bfb-57hsb,142.1,,,True,False
+w1-task6-1792565993,6,safe,0,get_user_details,1792566058.071,3966.3,True,True,True,get-user-details-00004-deployment-675b8555fb-h656z,539.9,,,True,False
+w1-task6-1792565993,6,safe,1,get_reservation_details,1792566111.768,4505.2,True,True,True,get-reservation-details-00004-deployment-7949557ff9-kcxw4,583.5,,,True,False
+w1-task6-1792565993,6,safe,2,search_direct_flight,1792566139.269,8830.6,True,True,True,search-direct-flight-00004-deployment-749b966bfb-lmb4n,203.9,,,True,False
+w1-task6-1792565993,6,safe,3,search_onestop_flight,1792566166.062,4893.8,True,True,True,search-onestop-flight-00004-deployment-84b444d8f-4lkwp,,,,True,False

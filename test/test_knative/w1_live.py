@@ -43,12 +43,16 @@ SETS = {
     "multi": [3, 4, 5, 8, 9, 10, 19, 23, 26, 33, 34],      # writes with different tools (need the shared DB)
 }
 SETS["all"] = SETS["safe"] + SETS["multi"]
+# The 5 tasks with the most branching that together cover 13 of the 14 tools (chosen from the
+# 276 recorded tau-bench runs: 10-12 different tool sequences per task, median 6-10 calls).
+SETS["best5"] = [4, 9, 10, 23, 27]
 
 
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--set", choices=list(SETS), default="all")
     ap.add_argument("--tasks", type=int, nargs="+", help="explicit task ids (overrides --set)")
+    ap.add_argument("--repeats", type=int, default=1, help="run every task this many times")
     ap.add_argument("--backend", choices=["groq", "openrouter"], default=None,
                     help="LLM provider (default: LLM_BACKEND in agent/.env)")
     ap.add_argument("--agent-model", default="openai/gpt-oss-20b", help="model for the agent (same ids on Groq and OpenRouter)")
@@ -91,16 +95,24 @@ def think_times(ep: dict | None) -> list[tuple[float, float]]:
 def main():
     a = ARGS
     tasks = {t["id"]: t for t in load_tasks()}
-    ids = a.tasks or SETS[a.set]
+    ids = (a.tasks or SETS[a.set]) * a.repeats
     set_of = {i: name for name in ("safe", "multi") for i in SETS[name]}
+    n_trimmed = 0
     out_dir = HERE / "results" / f"w1_live_{time.strftime('%Y%m%d-%H%M%S')}"
     out_dir.mkdir(parents=True)
-    print(f"W1 live C0 | tasks {ids} | agent {llm.DEFAULT_MODEL}, user sim {os.environ['USER_MODEL']} | -> {out_dir}")
+    print(f"W1 live C0 | tasks {ids} | agent {llm.DEFAULT_MODEL}, user sim {os.environ['USER_MODEL']} "
+          f"| {llm.BACKEND}, {len(llm.KEYS)} key(s) | -> {out_dir}")
 
     db = "redis (shared, reset per episode)" if shared_db() else "in-memory per pod (no shared DB!)"
     cfg = run_config(ids, db, "W1 airline change/cancel (tau-bench), live agent",
-                     {"backend": llm.BACKEND, "agent": llm.DEFAULT_MODEL, "user_simulator": os.environ["USER_MODEL"]},
-                     {"db_reset_per_episode": db.startswith("redis")})
+                     {"backend": llm.BACKEND, "agent": llm.DEFAULT_MODEL, "user_simulator": os.environ["USER_MODEL"],
+                      "api_keys_available": len(llm.KEYS)},
+                     {"db_reset_per_episode": db.startswith("redis"), "repeats": a.repeats,
+                      "context_budget_tokens": llm.CONTEXT_BUDGET,
+                      "context_trimming": "sent copy only, oldest first, newest 4 messages kept: old tool results "
+                                          "compacted, then replaced by a neutral note, then old long messages cut "
+                                          "to 300 chars; saved traces are complete",
+                      "fixed_prompt_tokens_estimate": llm.FIXED_TOKENS})
     (out_dir / "run_config.json").write_text(json.dumps(cfg, indent=2))
     print(f"config: {cfg['config']} | window {cfg['knative']['tool_window']} | images {cfg['tool_images']} | db: {db}")
     watcher = PodWatcher()
@@ -129,6 +141,7 @@ def main():
             status = f"error: {type(e).__name__}: {e}"
 
         tt = think_times(ep)
+        n_trimmed += sum(s.get("context_trimmed", 0) for s in (ep or {}).get("steps", []))
         for i, c in enumerate(CALL_LOG):
             t_end = c["t_start"] + c["latency_s"]
             pod = watcher.new_pod_during(c["tool"], c["t_start"], t_end)
@@ -180,6 +193,8 @@ def main():
         "signals_agree": sum(r["cold_by_pod"] == r["cold_by_latency"] for r in ok),
         "per_tool": per_tool, "agent_model": llm.DEFAULT_MODEL, "user_model": os.environ["USER_MODEL"], "database": db,
         "config": cfg["config"], "tool_window": cfg["knative"]["tool_window"], "tool_images": cfg["tool_images"],
+        "api_keys_available": len(llm.KEYS), "key_switches": llm.KEY_LOG,
+        "tool_results_trimmed_from_context": n_trimmed,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     print("\n" + json.dumps({k: v for k, v in summary.items() if k != "per_tool"}, indent=2))

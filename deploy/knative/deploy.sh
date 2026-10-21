@@ -10,6 +10,7 @@
 # IMAGE=<repo:tag> overrides the image (e.g. your own Docker Hub account).
 # NO_REDIS=1 skips the shared database (each tool pod keeps its own in-memory copy).
 # WINDOW=<time> idle time before a tool scales down (default 60s = Knative default; e.g. WINDOW=6s)
+# KUBE_CONTEXT=<context> cluster to deploy to (default kind-pulse-kn, the local cluster; see EKS_deployment/)
 set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$HOME/.arkade/bin:$PATH"
@@ -25,7 +26,7 @@ for c in python python3 py; do
 done
 [ -n "$PY" ] || { echo "No working Python found"; exit 1; }
 
-kubectl config use-context kind-pulse-kn
+kubectl config use-context "${KUBE_CONTEXT:-kind-pulse-kn}"   # KUBE_CONTEXT=<eks context> for EKS
 
 # 1. Image (public on Docker Hub; .dockerignore keeps .env, .venv and runs/ out)
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
@@ -38,6 +39,8 @@ REDIS_URL=redis://redis.default.svc.cluster.local:6379/0
 if [ "${NO_REDIS:-0}" != "1" ]; then
   kubectl apply -f redis.yaml
   kubectl rollout status deploy/redis --timeout=180s
+  # After a Docker restart cluster DNS comes up last; the seed pod must resolve "redis"
+  kubectl -n kube-system rollout status deploy/coredns --timeout=180s
   kubectl delete pod redis-seed --ignore-not-found
   kubectl run redis-seed --image="$IMAGE" --restart=Never --env="REDIS_URL=$REDIS_URL" \
     --command -- python mcp_server.py --seed

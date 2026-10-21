@@ -1,0 +1,118 @@
+{
+  "episodes": 46,
+  "tool_calls": 386,
+  "transport_failures": 0,
+  "cold_calls": 4,
+  "cold_share": 0.01,
+  "latency_ms": {
+    "all": {
+      "p50": 56.6,
+      "p95": 232.2,
+      "p99": 879.3,
+      "mean": 100.2
+    },
+    "cold": {
+      "p50": 1542.1,
+      "p95": 1882.1,
+      "max": 1882.1
+    },
+    "warm": {
+      "p50": 56.3,
+      "p95": 221.8,
+      "max": 879.3
+    }
+  },
+  "cold_start_time_added_s": 5.6,
+  "signals_agree": 382,
+  "pods_started": 14,
+  "pod_seconds_seen": 23125.0,
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 137,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "search_direct_flight": {
+      "calls": 70,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "update_reservation_flights": {
+      "calls": 47,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "get_user_details": {
+      "calls": 39,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "cancel_reservation": {
+      "calls": 23,
+      "cold": 1,
+      "cold_share": 0.04
+    },
+    "search_onestop_flight": {
+      "calls": 19,
+      "cold": 1,
+      "cold_share": 0.05
+    },
+    "think": {
+      "calls": 15,
+      "cold": 1,
+      "cold_share": 0.07
+    },
+    "update_reservation_baggages": {
+      "calls": 11,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "transfer_to_human_agents": {
+      "calls": 9,
+      "cold": 1,
+      "cold_share": 0.11
+    },
+    "calculate": {
+      "calls": 7,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "update_reservation_passengers": {
+      "calls": 4,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "list_all_airports": {
+      "calls": 2,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "book_reservation": {
+      "calls": 2,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "send_certificate": {
+      "calls": 1,
+      "cold": 0,
+      "cold_share": 0.0
+    }
+  },
+  "config": "C1",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": 46,
+    "traces": null,
+    "tasks": null,
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252
+  }
+}

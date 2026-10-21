@@ -13,7 +13,9 @@ import json
 import time
 
 from hints import send_hint
-from llm import chat
+from openai import APIStatusError
+
+from llm import CONTEXT_BUDGET, chat, est_tokens, fit_context
 from prompts import AGENT_SYSTEM_PROMPT
 from tools import TERMINATE_TOOLS, LocalToolBackend, make_tool_backend
 from user import STOP, HumanUser, SimulatedUser
@@ -24,6 +26,31 @@ def emit_hint(episode_id: str, trajectory: list[str]) -> None:
     recent trajectory} to the predictor in the background (see hints.py).
     Does nothing when PREDICTOR_URL is not set."""
     send_hint(episode_id, trajectory)
+
+def _chat_within_limit(messages: list[dict], schemas: list[dict], scale: float = 1.0):
+    """chat() on a copy trimmed to the context budget, with two provider glitches handled:
+      HTTP 413 (request still too large: our estimate was low) -> trim harder and retry
+      HTTP 400 tool_use_failed (gpt-oss on Groq sometimes emits a malformed tool call) -> retry"""
+    budget, glitches = CONTEXT_BUDGET, 0
+    for _ in range(6):
+        to_send, trimmed = fit_context(messages, schemas, budget=budget, scale=scale)
+        try:
+            r = chat(to_send, tools=schemas)
+            if r.prompt_tokens:   # calibrate the next estimate against the provider's real count
+                _chat_within_limit.scale = r.prompt_tokens / max(1, est_tokens(to_send, schemas))
+            return r, trimmed
+        except APIStatusError as e:
+            if e.status_code == 400 and "tool_use_failed" in str(e) and glitches < 3:
+                glitches += 1
+                print(f"  [llm] malformed tool call from the model; retrying ({glitches}/3)")
+                continue
+            if e.status_code != 413 or not budget:
+                raise
+            budget = int(budget * 0.8)
+            print(f"  [llm] request too large; retrying with a smaller context budget ({budget} tokens)")
+    to_send, trimmed = fit_context(messages, schemas, budget=budget, keep_last=1, scale=scale)
+    return chat(to_send, tools=schemas), trimmed
+
 
 def _assistant_msg(m) -> dict:
     msg = {"role": "assistant", "content": m.content or ""}
@@ -53,13 +80,17 @@ def run_episode(task: dict, user: str = "sim", max_steps: int = 30,
     if verbose:
         print(f"\n[user]  {first}")
 
+    scale = 1.0   # real/estimated prompt tokens, updated after every LLM call
+    _chat_within_limit.scale = 1.0
     for step in range(1, max_steps + 1):
         emit_hint(episode_id, trajectory)
-        r = chat(messages, tools=tools.schemas)
+        r, trimmed = _chat_within_limit(messages, tools.schemas, scale)
+        scale = getattr(_chat_within_limit, "scale", scale)
         m = r.message
         messages.append(_assistant_msg(m))
         rec = {"step": step, "t": round(time.perf_counter() - t_start, 3),
-               "think_s": round(r.latency_s, 3), "rate_wait_s": round(r.rate_wait_s, 1)}
+               "think_s": round(r.latency_s, 3), "rate_wait_s": round(r.rate_wait_s, 1),
+               "context_trimmed": trimmed, "prompt_tokens": r.prompt_tokens}
 
         if m.tool_calls:
             # Native tool calling. Models occasionally emit >1 call; run them in order.
@@ -84,11 +115,13 @@ def run_episode(task: dict, user: str = "sim", max_steps: int = 30,
         else:
             text = m.content or ""
             agent_texts.append(text)
-            steps.append({**rec, "kind": "respond"})
             if verbose:
                 print(f"  [{step:>2}] think {r.latency_s:5.2f}s -> respond")
                 print(f"[agent] {text}")
             reply = customer.reply(text)
+            # How long the customer took to answer (LLM time, rate-limit waits excluded):
+            # recorded so a replay of this run can reproduce the real gap between tool calls.
+            steps.append({**rec, "kind": "respond", "user_s": round(getattr(customer, "last_latency_s", 0.0), 3)})
             if verbose:
                 print(f"[user]  {reply}")
             # End only on a standalone STOP. Small sim models often write

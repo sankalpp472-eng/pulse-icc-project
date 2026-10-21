@@ -164,7 +164,28 @@ agent/.venv/Scripts/python test/test_knative/w1_live.py
 | *(none)* | All 23 tasks: the 12 one-write tasks first, then the 11 multi-tool-write tasks |
 | `--set safe` / `--set multi` | Only one group |
 | `--tasks 1 6 7` | Specific task ids |
-| `--agent-model M` / `--user-model M` | Groq models (default `openai/gpt-oss-20b` for both). Groq's free tier allows about 200k tokens per model per day, roughly 5 tasks with `gpt-oss-120b` |
+| `--set best5` | The 5 most-branching tasks (4, 9, 10, 23, 27), together covering 13 of the 14 tools. **Recommended** |
+| `--repeats N` | Run every task N times |
+| `--backend groq` | LLM provider (default: `LLM_BACKEND` in `agent/.env`) |
+| `--agent-model M` / `--user-model M` | Groq models (default `openai/gpt-oss-20b` for both) |
+
+**Groq free-tier limits** (per organization, per model): 8K tokens per minute, 200K per day.
+- **Several keys:** put `GROQ_API_KEY_1`, `GROQ_API_KEY_2`, … in `agent/.env`. When one hits its daily
+  limit for a model, the next takes over; `summary.json` → `key_switches` logs each switch and the key's
+  organization. Keys from the **same** Groq organization share one quota, so switching doesn't help there.
+- **8K per request:** any single request above 8K tokens is rejected (HTTP 413). The agent therefore
+  trims its context before each request: the oldest tool results are replaced by a short note once the
+  estimate passes 6,500 tokens (`LLM_CONTEXT_BUDGET` in `.env`), keeping the 2 latest in full. Saved traces
+  are always complete.
+
+Recommended runs (two agent models, same simulated customer):
+
+```bash
+agent/.venv/Scripts/python test/test_knative/w1_live.py --backend groq --set best5 --repeats 2 --agent-model openai/gpt-oss-120b --user-model openai/gpt-oss-20b
+```
+```bash
+agent/.venv/Scripts/python test/test_knative/w1_live.py --backend groq --set best5 --repeats 2 --agent-model openai/gpt-oss-20b --user-model openai/gpt-oss-20b
+```
 | `-v` | Also print the conversation |
 
 **How it runs:** waits until all 14 tools are at zero → for each task, resets the shared database
@@ -215,6 +236,15 @@ agent/.venv/Scripts/python test/test_knative/w1_replay.py
 | `--think-median S` | 1.5 | Median LLM "think" time before each call (seconds) |
 | `--user-turn-median S` | 8.0 | Median time per customer turn, added when the recorded agent talked to the customer between two calls |
 | `--seed N` | 252 | Fixes trace choice, start times and gaps: **same seed = same request sequence** for C0, C1 and C3 |
+| `--traces DIR ...` | τ-bench runs | Replay **our agent's live runs** instead: pass one or more `results/w1_live_<time>` folders. Each recorded episode is replayed once, with its **real** gaps (agent think time + the customer's reply time) |
+| `--tasks 4 9 10 23 27` | all | Only these tasks |
+| `--gap-scale X` | 1.0 | Multiply the recorded gaps of our traces (e.g. 2 = a slower LLM) |
+
+Example, replaying the two best-5 live runs (120b and 20b agents):
+
+```bash
+agent/.venv/Scripts/python test/test_knative/w1_replay.py --traces test/test_knative/results/w1_live_<120b run> test/test_knative/results/w1_live_<20b run>
+```
 
 It waits until all tools are at zero, resets the database once, then runs the episodes
 concurrently. Calls are labelled cold/warm after the run (latency > 1 s, or a new pod for that

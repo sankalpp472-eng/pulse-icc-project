@@ -16,6 +16,8 @@ during the call) and gets its idle gap (time since that tool's previous call end
 Run with the agent's Python, from the project root:
   agent/.venv/Scripts/python test/test_knative/w1_replay.py                       # 46 episodes, 2/min
   agent/.venv/Scripts/python test/test_knative/w1_replay.py --episodes 92 --rate 4
+  # replay OUR agent's live runs (w1_live result folders), with their real recorded gaps:
+  agent/.venv/Scripts/python test/test_knative/w1_replay.py --traces test/test_knative/results/w1_live_<time> ...
 
 Output: test/test_knative/results/w1_replay_<time>/
   run_config.json  replay parameters + Knative/cluster settings (read from the cluster), code version
@@ -45,7 +47,7 @@ os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:8081/mcp")
 os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 
 from c0_common import (COLD_LATENCY_S, PodWatcher, reset_db, run_config,  # noqa: E402
-                       shared_db, wait_all_zero)
+                       shared_db, wait_all_ready, wait_all_zero)
 from tools import MCPToolBackend  # noqa: E402
 
 TRACES = HERE / "data" / "w1_tau_traces.jsonl"
@@ -58,14 +60,78 @@ def lognormal(rng: random.Random, median: float, sigma: float, lo: float, hi: fl
     return min(hi, max(lo, rng.lognormvariate(math.log(median), sigma)))
 
 
+def live_traces(run_dir: Path) -> list[dict]:
+    """Our agent's episodes from a w1_live result folder, in the replay trace format.
+    Gap before a call = agent think time + for every customer turn since the previous call:
+    the agent's reply time + the customer's reply time (user_s; sampled later if not recorded)."""
+    cfg = json.loads((run_dir / "run_config.json").read_text()) if (run_dir / "run_config.json").exists() else {}
+    model = cfg.get("models", {}).get("agent", "our agent")
+    out = []
+    for n, line in enumerate(open(run_dir / "episodes.jsonl", encoding="utf-8")):
+        ep = json.loads(line)
+        calls, known, unknown_turns, turns = [], 0.0, 0, 0
+        for st in ep.get("steps") or []:
+            if st["kind"] == "respond":
+                known += st["think_s"]
+                turns += 1
+                if "user_s" in st:
+                    known += st["user_s"]
+                else:
+                    unknown_turns += 1
+                continue
+            for k, c in enumerate(st.get("calls", [])):
+                calls.append({"tool": c["tool"], "args": c.get("args", {}), "user_turns_before": turns if k == 0 else 0,
+                              "recorded_gap_s": round(known + (st["think_s"] if k == 0 else 0.05), 3),
+                              "unknown_user_turns": unknown_turns if k == 0 else 0})
+                known, unknown_turns, turns = 0.0, 0, 0
+        if calls:
+            out.append({"task_id": ep["task_id"], "task_set": ep.get("task_set", "?"),
+                        "source_model": f"{model} (our agent, {run_dir.name})", "trial": n,
+                        "reward": ep.get("reward"), "status": ep.get("status"), "calls": calls})
+    return out
+
+
+def load_traces(paths: list[str] | None) -> list[dict]:
+    if not paths:
+        return [json.loads(l) for l in open(TRACES, encoding="utf-8")]
+    out = []
+    for p in map(Path, paths):
+        out += live_traces(p) if p.is_dir() else [json.loads(l) for l in open(p, encoding="utf-8")]
+    return out
+
+
 def plan(a) -> list[dict]:
     """Episodes to run: which trace, when it starts, and the gap before every call (all from the seed)."""
     rng = random.Random(a.seed)
-    traces = [json.loads(l) for l in open(TRACES, encoding="utf-8")]
+    traces = [t for t in load_traces(a.traces) if t["calls"] and (not a.tasks or t["task_id"] in a.tasks)]
+    if not traces:
+        raise SystemExit("No traces to replay (check --traces / --tasks)")
+
+    def gaps_for(tr):
+        out = []
+        for c in tr["calls"]:
+            if "recorded_gap_s" in c:      # our agent: real timing, scaled; sample only missing customer turns
+                g = c["recorded_gap_s"] * a.gap_scale
+                turns = c.get("unknown_user_turns", 0)
+            else:                          # tau-bench recordings carry no timing: sample think time
+                g = lognormal(rng, a.think_median, a.think_sigma, 0.2, 15.0)
+                turns = c["user_turns_before"]
+            out.append(g + sum(lognormal(rng, a.user_turn_median, a.user_turn_sigma, 1.0, 60.0) for _ in range(turns)))
+        return out
+
+    if a.episodes is None and a.traces:    # our own traces: replay every one once, in a seeded order
+        order = traces[:]
+        rng.shuffle(order)
+        episodes, t = [], 0.0
+        for tr in order:
+            t += rng.expovariate(a.rate / 60.0)
+            episodes.append({"episode": f"ep{len(episodes) + 1:03d}", "start_offset_s": round(t, 2), "trace": tr,
+                             "gaps": [round(g, 2) for g in gaps_for(tr)]})
+        return episodes
+    a.episodes = a.episodes or 46
     by_task: dict[int, list] = {}
     for t in traces:
-        if t["calls"]:
-            by_task.setdefault(t["task_id"], []).append(t)
+        by_task.setdefault(t["task_id"], []).append(t)
     # cover the 23 tasks evenly: round-robin over shuffled tasks, a random recorded run each time
     tasks = sorted(by_task)
     episodes, t = [], 0.0
@@ -75,10 +141,7 @@ def plan(a) -> list[dict]:
             if len(episodes) == a.episodes:
                 break
             tr = rng.choice(by_task[tid])
-            gaps = [lognormal(rng, a.think_median, a.think_sigma, 0.2, 15.0)
-                    + sum(lognormal(rng, a.user_turn_median, a.user_turn_sigma, 1.0, 60.0)
-                          for _ in range(c["user_turns_before"]))
-                    for c in tr["calls"]]
+            gaps = gaps_for(tr)
             t += rng.expovariate(a.rate / 60.0)
             episodes.append({"episode": f"ep{len(episodes) + 1:03d}", "start_offset_s": round(t, 2), "trace": tr,
                              "gaps": [round(g, 2) for g in gaps]})
@@ -124,7 +187,12 @@ def pct(xs, q):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--episodes", type=int, default=46, help="episodes to replay (46 = every W1 task twice)")
+    ap.add_argument("--episodes", type=int, default=None,
+                    help="episodes to replay (default: 46 = every W1 task twice; with --traces: every trace once)")
+    ap.add_argument("--traces", nargs="+", help="w1_live result folders (our agent) or trace .jsonl files; "
+                                                "default: the recorded tau-bench runs")
+    ap.add_argument("--tasks", type=int, nargs="+", help="only these task ids (e.g. 4 9 10 23 27)")
+    ap.add_argument("--gap-scale", type=float, default=1.0, help="multiply recorded gaps (our traces only)")
     ap.add_argument("--rate", type=float, default=2.0, help="average new episodes per minute (Poisson)")
     ap.add_argument("--think-median", type=float, default=1.5, help="median LLM think time before a call (s)")
     ap.add_argument("--think-sigma", type=float, default=0.5, help="spread of think time (lognormal sigma)")
@@ -146,18 +214,27 @@ def main():
     params = {k: v for k, v in vars(a).items()}
     cfg = run_config(sorted({e["trace"]["task_id"] for e in episodes}), db,
                      "W1 airline change/cancel (tau-bench), replay of recorded traces",
-                     {"note": "replay: no LLM calls; traces recorded by gpt-4o and claude-3.5-sonnet (tau-bench)"},
-                     {"replay": {**params, "traces_file": str(TRACES.relative_to(HERE.parents[1])),
+                     {"note": "replay: no LLM calls; " + (
+                         "traces recorded by our ReAct agent (live runs), with their real gaps"
+                         f" x{a.gap_scale}" if a.traces else
+                         "traces recorded by gpt-4o and claude-3.5-sonnet (tau-bench), sampled gaps"),
+                      "trace_models": sorted({e["trace"]["source_model"] for e in episodes})},
+                     {"replay": {**params, "traces_source": a.traces or [str(TRACES.relative_to(HERE.parents[1]))],
                                  "planned_calls": n_calls, "start_span_s": span}})
     (out_dir / "run_config.json").write_text(json.dumps(cfg, indent=2))
     print(f"config: {cfg['config']} | window {cfg['knative']['tool_window']} | images {cfg['tool_images']} | db: {db}")
 
     watcher = PodWatcher()
     watcher.start()
-    wait_all_zero(watcher)
+    if cfg["config"] == "C0":
+        wait_all_zero(watcher)          # C0: every run starts with all tools cold
+        start_state = "all 14 tools at zero"
+    else:
+        wait_all_ready()                # C1 (min-scale 1): tools never go to zero; start once all are warm
+        start_state = "all 14 tools warm"
     if db.startswith("redis"):
         reset_db()
-    print("all 14 tools at zero, database reset; starting\n")
+    print(f"{start_state}, database reset; starting\n")
 
     rp, t0 = Replay(), time.time() + 1.0
     threads = [threading.Thread(target=rp.episode, args=(e, t0), daemon=True) for e in episodes]

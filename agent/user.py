@@ -6,6 +6,7 @@ HumanUser     -- you type the customer's messages yourself (for debugging).
 """
 
 import os
+import time
 
 from llm import chat
 from prompts import USER_SIM_PROMPT
@@ -21,7 +22,9 @@ class SimulatedUser:
                          {"role": "user", "content": "Hi! How can I help you today?"}]
 
     def _next(self) -> str:
-        text = (chat(self.messages, model=self.model).message.content or "").strip()
+        r = chat(self.messages, model=self.model)
+        self.last_latency_s = r.latency_s          # customer "think" time (rate-limit waits excluded)
+        text = (r.message.content or "").strip()
         self.messages.append({"role": "assistant", "content": text})
         return text
 
@@ -41,4 +44,7 @@ class HumanUser:
         return input("you> ")
 
     def reply(self, agent_text: str) -> str:
-        return input("you> ")
+        t0 = time.perf_counter()
+        text = input("you> ")
+        self.last_latency_s = time.perf_counter() - t0
+        return text

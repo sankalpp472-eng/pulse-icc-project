@@ -1,0 +1,24 @@
+# EKS cluster for the Pulse MCP tools (same role as the local kind cluster `pulse-kn`).
+#   eksctl create cluster -f EKS_deployment/cluster.yaml      (~15-20 min)
+#   eksctl delete cluster -f EKS_deployment/cluster.yaml      (when done: EKS and EC2 cost money by the hour)
+#
+# PRD 7.1 cloud tier: 2 worker nodes, 2-4 vCPU, 16 GB, 50 GB SSD each.
+# Fixed size (min = max = 2): no node autoscaling, so a cold start never includes booting a new node.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: pulse-eks
+  region: ap-south-1          # Mumbai: closest AWS region to IISc -> lowest laptop-to-cluster latency
+  tags:
+    project: pulse-ds252
+
+managedNodeGroups:
+  - name: workers
+    instanceType: t3.xlarge   # 4 vCPU, 16 GiB
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 2
+    volumeSize: 50            # GB, gp3
+    labels:
+      pulse/role: worker

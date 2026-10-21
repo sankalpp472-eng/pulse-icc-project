@@ -1,0 +1,9 @@
+episode,task_id,task_set,call_idx,tool,t_start,latency_ms,cold,cold_by_pod,cold_by_latency,pod,idle_gap_s,think_s,rate_wait_s,transport_ok,tool_error
+w1-task9-1792576674,9,multi,0,get_user_details,1792576686.687,3562.4,True,True,True,get-user-details-00004-deployment-675b8555fb-vmxlc,,4.756,0.0,True,False
+w1-task9-1792576674,9,multi,1,get_reservation_details,1792576706.062,3056.6,True,True,True,get-reservation-details-00004-deployment-7949557ff9-sxzsm,,0.775,6.0,True,False
+w1-task9-1792576674,9,multi,2,search_direct_flight,1792576759.865,3014.5,True,True,True,search-direct-flight-00004-deployment-749b966bfb-xf8z5,,2.173,12.0,True,False
+w1-task9-1792576674,9,multi,3,search_direct_flight,1792576799.208,120.2,False,False,False,,36.3,1.871,34.0,True,False
+w1-task9-1792576674,9,multi,4,search_onestop_flight,1792576816.442,5745.2,True,True,True,search-onestop-flight-00004-deployment-84b444d8f-hnjbq,,3.717,13.0,True,False
+w1-task9-1792576674,9,multi,5,get_user_details,1792576919.873,3037.3,True,True,True,get-user-details-00004-deployment-675b8555fb-lkw8f,229.6,2.34,53.0,True,False
+w1-task9-1792576674,9,multi,6,update_reservation_flights,1792577016.13,4390.0,True,True,True,update-reservation-flights-00004-deployment-5777dd6559-l6hr7,,4.736,35.0,True,False
+w1-task9-1792576674,9,multi,7,transfer_to_human_agents,1792577276.993,5007.2,True,True,True,transfer-to-human-agents-00004-deployment-c8c8bf7dc-ddvvs,,1.771,30.0,True,False

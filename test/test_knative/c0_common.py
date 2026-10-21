@@ -119,6 +119,22 @@ def reset_db() -> None:
                        capture_output=True, check=True)
 
 
+def wait_all_ready(n_tools: int = 14, timeout: float = 600) -> None:
+    """C1: wait until every tool has at least one ready pod (they never scale to zero)."""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        items = _kjson("get", "pods", "-l", "pulse/role=mcp-tool").get("items", [])
+        ready = {p["metadata"]["labels"].get("pulse/tool") for p in items
+                 if any(c.get("type") == "Ready" and c.get("status") == "True"
+                        for c in p.get("status", {}).get("conditions", []))}
+        if len(ready) >= n_tools:
+            print(" " * 70, end="\r")
+            return
+        print(f"  waiting for all tools to be warm ({len(ready)}/{n_tools} ready)...", end="\r")
+        time.sleep(5)
+    raise SystemExit(f"Not all {n_tools} tools became ready within {timeout:.0f}s")
+
+
 def wait_all_zero(watcher: PodWatcher, timeout: float = 600) -> None:
     t0 = time.time()
     while (n := watcher.running()) and time.time() - t0 < timeout:
