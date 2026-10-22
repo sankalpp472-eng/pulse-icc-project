@@ -37,6 +37,7 @@ import statistics
 import sys
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -69,9 +70,12 @@ def live_traces(run_dir: Path) -> list[dict]:
     out = []
     for n, line in enumerate(open(run_dir / "episodes.jsonl", encoding="utf-8")):
         ep = json.loads(line)
-        calls, known, unknown_turns, turns = [], 0.0, 0, 0
+        # hints: the live agent sent a hint at the START of every LLM step (agent.emit_hint), including
+        # steps where it only answered the customer -> keep their offsets within the gap before each call
+        calls, known, unknown_turns, turns, hints = [], 0.0, 0, 0, []
         for st in ep.get("steps") or []:
             if st["kind"] == "respond":
+                hints.append(round(known, 3))
                 known += st["think_s"]
                 turns += 1
                 if "user_s" in st:
@@ -80,10 +84,13 @@ def live_traces(run_dir: Path) -> list[dict]:
                     unknown_turns += 1
                 continue
             for k, c in enumerate(st.get("calls", [])):
+                if k == 0:
+                    hints.append(round(known, 3))
                 calls.append({"tool": c["tool"], "args": c.get("args", {}), "user_turns_before": turns if k == 0 else 0,
                               "recorded_gap_s": round(known + (st["think_s"] if k == 0 else 0.05), 3),
-                              "unknown_user_turns": unknown_turns if k == 0 else 0})
-                known, unknown_turns, turns = 0.0, 0, 0
+                              "unknown_user_turns": unknown_turns if k == 0 else 0,
+                              "hint_offsets_s": hints})
+                known, unknown_turns, turns, hints = 0.0, 0, 0, []
         if calls:
             out.append({"task_id": ep["task_id"], "task_set": ep.get("task_set", "?"),
                         "source_model": f"{model} (our agent, {run_dir.name})", "trial": n,
@@ -106,6 +113,12 @@ def plan(a) -> list[dict]:
     traces = [t for t in load_traces(a.traces) if t["calls"] and (not a.tasks or t["task_id"] in a.tasks)]
     if not traces:
         raise SystemExit("No traces to replay (check --traces / --tasks)")
+    traces = traces * a.repeat
+
+    def hints_for(tr):
+        """When to send hints within the gap before each call (seconds from the gap's start)."""
+        return [[o * a.gap_scale for o in c["hint_offsets_s"]] if "hint_offsets_s" in c else [0.0]
+                for c in tr["calls"]]
 
     def gaps_for(tr):
         out = []
@@ -126,7 +139,7 @@ def plan(a) -> list[dict]:
         for tr in order:
             t += rng.expovariate(a.rate / 60.0)
             episodes.append({"episode": f"ep{len(episodes) + 1:03d}", "start_offset_s": round(t, 2), "trace": tr,
-                             "gaps": [round(g, 2) for g in gaps_for(tr)]})
+                             "gaps": [round(g, 2) for g in gaps_for(tr)], "hints": hints_for(tr)})
         return episodes
     a.episodes = a.episodes or 46
     by_task: dict[int, list] = {}
@@ -144,13 +157,41 @@ def plan(a) -> list[dict]:
             gaps = gaps_for(tr)
             t += rng.expovariate(a.rate / 60.0)
             episodes.append({"episode": f"ep{len(episodes) + 1:03d}", "start_offset_s": round(t, 2), "trace": tr,
-                             "gaps": [round(g, 2) for g in gaps]})
+                             "gaps": [round(g, 2) for g in gaps], "hints": hints_for(tr)})
     return episodes
 
 
 class Replay:
-    def __init__(self):
+    def __init__(self, predictor_url: str | None = None, workflow_id: str = "W1", hint_log: Path | None = None):
         self.rows, self.lock, self.active = [], threading.Lock(), 0
+        self.predictor_url, self.workflow_id, self.hint_log = predictor_url, workflow_id, hint_log
+        self.hints_sent = self.hints_ok = 0
+
+    def send_hint(self, episode: str, trajectory: list[str]) -> None:
+        """What agent.emit_hint does: POST the trajectory to the predictor in the background (never waits)."""
+        if not self.predictor_url:
+            return
+        hint = {"workflow_id": self.workflow_id, "episode_id": episode, "trajectory": trajectory[-8:],
+                "current_tool": trajectory[-1] if trajectory else "START", "ts": time.time()}
+
+        def post():
+            rec, t0 = {"hint": hint}, time.perf_counter()
+            try:
+                req = urllib.request.Request(self.predictor_url + "/predict", data=json.dumps(hint).encode(),
+                                             headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=1.0) as r:
+                    ans = json.loads(r.read())
+                rec.update(ok=True, prewarm=ans["prewarm"], top3=ans["ranked"][:3], theta=ans["theta"])
+            except Exception as e:
+                rec.update(ok=False, error=f"{type(e).__name__}: {e}")
+            rec["rtt_ms"] = round((time.perf_counter() - t0) * 1000, 2)
+            with self.lock:
+                self.hints_sent += 1
+                self.hints_ok += rec["ok"]
+                if self.hint_log:
+                    with open(self.hint_log, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(rec) + "\n")
+        threading.Thread(target=post, daemon=True).start()
 
     def episode(self, ep: dict, t0: float) -> None:
         time.sleep(max(0.0, t0 + ep["start_offset_s"] - time.time()))
@@ -159,8 +200,13 @@ class Replay:
         with self.lock:
             self.active += 1
         ep["t_begin"] = time.time()
+        trajectory: list[str] = []
         for i, (call, gap) in enumerate(zip(tr["calls"], ep["gaps"])):
-            time.sleep(gap)
+            gap_start = time.time()
+            for off in ep["hints"][i]:      # hints at the recorded LLM-step starts within this gap
+                time.sleep(max(0.0, gap_start + off - time.time()))
+                self.send_hint(ep["episode"], trajectory)
+            time.sleep(max(0.0, gap_start + gap - time.time()))
             with self.lock:
                 concurrent = self.active
             t_start = time.time()
@@ -172,6 +218,7 @@ class Replay:
                                   "planned_gap_s": gap, "user_turns_before": call["user_turns_before"],
                                   "concurrent_episodes": concurrent,
                                   "transport_ok": "MCP call" not in out, "tool_error": out.startswith("Error")})
+            trajectory.append(call["tool"])
         ep["t_end"] = time.time()
         with self.lock:
             self.active -= 1
@@ -200,6 +247,12 @@ def main():
                     help="median time for one customer turn (agent reply + customer answer) (s)")
     ap.add_argument("--user-turn-sigma", type=float, default=0.5)
     ap.add_argument("--seed", type=int, default=252)
+    ap.add_argument("--repeat", type=int, default=1, help="replay every selected trace this many times")
+    ap.add_argument("--sequential", action="store_true",
+                    help="one episode at a time; under C0/C3 wait until all tools are back at zero in between")
+    ap.add_argument("--predictor-url", help="C3: send the agent's hints to this predictor (e.g. http://127.0.0.1:8000); "
+                                            "the prewarm controller must be running")
+    ap.add_argument("--workflow-id", default="W1", help="workflow id sent in hints")
     a = ap.parse_args()
 
     episodes = plan(a)
@@ -221,13 +274,29 @@ def main():
                       "trace_models": sorted({e["trace"]["source_model"] for e in episodes})},
                      {"replay": {**params, "traces_source": a.traces or [str(TRACES.relative_to(HERE.parents[1]))],
                                  "planned_calls": n_calls, "start_span_s": span}})
+    if a.predictor_url:   # scale-to-zero tools + predictor + prewarm controller = C3
+        cfg["config"] = "C3" if cfg["config"] == "C0" else f"{cfg['config']}+prewarm"
+        try:
+            with urllib.request.urlopen(a.predictor_url + "/healthz", timeout=5) as r:
+                health = json.loads(r.read())
+        except Exception as e:
+            raise SystemExit(f"Predictor not reachable at {a.predictor_url}: {e}")
+        if health.get("crd", {}).get("mode") != "k8s":
+            print("WARNING: predictor is not in CRD_MODE=k8s -> no PrewarmRequests, nothing gets prewarmed")
+        cfg["prewarm"] = {"predictor_url": a.predictor_url, "workflow_id": a.workflow_id,
+                          "predictor": {k: health.get(k) for k in ("model", "theta", "ttl_s")},
+                          "crd_mode": health.get("crd", {}).get("mode"),
+                          "mechanism": "Option A: controller sends an MCP ping per PrewarmRequest; "
+                                       "TTL = Knative idle window",
+                          "hints": "sent at the recorded start of every LLM step of the trace"}
     (out_dir / "run_config.json").write_text(json.dumps(cfg, indent=2))
     print(f"config: {cfg['config']} | window {cfg['knative']['tool_window']} | images {cfg['tool_images']} | db: {db}")
 
     watcher = PodWatcher()
     watcher.start()
-    if cfg["config"] == "C0":
-        wait_all_zero(watcher)          # C0: every run starts with all tools cold
+    scale_to_zero = not cfg["config"].startswith("C1")
+    if scale_to_zero:
+        wait_all_zero(watcher)          # C0 / C3: every run starts with all tools cold
         start_state = "all 14 tools at zero"
     else:
         wait_all_ready()                # C1 (min-scale 1): tools never go to zero; start once all are warm
@@ -236,12 +305,22 @@ def main():
         reset_db()
     print(f"{start_state}, database reset; starting\n")
 
-    rp, t0 = Replay(), time.time() + 1.0
-    threads = [threading.Thread(target=rp.episode, args=(e, t0), daemon=True) for e in episodes]
-    for th in threads:
-        th.start()
-    for th in threads:
-        th.join()
+    rp = Replay(a.predictor_url, a.workflow_id, out_dir / "hints.jsonl" if a.predictor_url else None)
+    if a.sequential:                    # one conversation at a time, each starting from the same state
+        for k, e in enumerate(episodes):
+            if k and scale_to_zero:
+                wait_all_zero(watcher)
+            if k and db.startswith("redis"):
+                reset_db()
+            e["start_offset_s"] = 0.0
+            rp.episode(e, time.time())
+    else:
+        t0 = time.time() + 1.0
+        threads = [threading.Thread(target=rp.episode, args=(e, t0), daemon=True) for e in episodes]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
     time.sleep(3)              # let the watcher see the last pods
     watcher.stop_flag = True
 
@@ -304,6 +383,7 @@ def main():
         "per_tool": dict(sorted(per_tool.items(), key=lambda kv: -kv[1]["calls"])),
         "config": cfg["config"], "tool_window": cfg["knative"]["tool_window"], "database": db,
         "replay": params,
+        "hints": {"sent": rp.hints_sent, "answered": rp.hints_ok} if a.predictor_url else None,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     print("\n" + json.dumps({k: v for k, v in summary.items() if k not in ("per_tool", "replay")}, indent=2))

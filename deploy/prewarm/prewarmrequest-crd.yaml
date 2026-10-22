@@ -1,11 +1,22 @@
 # PrewarmRequest: the contract between the predictor and the prewarming controller.
 #
-#   predictor  (Python, predictor/crd_writer.py)  WRITES  .spec   -- "please keep this tool warm"
-#   controller (Go, Nithish)                      READS   .spec, WRITES .status
+#   predictor  (Python, predictor/crd_writer.py)       WRITES  .spec    -- "this tool will probably be called next"
+#   controller (Python, controller/prewarm_controller.py; a Go port can replace it)
+#                                                      READS   .spec, WRITES .status
+#
+# Mechanism = Option A, "warm-up request + Knative's idle window as the TTL":
+#   * On every new or refreshed request (new spec.requestedAt) the controller sends the tool's
+#     Knative service one lightweight MCP `ping` through the ingress (the same path the agent uses).
+#     If the tool is at zero, Knative's activator starts a pod -- a cold start, but BEFORE the agent
+#     needs the tool. If it is already warm, the ping just counts as activity.
+#   * Nothing is evicted by the controller: Knative scales the pod back to zero once it has seen
+#     no request for the service's idle window (autoscaling.knative.dev/window, 60s by default here).
+#     So the effective TTL = that window, counted from the LAST request (ping or real call).
+#   * spec.ttlSeconds and spec.desiredReplicas are kept for compatibility but NOT used to warm or
+#     evict; status.effectiveTtlSeconds shows the window actually in force.
 #
 # One object per tool, named after its Knative service (search-direct-flight).
-# A new prediction for the same tool UPDATES the object (new requestedAt -> TTL restarts);
-# it never creates a second one.
+# A new prediction for the same tool UPDATES the object (new requestedAt -> new ping -> TTL restarts).
 #
 # Install once per cluster:
 #   kubectl apply -f deploy/prewarm/prewarmrequest-crd.yaml
@@ -31,9 +42,11 @@ spec:
       additionalPrinterColumns:
         - {name: Tool, type: string, jsonPath: .spec.tool}
         - {name: P, type: number, jsonPath: .spec.probability}
-        - {name: TTL, type: integer, jsonPath: .spec.ttlSeconds}
-        - {name: Requested, type: date, jsonPath: .spec.requestedAt}
         - {name: Phase, type: string, jsonPath: .status.phase}
+        - {name: Cold, type: boolean, jsonPath: .status.wasCold}
+        - {name: Ping-ms, type: integer, jsonPath: .status.pingLatencyMs}
+        - {name: TTL, type: integer, jsonPath: .status.effectiveTtlSeconds}
+        - {name: Requested, type: date, jsonPath: .spec.requestedAt}
       schema:
         openAPIV3Schema:
           type: object
@@ -46,17 +59,24 @@ spec:
                 service:         {type: string, description: "Knative service to warm, e.g. search-direct-flight"}
                 probability:     {type: number, minimum: 0, maximum: 1, description: "predicted P(next tool)"}
                 threshold:       {type: number, minimum: 0, maximum: 1, description: "theta used for this decision"}
-                ttlSeconds:      {type: integer, minimum: 1, description: "evict if unused this long after requestedAt"}
-                desiredReplicas: {type: integer, minimum: 0, maximum: 5}
-                requestedAt:     {type: string, format: date-time, description: "time of the latest prediction (RFC 3339)"}
+                ttlSeconds:      {type: integer, minimum: 1, description: "predictor's intended TTL. Option A: informational only; the real TTL is the Knative idle window (status.effectiveTtlSeconds)"}
+                desiredReplicas: {type: integer, minimum: 0, maximum: 5, description: "Option A: unused (the warm-up request yields one pod)"}
+                requestedAt:     {type: string, format: date-time, description: "time of the latest prediction (RFC 3339); a newer value triggers a new warm-up ping"}
                 episodeId:       {type: string}
                 workflowId:      {type: string}
             status:
               type: object
               description: "Owned by the controller."
               properties:
-                phase:          {type: string, enum: [Pending, Warming, Ready, Evicted, Failed]}
-                readyAt:        {type: string, format: date-time}
-                expiresAt:      {type: string, format: date-time}
-                lastActivityAt: {type: string, format: date-time}
-                message:        {type: string}
+                phase:               {type: string, enum: [Pending, Warming, Ready, Evicted, Failed], description: "Warming = ping sent; Ready = a pod answered; Evicted = Knative scaled the tool back to zero; Failed = ping failed"}
+                lastRequestedAt:     {type: string, format: date-time, description: "spec.requestedAt of the last request the controller acted on"}
+                lastPingAt:          {type: string, format: date-time, description: "when the warm-up ping was sent"}
+                readyAt:             {type: string, format: date-time, description: "when the ping was answered (the pod is warm)"}
+                pingLatencyMs:       {type: integer, description: "ping round trip: ~a cold start if wasCold, a few ms if the tool was already warm"}
+                wasCold:             {type: boolean, description: "true if the tool had no pod when the ping was sent (this ping caused the cold start)"}
+                effectiveTtlSeconds: {type: integer, description: "the service's Knative idle window = the real TTL under Option A"}
+                expiresAt:           {type: string, format: date-time, description: "readyAt + effectiveTtlSeconds: earliest scale-down if nothing else calls the tool"}
+                evictedAt:           {type: string, format: date-time, description: "first time the controller saw the tool back at zero pods"}
+                message:             {type: string}
+                # kept from the first version of the contract (Option B); not set by the Option A controller
+                lastActivityAt:      {type: string, format: date-time}

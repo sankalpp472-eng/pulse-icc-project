@@ -1,0 +1,2 @@
+{"time": "2026-10-22T07:13:10.787Z", "event": "warmed", "tool": "get_reservation_details", "service": "get-reservation-details", "was_cold": true, "ping_ms": 8564, "http": 200, "probability": 0.7647, "episode": "crd-demo-1", "requested_at": "2026-10-22T07:13:01.955Z", "effective_ttl_s": 60}
+{"time": "2026-10-22T07:14:45.627Z", "event": "evicted", "tool": "get_reservation_details", "service": "get-reservation-details", "warm_for_s": 94.9, "effective_ttl_s": 60}

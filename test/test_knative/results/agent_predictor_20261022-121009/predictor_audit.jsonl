@@ -1,0 +1,14 @@
+{"time": 1792651242.2250063, "tool": "get_reservation_details", "probability": 0.3998, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651242.2250063, "tool": "get_user_details", "probability": 0.3944, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651243.49462, "tool": "get_reservation_details", "probability": 0.3998, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651243.49462, "tool": "get_user_details", "probability": 0.3944, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651244.023009, "tool": "get_reservation_details", "probability": 0.7647, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651254.635661, "tool": "get_reservation_details", "probability": 0.7647, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651279.1038976, "tool": "get_reservation_details", "probability": 0.7647, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651307.268068, "tool": "get_reservation_details", "probability": 0.7647, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651334.047434, "tool": "get_reservation_details", "probability": 0.6219, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651366.8297424, "tool": "get_reservation_details", "probability": 0.6219, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651402.7010767, "tool": "get_reservation_details", "probability": 0.6219, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651430.4338706, "tool": "search_direct_flight", "probability": 0.4797, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651465.653295, "tool": "search_direct_flight", "probability": 0.431, "action": "prewarm", "ttl_s": 60}
+{"time": 1792651774.7934277, "tool": "get_reservation_details", "probability": 0.4058, "action": "prewarm", "ttl_s": 60}
