@@ -2,35 +2,35 @@
   "episodes": 3,
   "tool_calls": 24,
   "transport_failures": 0,
-  "cold_calls": 12,
-  "cold_share": 0.5,
+  "cold_calls": 18,
+  "cold_share": 0.75,
   "latency_ms": {
     "all": {
-      "p50": 2570.4,
-      "p95": 3989.7,
-      "p99": 4481.0,
-      "mean": 1732.6
+      "p50": 2822.1,
+      "p95": 5106.7,
+      "p99": 7062.0,
+      "mean": 2705.9
     },
     "cold": {
-      "p50": 3302.4,
-      "p95": 3989.7,
-      "max": 4481.0
+      "p50": 3070.0,
+      "p95": 5106.7,
+      "max": 7062.0
     },
     "warm": {
-      "p50": 97.3,
-      "p95": 158.6,
-      "max": 375.0
+      "p50": 51.7,
+      "p95": 186.5,
+      "max": 186.5
     }
   },
-  "cold_start_time_added_s": 39.3,
+  "cold_start_time_added_s": 62.8,
   "signals_agree": 24,
-  "pods_started": 23,
-  "pod_seconds_seen": 1969.0,
+  "pods_started": 18,
+  "pod_seconds_seen": 1617.0,
   "per_tool": {
     "get_user_details": {
       "calls": 6,
-      "cold": 0,
-      "cold_share": 0.0
+      "cold": 3,
+      "cold_share": 0.5
     },
     "search_direct_flight": {
       "calls": 6,
@@ -39,8 +39,8 @@
     },
     "get_reservation_details": {
       "calls": 3,
-      "cold": 0,
-      "cold_share": 0.0
+      "cold": 3,
+      "cold_share": 1.0
     },
     "search_onestop_flight": {
       "calls": 3,
@@ -58,7 +58,7 @@
       "cold_share": 1.0
     }
   },
-  "config": "C3",
+  "config": "C0",
   "tool_window": [
     "60s"
   ],
@@ -66,7 +66,7 @@
   "replay": {
     "episodes": null,
     "traces": [
-      "test/test_knative/results/w1_live_20261021-152753"
+      "test/test_knative/results/2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b"
     ],
     "tasks": null,
     "gap_scale": 1.0,
@@ -78,11 +78,8 @@
     "seed": 252,
     "repeat": 3,
     "sequential": true,
-    "predictor_url": "http://127.0.0.1:8000",
+    "predictor_url": null,
     "workflow_id": "W1"
   },
-  "hints": {
-    "sent": 66,
-    "answered": 66
-  }
+  "hints": null
 }

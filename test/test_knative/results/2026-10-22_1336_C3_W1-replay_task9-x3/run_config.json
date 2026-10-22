@@ -1,5 +1,5 @@
 {
-  "started": "2026-10-22T13:48:41",
+  "started": "2026-10-22T13:36:37",
   "workload": "W1 airline change/cancel (tau-bench), replay of recorded traces",
   "task_ids": [
     9
@@ -7,14 +7,14 @@
   "models": {
     "note": "replay: no LLM calls; traces recorded by our ReAct agent (live runs), with their real gaps x1.0",
     "trace_models": [
-      "openai/gpt-oss-120b (our agent, w1_live_20261021-152753)"
+      "openai/gpt-oss-120b (our agent, 2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b)"
     ]
   },
-  "config": "C1",
+  "config": "C3",
   "knative": {
     "version": "1.23.0",
     "tool_min_scale": [
-      "1"
+      "0"
     ],
     "tool_window": [
       "60s"
@@ -26,9 +26,9 @@
   "tools": [
     {
       "service": "book-reservation",
-      "revision": "book-reservation-00009",
+      "revision": "book-reservation-00008",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -41,9 +41,9 @@
     },
     {
       "service": "calculate",
-      "revision": "calculate-00007",
+      "revision": "calculate-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -56,9 +56,9 @@
     },
     {
       "service": "cancel-reservation",
-      "revision": "cancel-reservation-00007",
+      "revision": "cancel-reservation-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -71,9 +71,9 @@
     },
     {
       "service": "get-reservation-details",
-      "revision": "get-reservation-details-00007",
+      "revision": "get-reservation-details-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -86,9 +86,9 @@
     },
     {
       "service": "get-user-details",
-      "revision": "get-user-details-00007",
+      "revision": "get-user-details-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -101,9 +101,9 @@
     },
     {
       "service": "list-all-airports",
-      "revision": "list-all-airports-00007",
+      "revision": "list-all-airports-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -116,9 +116,9 @@
     },
     {
       "service": "search-direct-flight",
-      "revision": "search-direct-flight-00007",
+      "revision": "search-direct-flight-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -131,9 +131,9 @@
     },
     {
       "service": "search-onestop-flight",
-      "revision": "search-onestop-flight-00007",
+      "revision": "search-onestop-flight-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -146,9 +146,9 @@
     },
     {
       "service": "send-certificate",
-      "revision": "send-certificate-00007",
+      "revision": "send-certificate-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -161,9 +161,9 @@
     },
     {
       "service": "think",
-      "revision": "think-00007",
+      "revision": "think-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -176,9 +176,9 @@
     },
     {
       "service": "transfer-to-human-agents",
-      "revision": "transfer-to-human-agents-00009",
+      "revision": "transfer-to-human-agents-00008",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -191,9 +191,9 @@
     },
     {
       "service": "update-reservation-baggages",
-      "revision": "update-reservation-baggages-00007",
+      "revision": "update-reservation-baggages-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -206,9 +206,9 @@
     },
     {
       "service": "update-reservation-flights",
-      "revision": "update-reservation-flights-00007",
+      "revision": "update-reservation-flights-00006",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -221,9 +221,9 @@
     },
     {
       "service": "update-reservation-passengers",
-      "revision": "update-reservation-passengers-00009",
+      "revision": "update-reservation-passengers-00008",
       "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
-      "min_scale": "1",
+      "min_scale": "0",
       "window": "60s",
       "redis": true,
       "requests": {
@@ -255,7 +255,7 @@
   "replay": {
     "episodes": null,
     "traces": [
-      "test/test_knative/results/w1_live_20261021-152753"
+      "test/test_knative/results/2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b"
     ],
     "tasks": null,
     "gap_scale": 1.0,
@@ -267,12 +267,24 @@
     "seed": 252,
     "repeat": 3,
     "sequential": true,
-    "predictor_url": null,
+    "predictor_url": "http://127.0.0.1:8000",
     "workflow_id": "W1",
     "traces_source": [
-      "test/test_knative/results/w1_live_20261021-152753"
+      "test/test_knative/results/2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b"
     ],
     "planned_calls": 24,
     "start_span_s": 109.05
+  },
+  "prewarm": {
+    "predictor_url": "http://127.0.0.1:8000",
+    "workflow_id": "W1",
+    "predictor": {
+      "model": "ensemble",
+      "theta": 0.3,
+      "ttl_s": 60
+    },
+    "crd_mode": "k8s",
+    "mechanism": "Option A: controller sends an MCP ping per PrewarmRequest; TTL = Knative idle window",
+    "hints": "sent at the recorded start of every LLM step of the trace"
   }
 }

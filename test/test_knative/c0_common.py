@@ -6,12 +6,35 @@ reset, and the run_config.json that records exactly how a run was set up.
 import json
 import os
 import subprocess
+import re
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 COLD_LATENCY_S = 1.0     # a call slower than this counts as cold (warm calls take ~40-100 ms)
 POD_POLL_S = 1.0
+RESULTS = Path(__file__).resolve().parent / "results"
+
+
+def run_dir(config: str, mode: str, detail: str = "", label: str = "") -> Path:
+    """A new result folder named so a run can be told apart at a glance, e.g.
+    results/2026-10-22_1336_C3_W1-replay_task9-x3   (date_time_config_workload-mode_detail[_label])."""
+    parts = [time.strftime("%Y-%m-%d_%H%M"), config, f"W1-{mode}", detail, label]
+    name = re.sub(r"[^A-Za-z0-9._+-]+", "-", "_".join(x for x in parts if x))
+    path = RESULTS / name
+    if path.exists():                       # two runs started in the same minute
+        path = RESULTS / f"{name}_{time.strftime('%S')}s"
+    path.mkdir(parents=True)
+    return path
+
+
+def tasks_tag(task_ids: list) -> str:
+    """'task9', 'tasks4-9-10', or 'tasks23' (a count) when there are many."""
+    ids = sorted(set(task_ids))
+    if len(ids) == 1:
+        return f"task{ids[0]}"
+    return "tasks" + "-".join(map(str, ids)) if len(ids) <= 5 else f"tasks{len(ids)}"
 
 
 class PodWatcher(threading.Thread):

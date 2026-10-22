@@ -14,6 +14,34 @@ kind cluster pulse-kn (Docker on the laptop)     EKS cluster pulse-eks (ap-south
    Knative + Kourier, 14 tools, Redis               Knative + Kourier, 14 tools, Redis   (identical)
 ```
 
+## Quick way: the scripts
+
+After step 1 (tools + `aws configure`), with your Python environment active (e.g. `conda activate pulse`):
+
+```bash
+bash EKS_deployment/eks_up.sh       # cluster + Knative + tools + CRD + tool check (steps 2-5)
+bash EKS_deployment/run_all.sh      # C0, C3, C1 with the same workload and seed, then the comparison plots
+bash EKS_deployment/eks_down.sh     # delete the cluster (step 9) -- do this the same day
+```
+
+| Script | What it does |
+|---|---|
+| `eks_up.sh` | Creates the cluster if missing, installs Knative (load balancer open to your current IP only), deploys Redis + the 14 tools at scale-to-zero, installs the CRD, checks every tool. Rerun it after your IP changes |
+| `run_c0.sh` | C0: replay with scale-to-zero tools |
+| `run_c3.sh` | C3: starts the predictor (`CRD_MODE=k8s`) and the controller in the background, replays with hints, stops both; copies the controller log into the run folder. `THETA=0.5` changes the threshold |
+| `run_c1.sh` | C1: switches the tools to min-scale 1, replays, switches back to scale-to-zero |
+| `run_all.sh` | `run_c0.sh`, `run_c3.sh`, `run_c1.sh`, then `plot_compare.py` |
+| `eks_down.sh` | Deletes the PrewarmRequests and the cluster |
+
+Settings for the run scripts (see `common.sh`): `WORKLOAD=task9` (default: our agent's task-9 trace,
+3 times, one episode at a time, ~10 min per config) or `WORKLOAD=taubench` (46 recorded τ-bench
+episodes, ~30 min per config); `PYTHON=...` if your Python isn't `python`; `LABEL=...` (default
+`eks`) is added to the result folder names. Extra arguments go to `w1_replay.py`, e.g.
+`bash EKS_deployment/run_c0.sh --seed 7`. Background logs (predictor, controller) go to
+`EKS_deployment/logs/`.
+
+The steps below do the same by hand.
+
 | Step | What | Time |
 |---|---|---|
 | 1 | Install `aws`, `eksctl`, `kubectl`; log in to AWS | one time |
@@ -139,7 +167,7 @@ agent/.venv/Scripts/python test/test_knative/w1_replay.py
 Replay of **our own agent's** live traces (e.g. task 9 with gpt-oss-120b):
 
 ```bash
-agent/.venv/Scripts/python test/test_knative/w1_replay.py --traces test/test_knative/results/w1_live_20261021-152753
+agent/.venv/Scripts/python test/test_knative/w1_replay.py --traces test/test_knative/results/2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b
 ```
 
 Live agent against EKS (Groq keys from `agent/.env`):
@@ -221,4 +249,6 @@ console (EC2 → Load Balancers, EKS) that nothing is left running.
 | `cluster.yaml` | eksctl cluster definition (2 x m7i-flex.large, ap-south-1, fixed size) |
 | `setup_knative.sh` | Knative + Kourier on EKS, load balancer restricted to your IP |
 | `use_eks.sh` / `use_local.sh` | Point a terminal at the EKS tools / back to the local kind cluster |
+| `eks_up.sh` / `eks_down.sh` | Bring everything up / delete the cluster |
+| `run_c0.sh`, `run_c1.sh`, `run_c3.sh`, `run_all.sh` | One config each / all three + plots (shared settings in `common.sh`) |
 | `../deploy/knative/deploy.sh` | Same deploy as locally; `KUBE_CONTEXT` picks the cluster |

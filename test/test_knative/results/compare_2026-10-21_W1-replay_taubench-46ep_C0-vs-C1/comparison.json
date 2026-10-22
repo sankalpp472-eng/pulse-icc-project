@@ -1,6 +1,6 @@
 [
   {
-    "run": "w1_replay_20261019-001516",
+    "run": "2026-10-19_0015_C0_W1-replay_taubench-46ep",
     "config": "C0",
     "seed": 252,
     "window": "60s",
@@ -15,7 +15,7 @@
     "mean_ms": 903.4
   },
   {
-    "run": "w1_replay_20261021-161136",
+    "run": "2026-10-21_1611_C1_W1-replay_taubench-46ep",
     "config": "C1",
     "seed": 252,
     "window": "60s",
