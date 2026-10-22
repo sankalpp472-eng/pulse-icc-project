@@ -10,7 +10,7 @@ and are unchanged. They just call the tools at a different address.
 laptop: agent / w1_replay.py                     laptop: agent / w1_replay.py
    │ http://127.0.0.1:8081/mcp                      │ http://<AWS load balancer>/mcp
    ▼                                                ▼
-kind cluster pulse-kn (Docker on the laptop)     EKS cluster pulse-eks (ap-south-1, 2 x t3.xlarge)
+kind cluster pulse-kn (Docker on the laptop)     EKS cluster pulse-eks (ap-south-1, 2 x m7i-flex.large)
    Knative + Kourier, 14 tools, Redis               Knative + Kourier, 14 tools, Redis   (identical)
 ```
 
@@ -67,9 +67,10 @@ The second command must print your account. If it fails, nothing below will work
 eksctl create cluster -f EKS_deployment/cluster.yaml
 ```
 
-`cluster.yaml` follows the PRD's cloud tier: **2 worker nodes, t3.xlarge (4 vCPU, 16 GiB), 50 GB
-disk, region ap-south-1 (Mumbai)**. The node count is fixed (min = max = 2), so a cold start never
-includes booting a new node. eksctl also creates the VPC and adds the cluster to your kubeconfig:
+`cluster.yaml` follows the PRD's cloud tier: **2 worker nodes, m7i-flex.large (2 vCPU, 8 GiB), 50 GB
+disk, region ap-south-1 (Mumbai)**. m7i-flex.large is AWS Free Tier eligible (it runs on the free
+credits); it is within the PRD's 2-4 vCPU but has 8 GiB instead of the PRD's 16 GB per node. The node count
+is fixed (min = max = 2), so a cold start never includes booting a new node. eksctl also creates the VPC and adds the cluster to your kubeconfig:
 
 ```bash
 kubectl config current-context
@@ -217,7 +218,7 @@ console (EC2 → Load Balancers, EKS) that nothing is left running.
 
 | File | Purpose |
 |---|---|
-| `cluster.yaml` | eksctl cluster definition (2 x t3.xlarge, ap-south-1, fixed size) |
+| `cluster.yaml` | eksctl cluster definition (2 x m7i-flex.large, ap-south-1, fixed size) |
 | `setup_knative.sh` | Knative + Kourier on EKS, load balancer restricted to your IP |
 | `use_eks.sh` / `use_local.sh` | Point a terminal at the EKS tools / back to the local kind cluster |
 | `../deploy/knative/deploy.sh` | Same deploy as locally; `KUBE_CONTEXT` picks the cluster |
