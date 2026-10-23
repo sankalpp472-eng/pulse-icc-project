@@ -5,6 +5,8 @@
 #   PYTHON     Python with agent/requirements.txt + predictor/requirements.txt   (default: python)
 #   WORKLOAD   task9    our agent's task-9 live trace, replayed 3 times, one episode at a time (~10 min)
 #              taubench the 46 recorded tau-bench episodes, overlapping, 2 per minute      (~30 min)
+#              heldout  46 tau-bench episodes of tasks 6, 20, 22, 26, 30 only: the W1 tasks the
+#                       predictor never saw in training (its test split), same pacing      (~30 min)
 #                                                                                   (default: task9)
 #   LABEL      text at the end of every result folder name                       (default: eks)
 
@@ -35,7 +37,8 @@ case "$WORKLOAD" in
   task9)    REPLAY_ARGS=(--traces test/test_knative/results/2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b
                          --repeat 3 --sequential) ;;
   taubench) REPLAY_ARGS=() ;;
-  *) echo "Unknown WORKLOAD=$WORKLOAD (use task9 or taubench)"; exit 1 ;;
+  heldout)  REPLAY_ARGS=(--tasks 6 20 22 26 30) ;;
+  *) echo "Unknown WORKLOAD=$WORKLOAD (use task9, taubench or heldout)"; exit 1 ;;
 esac
 
 # Deploy the 14 tools with this min-scale (0 = C0/C3, 1 = C1), unless they already have it

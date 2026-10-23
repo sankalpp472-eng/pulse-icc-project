@@ -289,7 +289,7 @@ def main():
                                        "TTL = Knative idle window",
                           "hints": "sent at the recorded start of every LLM step of the trace"}
     detail = (tasks_tag(cfg["task_ids"]) if a.traces or a.tasks else "taubench") + \
-        (f"-x{a.repeat}" if a.repeat > 1 else "") + ("" if a.traces or a.tasks else f"-{len(episodes)}ep")
+        (f"-x{a.repeat}" if a.repeat > 1 else "") + ("" if a.traces else f"-{len(episodes)}ep")
     out_dir = run_dir(cfg["config"], "replay", detail, a.label)
     print(f"-> {out_dir}")
     (out_dir / "run_config.json").write_text(json.dumps(cfg, indent=2))

@@ -35,7 +35,8 @@ bash EKS_deployment/eks_down.sh     # delete the cluster (step 9) -- do this the
 
 Settings for the run scripts (see `common.sh`): `WORKLOAD=task9` (default: our agent's task-9 trace,
 3 times, one episode at a time, ~10 min per config) or `WORKLOAD=taubench` (46 recorded τ-bench
-episodes, ~30 min per config); `PYTHON=...` if your Python isn't `python`; `LABEL=...` (default
+episodes, 386 calls, ~30 min per config) or `WORKLOAD=heldout` (46 τ-bench episodes, 293 calls, of
+the 5 W1 tasks the predictor never saw in training: 6, 20, 22, 26, 30); `PYTHON=...` if your Python isn't `python`; `LABEL=...` (default
 `eks`) is added to the result folder names. Extra arguments go to `w1_replay.py`, e.g.
 `bash EKS_deployment/run_c0.sh --seed 7`. Background logs (predictor, controller) go to
 `EKS_deployment/logs/`.
