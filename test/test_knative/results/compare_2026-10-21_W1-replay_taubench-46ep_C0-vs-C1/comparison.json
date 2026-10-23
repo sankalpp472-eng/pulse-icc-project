@@ -1,0 +1,32 @@
+[
+  {
+    "run": "2026-10-19_0015_C0_W1-replay_taubench-46ep",
+    "config": "C0",
+    "seed": 252,
+    "window": "60s",
+    "calls": 386,
+    "real_cold_starts": 82,
+    "slow_warm_calls_over_1s": 2,
+    "pods_started": 81,
+    "pod_seconds": 11029,
+    "p50_ms": 68.6,
+    "p95_ms": 4366.2,
+    "p99_ms": 8740.0,
+    "mean_ms": 903.4
+  },
+  {
+    "run": "2026-10-21_1611_C1_W1-replay_taubench-46ep",
+    "config": "C1",
+    "seed": 252,
+    "window": "60s",
+    "calls": 386,
+    "real_cold_starts": 0,
+    "slow_warm_calls_over_1s": 4,
+    "pods_started": 14,
+    "pod_seconds": 23125,
+    "p50_ms": 56.6,
+    "p95_ms": 232.2,
+    "p99_ms": 879.3,
+    "mean_ms": 100.2
+  }
+]

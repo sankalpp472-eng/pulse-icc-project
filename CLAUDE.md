@@ -6,62 +6,81 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Pulse** — DS252: Introduction to Cloud Computing (IISc, Aug 2026)
 
-Predictive prewarming system for Kubernetes/OpenFaaS pods in agentic (ReAct-style) workflows. The core idea: predict the next MCP tool a LLM agent will call and proactively scale up its OpenFaaS pod before the call arrives, eliminating cold-start latency (1–3 s) that accumulates across multi-step agent loops.
+Predictive prewarming for serverless MCP tools on Kubernetes (Knative Serving) in agentic (ReAct-style) workflows. The core idea: predict the next MCP tool an LLM agent will call and wake its scaled-to-zero pod before the call arrives, hiding the cold-start latency (1–5 s) that accumulates across multi-step agent loops.
+
+The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knative** because OpenFaaS Community Edition never keeps a function at zero replicas, so tools never go cold during a run (see `docs/Knative_decision.docx`).
 
 ## System Architecture
 
-The system has four main components:
+1. **Agent** (`agent/`) — A custom ReAct agent (reason → act → observe, one tool call at a time) on tau-bench's airline domain, with an LLM-simulated customer. LLMs via Groq / OpenRouter / Ollama. Sends a prediction hint (workflow ID, episode, trajectory so far) to the predictor before every LLM step.
 
-1. **Agent** — A custom ReAct agent (reason → act → observe) that emits a prediction hint (workflow ID, current node, recent trajectory) *before* each tool call.
+2. **Prediction Service** (`predictor/`, Python + scikit-learn + FastAPI) — Graph + history + trajectory models (and an ensemble) return ranked next-tool probabilities; tools with P ≥ θ become `PrewarmRequest` objects (CRD). Target: p95 < 50 ms at 10 hints/s.
 
-2. **Prediction Service** (Python + scikit-learn) — Receives hints, uses workflow graph topology + historical telemetry + real-time trajectory to return ranked next-tool probabilities. Must respond at p95 < 50 ms at 10 hints/s.
+3. **Prewarm Controller** (`controller/prewarm_controller.py`, Python) — Watches `PrewarmRequest` objects and sends the tool one MCP `ping`, which makes Knative start a pod if the tool is at zero. TTL = the tools' Knative idle window (`autoscaling.knative.dev/window`, 60 s); Knative scales unused tools back to zero, and the controller marks them `Evicted`. Contract and status fields: `deploy/prewarm/README.md`.
 
-3. **Prewarming Controller** (Go + controller-runtime) — Watches a Kubernetes CRD. When the predictor outputs a tool with confidence ≥ θ, the controller scales up the corresponding OpenFaaS replica. A TTL triggers automatic eviction if the tool is unused.
-
-4. **MCP Tool Functions** (OpenFaaS) — 14 tools from tau-bench's airline environment (reads + writes). Controlled startup behavior (~50–150 ms execution time) is the measurement target.
+4. **MCP Tool Functions** (Knative) — 14 tau-bench airline tools, each its own MCP server (`agent/mcp_server.py`) and Knative Service, sharing one Redis copy of the airline database.
 
 ### Tier Boundaries
 
 | From → To | Data |
 |---|---|
 | Agent → Predictor | Workflow ID, current tool, trajectory, graph ID, timestamp |
-| Predictor → Controller | Tool ID, probability, threshold θ, TTL, desired replicas (via CRD) |
-| OpenFaaS → Agent | Tool result + latency |
+| Predictor → Controller | Tool ID, probability, threshold θ, TTL, desired replicas (via the `PrewarmRequest` CRD) |
+| Knative tool → Agent | Tool result + latency |
 | Any → Trace store | Tool/timing/resource/prediction fields (no raw prompts or credentials) |
 
 ## Technology Stack
 
 | Layer | Choice |
 |---|---|
-| Orchestration | Kubernetes |
-| FaaS | OpenFaaS (note: scale-to-zero requires Pro/paid tier) |
-| MCP | MCP SDK microservers |
-| Prediction | Python + scikit-learn |
-| Controller | Go + controller-runtime / client-go |
-| Load generation | Locust / asyncio |
-| Metrics | Prometheus |
-| Trace store | SQLite (dev) / PostgreSQL (prod) |
+| Orchestration | Kubernetes: kind (local, 2 nodes) or AWS EKS (`EKS_deployment/`) |
+| Serverless | Knative Serving v1.23 + Kourier (min-scale 0 = scale-to-zero) |
+| MCP | MCP Python SDK, Streamable HTTP, one server per tool |
+| Prediction | Python + scikit-learn, FastAPI |
+| Controller | Python (`kubernetes` client); a Go/controller-runtime port is possible later |
+| Load generation | Trace replay (`test/test_knative/w1_replay.py`) and the live agent (`w1_live.py`) |
+| Metrics | Prometheus (`/metrics` on the predictor and the runners) |
+| Trace store | CSV / JSONL files per run (`test/test_knative/results/`) |
+
+## Repository Layout
+
+| Path | What |
+|---|---|
+| `agent/` | ReAct agent, LLM client, simulated user, MCP tool servers, hints, `tau_airline/` (tools, data, tasks) |
+| `predictor/` | Steps 1–9: trace export, graphs, models, training, evaluation, API, load test, CRD writer |
+| `controller/` | Prewarm controller and its action logs |
+| `deploy/knative/` | Knative Services for the tools, Redis, `deploy.sh`, per-tool cold/warm check |
+| `deploy/prewarm/` | `PrewarmRequest` CRD and the predictor ↔ controller contract |
+| `test/test_knative/` | Local cluster setup, C0/C1/C3 runners, plots, `results/` |
+| `test/test_cold_start/` | The OpenFaaS CE tests that led to the move to Knative |
+| `EKS_deployment/` | EKS cluster, Knative setup, `run_c0/c1/c3/all.sh` |
+| `workloads/` | Workload spreadsheet (prompts, graphs, real traces) |
+| `docs/` | PRD and the Knative decision document |
+
+Result folders are named `<date>_<time>_<config>_W1-<replay|live>_<details>[_label]`, e.g. `2026-10-22_1336_C3_W1-replay_task9-x3`.
 
 ## Evaluation Configurations
 
-- **C0** — scale-to-zero, no prewarming (cold-start baseline)
-- **C1** — always-warm, one ready replica per tool (latency floor / resource ceiling)
-- **C3** — graph + history + trajectory predictor with threshold θ and TTL eviction (proposed method)
+- **C0** — scale-to-zero (min-scale 0), no prewarming (cold-start baseline)
+- **C1** — always-warm, min-scale 1 per tool (latency floor / resource ceiling)
+- **C3** — scale-to-zero + predictor (θ) + prewarm controller, TTL = Knative idle window (proposed method)
 
 Key NFR targets: predictive p50 ≥20% lower than C0; p99 ≥15% lower; ≥30% fewer warm-pod-seconds than C1.
 
 ## Key Design Decisions
 
-- **CRD + Controller over script**: continuous reconciliation loop handles pod failures automatically.
+- **Knative over OpenFaaS CE**: real scale-to-zero, the activator holds requests during a cold start (miss fallback, FR-8), private images allowed.
+- **Prewarm by MCP ping ("Option A")**: changing a Knative Service's min-scale creates a new Revision, so the controller wakes tools with a request instead; Knative's idle window is the TTL.
+- **CRD + controller over a script**: the predictor only writes desired state; the controller reconciles it.
 - **Lightweight feature model first**: scikit-learn before LSTMs/Transformers — isolate prewarming impact from model complexity.
-- **Go for controller**: native Kubernetes libraries (client-go, controller-runtime), lower overhead than Python.
-- **MCP over direct API calls**: standardized, discoverable tools with controllable startup behavior needed for reproducible measurement.
+- **MCP over direct API calls**: standardized, discoverable tools with controllable startup behavior for reproducible measurement.
+- **Replay for baselines**: seeded replay of recorded traces gives identical request sequences across C0/C1/C3 without LLM quota limits.
 
 ## Hardware Setup
 
 - **Client tier**: laptop (2–4 vCPU, 8 GB) for load generation and agent execution.
-- **Cloud tier**: Kubernetes cluster, 2 worker nodes (2–4 vCPU, 16 GB, 50 GB SSD each).
+- **Cloud tier**: PRD: 2 worker nodes (2–4 vCPU, 16 GB, 50 GB SSD each). EKS currently uses 2 × m7i-flex.large (2 vCPU, 8 GiB, Free Tier eligible).
 
 ## Workload Protocol
 
-All experiments use: 3 branching tau-bench airline workflows, fixed seeds, 2-min warm-up + 10-min steady state, 3 trials (report median with min/max).
+All experiments use: 3 branching tau-bench airline workflows, fixed seeds, 2-min warm-up + 10-min steady state, 3 trials (report median with min/max). So far only W1 (change/cancel a booking) has been run.

@@ -1,0 +1,108 @@
+{
+  "episodes": 50,
+  "tool_calls": 319,
+  "transport_failures": 0,
+  "cold_calls": 60,
+  "cold_share": 0.188,
+  "latency_ms": {
+    "all": {
+      "p50": 339.9,
+      "p95": 1768.3,
+      "p99": 2194.5,
+      "mean": 592.5
+    },
+    "cold": {
+      "p50": 1631.9,
+      "p95": 2194.5,
+      "max": 4307.6
+    },
+    "warm": {
+      "p50": 283.4,
+      "p95": 541.1,
+      "max": 846.0
+    }
+  },
+  "cold_start_time_added_s": 86.2,
+  "signals_agree": 307,
+  "pods_started": 70,
+  "pod_seconds_seen": 9523.0,
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 144,
+      "cold": 7,
+      "cold_share": 0.05
+    },
+    "get_user_details": {
+      "calls": 41,
+      "cold": 3,
+      "cold_share": 0.07
+    },
+    "update_reservation_flights": {
+      "calls": 33,
+      "cold": 9,
+      "cold_share": 0.27
+    },
+    "search_direct_flight": {
+      "calls": 33,
+      "cold": 10,
+      "cold_share": 0.3
+    },
+    "cancel_reservation": {
+      "calls": 27,
+      "cold": 8,
+      "cold_share": 0.3
+    },
+    "transfer_to_human_agents": {
+      "calls": 15,
+      "cold": 7,
+      "cold_share": 0.47
+    },
+    "search_onestop_flight": {
+      "calls": 13,
+      "cold": 8,
+      "cold_share": 0.62
+    },
+    "think": {
+      "calls": 8,
+      "cold": 4,
+      "cold_share": 0.5
+    },
+    "calculate": {
+      "calls": 5,
+      "cold": 4,
+      "cold_share": 0.8
+    }
+  },
+  "config": "C3",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": 50,
+    "traces": null,
+    "tasks": [
+      6,
+      20,
+      22,
+      26,
+      30
+    ],
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": false,
+    "predictor_url": "http://127.0.0.1:8000",
+    "workflow_id": "W1",
+    "label": "eks"
+  },
+  "hints": {
+    "sent": 319,
+    "answered": 319
+  }
+}

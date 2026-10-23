@@ -1,7 +1,7 @@
 """
-Plots for one C0 run folder (w1_replay_* or w1_live_*). Saves PNGs into <run>/plots/.
+Plots for one run folder (results/<date>_<config>_W1-replay_* or _W1-live_*). Saves PNGs into <run>/plots/.
 
-  python test/test_knative/plot_c0.py test/test_knative/results/w1_replay_20261019-001516
+  python test/test_knative/plot_c0.py test/test_knative/results/2026-10-19_0015_C0_W1-replay_taubench-46ep
 
   1_latency_cdf.png          latency distribution: all / warm / cold, with p50 p95 p99
   2_tool_calls_cold_warm.png calls per tool, split warm / cold
@@ -251,7 +251,7 @@ def fig_examples(rows, eps, cfg, out):
 
 
 def main():
-    run = Path(sys.argv[1]) if len(sys.argv) > 1 else sorted((Path(__file__).parent / "results").glob("w1_replay_*"))[-1]
+    run = Path(sys.argv[1]) if len(sys.argv) > 1 else sorted((Path(__file__).parent / "results").glob("*_W1-replay_*"))[-1]
     rows, eps, pods, cfg = load(run)
     out = run / "plots"
     out.mkdir(exist_ok=True)

@@ -8,7 +8,7 @@ Run with the agent's Python (it needs the `mcp` package), from the project root:
   agent/.venv/Scripts/python deploy/knative/check_tools.py      # Windows
   agent/.venv/bin/python     deploy/knative/check_tools.py      # macOS / Linux
 
-Results: deploy/knative/results/tools_cold_warm_<time>.csv
+Results: deploy/knative/results/<date>_<time>_<config>_tools-cold-warm.csv
 """
 
 import csv
@@ -83,7 +83,7 @@ def main():
               f"(min {min(c):.0f}, max {max(c):.0f}) | warm p50 {statistics.median(w):.0f} ms")
     out_dir = HERE / "results"
     out_dir.mkdir(exist_ok=True)
-    path = out_dir / f"tools_cold_warm_{time.strftime('%Y%m%d-%H%M%S')}.csv"
+    path = out_dir / f"{time.strftime('%Y-%m-%d_%H%M')}_C0_tools-cold-warm.csv"
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["tool", "cold_ms", "warm_ms", "ok", "result"])
         w.writeheader()

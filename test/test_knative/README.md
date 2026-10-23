@@ -74,12 +74,12 @@ For each trial it prints:
 - **waited**: how long the idle service took to reach zero pods
 - the pod timeline in seconds after the request: created, scheduled, container started, ready
 
-Results go to `results/c0_<time>.csv` (per trial) and `results/c0_<time>_summary.json`
+Results go to `results/<date>_<time>_C0_single-function.csv` (per trial) and `..._summary.json`
 (p50/p95 cold and warm, cold-start penalty).
 
 ## Results (2026-10-15, laptop, 10 trials)
 
-`results/c0_20261015-200019*`. Setup: kind with 2 nodes, Docker 4 CPU / 4 GB, image cached on the node.
+`results/2026-10-15_2000_C0_single-function*`. Setup: kind with 2 nodes, Docker 4 CPU / 4 GB, image cached on the node.
 
 | | p50 | p95 | min | max |
 |---|---|---|---|---|
@@ -91,7 +91,7 @@ Results go to `results/c0_<time>.csv` (per trial) and `results/c0_<time>_summary
 - Knative scaled the idle service to zero after **38–49 s** (6 s window + 30 s grace period + pod shutdown).
 - The pod timeline is coarse: Kubernetes timestamps have **1 s resolution**, so "created" can show up to −1 s.
   `ready_s` is often empty because Knative's queue-proxy forwards the request before Kubernetes marks the pod Ready.
-- The first run (`results/discarded/`) had 4/10 HTTP 500s. Cause: the readiness probe used the watchdog's
+- A first run (deleted, still in git history) had 4/10 HTTP 500s. Cause: the readiness probe used the watchdog's
   `/_/health`, which passes before `handler.py` listens. Fixed by probing `/_/ready` with a fast
   `/healthz` handler path (image `0.2`).
 

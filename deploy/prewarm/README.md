@@ -100,6 +100,7 @@ prefixes.
   The agent's call then simply waits for the same pod (never fails), but only part of the cold start
   is hidden. Prewarms sent earlier (during customer turns, or predicting further ahead) hide all of it.
 - The controller runs on the laptop (like the predictor). It can later run in the cluster as a
-  Deployment, or be ported to Go (controller-runtime): the logic is the 3 steps above.
+  Deployment, or be ported to Go (controller-runtime; an earlier Go skeleton is in git history,
+  commit `4153875`): the logic is the 3 steps above.
 - The ping is a real MCP request (`{"method": "ping"}` to `/mcp`), not `/healthz`: requests to
   `/healthz` through Kourier are answered by Knative itself and do not wake the tool.

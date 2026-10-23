@@ -1,7 +1,7 @@
 """
 Compare runs of the SAME workload under different configs (C0, C1, later C3).
 
-  python test/test_knative/plot_compare.py results/w1_replay_A results/w1_replay_B [...] --out results/compare_C0_C1
+  python test/test_knative/plot_compare.py results/<C0 run> results/<C3 run> [...] --out results/compare_<date>_C0-vs-C3
 
   1_latency_cdf.png     latency distribution of every config on one chart
   2_percentiles.png     p50 / p95 / p99 per config

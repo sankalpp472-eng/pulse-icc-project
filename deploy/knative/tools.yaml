@@ -13,7 +13,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: book_reservation
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -52,7 +52,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: calculate
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -91,7 +91,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: cancel_reservation
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -130,7 +130,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: get_reservation_details
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -169,7 +169,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: get_user_details
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -208,7 +208,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: list_all_airports
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -247,7 +247,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: search_direct_flight
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -286,7 +286,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: search_onestop_flight
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -325,7 +325,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: send_certificate
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -364,7 +364,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: think
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -403,7 +403,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: transfer_to_human_agents
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -442,7 +442,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: update_reservation_baggages
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -481,7 +481,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: update_reservation_flights
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
@@ -520,7 +520,7 @@ spec:
         pulse/role: mcp-tool
         pulse/tool: update_reservation_passengers
       annotations:
-        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/min-scale: "0"
         autoscaling.knative.dev/window: "60s"
     spec:
       containers:
