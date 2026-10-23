@@ -1,0 +1,47 @@
+[
+  {
+    "run": "w1-c0-eks",
+    "config": "C0",
+    "seed": 252,
+    "window": "60s",
+    "calls": 24,
+    "real_cold_starts": 18,
+    "slow_warm_calls_over_1s": 0,
+    "pods_started": 18,
+    "pod_seconds": 1521,
+    "p50_ms": 1836.2,
+    "p95_ms": 2436.5,
+    "p99_ms": 2930.9,
+    "mean_ms": 1631.7
+  },
+  {
+    "run": "w1-c3-eks",
+    "config": "C3",
+    "seed": 252,
+    "window": "60s",
+    "calls": 24,
+    "real_cold_starts": 12,
+    "slow_warm_calls_over_1s": 1,
+    "pods_started": 22,
+    "pod_seconds": 1894,
+    "p50_ms": 1648.5,
+    "p95_ms": 2123.9,
+    "p99_ms": 2206.3,
+    "mean_ms": 1193.0
+  },
+  {
+    "run": "w1-c1-eks",
+    "config": "C1",
+    "seed": 252,
+    "window": "60s",
+    "calls": 24,
+    "real_cold_starts": 0,
+    "slow_warm_calls_over_1s": 0,
+    "pods_started": 14,
+    "pod_seconds": 3708,
+    "p50_ms": 378.0,
+    "p95_ms": 493.8,
+    "p99_ms": 597.8,
+    "mean_ms": 395.0
+  }
+]

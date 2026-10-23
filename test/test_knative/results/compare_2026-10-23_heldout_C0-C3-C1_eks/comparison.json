@@ -1,0 +1,47 @@
+[
+  {
+    "run": "2026-10-23_0738_C0_W1-replay_tasks6-20-22-26-30-50ep_eks",
+    "config": "C0",
+    "seed": 252,
+    "window": "60s",
+    "calls": 319,
+    "real_cold_starts": 68,
+    "slow_warm_calls_over_1s": 34,
+    "pods_started": 76,
+    "pod_seconds": 8856,
+    "p50_ms": 446.1,
+    "p95_ms": 2984.7,
+    "p99_ms": 5610.9,
+    "mean_ms": 1038.3
+  },
+  {
+    "run": "2026-10-23_0802_C3_W1-replay_tasks6-20-22-26-30-50ep_eks",
+    "config": "C3",
+    "seed": 252,
+    "window": "60s",
+    "calls": 319,
+    "real_cold_starts": 48,
+    "slow_warm_calls_over_1s": 12,
+    "pods_started": 70,
+    "pod_seconds": 9523,
+    "p50_ms": 339.9,
+    "p95_ms": 1768.3,
+    "p99_ms": 2194.5,
+    "mean_ms": 592.5
+  },
+  {
+    "run": "2026-10-23_0827_C1_W1-replay_tasks6-20-22-26-30-50ep_eks",
+    "config": "C1",
+    "seed": 252,
+    "window": "60s",
+    "calls": 319,
+    "real_cold_starts": 0,
+    "slow_warm_calls_over_1s": 17,
+    "pods_started": 21,
+    "pod_seconds": 19089,
+    "p50_ms": 333.3,
+    "p95_ms": 1276.1,
+    "p99_ms": 1604.5,
+    "mean_ms": 412.9
+  }
+]
