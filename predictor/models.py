@@ -159,10 +159,17 @@ class Predictor:
         """Unknown or missing workflow id -> the pooled airline model."""
         return self.models.get(workflow_id) or self.models[POOLED]
 
-    def proba(self, workflow_id, trajectory, model="ensemble"):
-        """{tool: probability} over every possible next tool (incl. END). Sums to 1."""
+    def proba(self, workflow_id, trajectory, model="ensemble", signals=None):
+        """{tool: probability} over every possible next tool (incl. END). Sums to 1.
+        model="lgbm" needs the hint's signals and a loaded LightGBM model (predictor/data/lgbm.pkl);
+        without either it falls back to the ensemble."""
         m = self.model_for(workflow_id)
         traj = list(trajectory)
+        if model == "lgbm":
+            lgbm = getattr(self, "lgbm", None)
+            if lgbm is not None and signals is not None:
+                return lgbm.proba(m.workflow_id, traj, signals, m.vocab)
+            model = "ensemble"
         if model == "graph":
             return m.p_graph(traj)
         if model == "history":
@@ -175,9 +182,9 @@ class Predictor:
             return self.lr.proba(m.workflow_id, traj, m.vocab)
         raise ValueError(f"unknown model {model!r}; use one of {MODEL_NAMES}")
 
-    def rank(self, workflow_id, trajectory, model="ensemble"):
+    def rank(self, workflow_id, trajectory, model="ensemble", signals=None):
         """[(tool, probability), ...] highest first."""
-        p = self.proba(workflow_id, trajectory, model)
+        p = self.proba(workflow_id, trajectory, model, signals)
         return sorted(p.items(), key=lambda kv: -kv[1])
 
 

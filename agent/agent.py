@@ -21,11 +21,11 @@ from tools import TERMINATE_TOOLS, LocalToolBackend, make_tool_backend
 from user import STOP, HumanUser, SimulatedUser
 
 
-def emit_hint(episode_id: str, trajectory: list[str]) -> None:
+def emit_hint(episode_id: str, trajectory: list[str], messages: list[dict] | None = None) -> None:
     """Called right before every LLM step. Sends {workflow id, current tool,
-    recent trajectory} to the predictor in the background (see hints.py).
-    Does nothing when PREDICTOR_URL is not set."""
-    send_hint(episode_id, trajectory)
+    recent trajectory} (+ signals computed from `messages`, for the LightGBM predictor)
+    to the predictor in the background (see hints.py). Does nothing when PREDICTOR_URL is not set."""
+    send_hint(episode_id, trajectory, messages)
 
 def _chat_within_limit(messages: list[dict], schemas: list[dict], scale: float = 1.0):
     """chat() on a copy trimmed to the context budget, with two provider glitches handled:
@@ -83,7 +83,7 @@ def run_episode(task: dict, user: str = "sim", max_steps: int = 30,
     scale = 1.0   # real/estimated prompt tokens, updated after every LLM call
     _chat_within_limit.scale = 1.0
     for step in range(1, max_steps + 1):
-        emit_hint(episode_id, trajectory)
+        emit_hint(episode_id, trajectory, messages)
         r, trimmed = _chat_within_limit(messages, tools.schemas, scale)
         scale = getattr(_chat_within_limit, "scale", scale)
         m = r.message
