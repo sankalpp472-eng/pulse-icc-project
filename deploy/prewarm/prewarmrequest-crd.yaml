@@ -60,7 +60,7 @@ spec:
                 probability:     {type: number, minimum: 0, maximum: 1, description: "predicted P(next tool)"}
                 threshold:       {type: number, minimum: 0, maximum: 1, description: "theta used for this decision"}
                 ttlSeconds:      {type: integer, minimum: 1, description: "predictor's intended TTL. Option A: informational only; the real TTL is the Knative idle window (status.effectiveTtlSeconds)"}
-                desiredReplicas: {type: integer, minimum: 0, maximum: 5, description: "Option A: unused (the warm-up request yields one pod)"}
+                desiredReplicas: {type: integer, minimum: 0, maximum: 5, description: "fan-out width k from the next-action predictor (pending-ID rule); Option A controller does not act on it yet (one ping = one pod)"}
                 requestedAt:     {type: string, format: date-time, description: "time of the latest prediction (RFC 3339); a newer value triggers a new warm-up ping"}
                 episodeId:       {type: string}
                 workflowId:      {type: string}

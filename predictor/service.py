@@ -3,16 +3,18 @@ Step 6: the prediction API.
 
     uvicorn service:app --app-dir predictor --port 8000          # run from the repo root
 
-  POST /predict   hint in  -> ranked next tools + the tools to prewarm (P >= theta)
+  POST /predict   hint in  -> ranked next actions + the tools to prewarm (P >= theta), each with k replicas
   GET  /healthz   "ok" once the model is loaded
   GET  /metrics   Prometheus metrics (FR-11)
   GET  /docs      interactive test page (FastAPI)
 
 Settings (environment variables):
-  PREDICTOR_MODEL  ensemble | trajectory | history | graph | lr | lgbm   (default ensemble)
-                   lgbm needs predictor/data/lgbm.pkl (train_lgbm.py) and hints that carry
-                   "signals" (agent/hints.py); a hint without signals is answered by the ensemble
-  LGBM_PATH        default predictor/data/lgbm.pkl
+  PREDICTOR_MODEL  tool-only models: ensemble | trajectory | history | graph | lr   (default ensemble)
+                   next-action models (14 tools + RESPOND, fan-out k): gbt (main; lgbm = alias) |
+                   lr_action | ngram_action. They need predictor/data/action_model.pkl
+                   (build_action_data.py + train_action.py) and hints that carry "signals"
+                   (agent/hints.py); a hint without signals is answered by the ensemble
+  ACTION_MODEL_PATH  default predictor/data/action_model.pkl
   THETA            confidence threshold for prewarming             (default 0.3)
   TTL_S            TTL the controller should give a prewarmed pod  (default 60)
   MODEL_PATH       default predictor/data/model.pkl
@@ -36,10 +38,10 @@ from fastapi.responses import RedirectResponse
 from prometheus_client import Counter, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
 
-import lgbm_model  # noqa: F401  (needed so pickle can find the LightGBM wrapper)
+import action_model  # noqa: F401  (needed so pickle can find the action-model classes)
 import models  # noqa: F401  (needed so pickle can find the model classes)
 from crd_writer import CRDWriter
-from models import POOLED, prewarm_set
+from models import ACTION_MODELS, MODEL_NAMES, POOLED, prewarm_set
 
 HERE = Path(__file__).resolve().parent
 MODEL_PATH = Path(os.getenv("MODEL_PATH", HERE / "data" / "model.pkl"))
@@ -51,13 +53,16 @@ AUDIT_LOG = os.getenv("AUDIT_LOG")
 with open(MODEL_PATH, "rb") as f:
     PRED = pickle.load(f)
 
-LGBM_PATH = Path(os.getenv("LGBM_PATH", HERE / "data" / "lgbm.pkl"))
-PRED.lgbm = None
-if MODEL_NAME == "lgbm":
-    if not LGBM_PATH.exists():
-        raise SystemExit(f"PREDICTOR_MODEL=lgbm but {LGBM_PATH} is missing: run predictor/train_lgbm.py")
-    with open(LGBM_PATH, "rb") as f:
-        PRED.lgbm = pickle.load(f)
+if MODEL_NAME not in MODEL_NAMES and MODEL_NAME not in ACTION_MODELS:
+    raise SystemExit(f"Unknown PREDICTOR_MODEL={MODEL_NAME}; use one of {list(MODEL_NAMES) + list(ACTION_MODELS)}")
+ACTION_PATH = Path(os.getenv("ACTION_MODEL_PATH", HERE / "data" / "action_model.pkl"))
+PRED.action = None
+if MODEL_NAME in ACTION_MODELS:
+    if not ACTION_PATH.exists():
+        raise SystemExit(f"PREDICTOR_MODEL={MODEL_NAME} needs {ACTION_PATH}: run predictor/build_action_data.py "
+                         "and predictor/train_action.py")
+    with open(ACTION_PATH, "rb") as f:
+        PRED.action = pickle.load(f)
 
 WRITER = CRDWriter()   # CRD_MODE=off|dryrun|k8s
 
@@ -75,12 +80,14 @@ class Hint(BaseModel):
     current_tool: Optional[str] = Field(None, description="optional; used if trajectory is empty")
     ts: Optional[float] = None
     signals: Optional[dict[str, float]] = Field(
-        None, description="numbers / yes-no flags from predictor/signals.py (no raw text); used by lgbm")
+        None, description="numbers / yes-no flags from predictor/signals.py (no raw text); "
+                          "used by the next-action models")
 
 
 class ToolProb(BaseModel):
-    tool: str
+    tool: str                 # a tool, or RESPOND / END
     p: float
+    k: Optional[int] = None   # prewarm list only: fan-out width = desiredReplicas in the PrewarmRequest
 
 
 class Prediction(BaseModel):
@@ -88,7 +95,7 @@ class Prediction(BaseModel):
     episode_id: str
     model: str
     ranked: list[ToolProb]
-    prewarm: list[ToolProb]   # tools with p >= theta (never END)
+    prewarm: list[ToolProb]   # tools with p >= theta (never END or RESPOND), with k
     theta: float
     ttl_s: int
     latency_ms: float
@@ -106,6 +113,7 @@ async def root():
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok", "model": MODEL_NAME, "workflows": sorted(PRED.models),
+            "action_models": PRED.action.names if PRED.action else [],
             "theta": THETA, "ttl_s": TTL_S,
             "crd": {"mode": WRITER.mode, **WRITER.stats, "last_error": WRITER.last_error}}
 
@@ -118,6 +126,9 @@ async def predict(h: Hint):
 
     ranked = PRED.rank(wf, traj, MODEL_NAME, h.signals)
     warm = set(prewarm_set(ranked, THETA))
+    action_used = MODEL_NAME in ACTION_MODELS and PRED.action is not None and h.signals is not None
+    # fan-out width k per prewarmed tool: pending-ID rule (action models), else 1
+    k = {t: (PRED.action.fanout.k(t, h.signals) if action_used else 1) for t in warm}
     latency = time.perf_counter() - t0
 
     LATENCY.observe(latency)
@@ -129,15 +140,15 @@ async def predict(h: Hint):
             for t, p in ranked:
                 if t in warm:
                     f.write(json.dumps({"time": time.time(), "tool": t, "probability": round(p, 4),
-                                        "action": "prewarm", "ttl_s": TTL_S}) + "\n")
+                                        "action": "prewarm", "replicas": k[t], "ttl_s": TTL_S}) + "\n")
 
     # Step 9: hand the prewarm list to the controller (background thread, returns at once)
-    WRITER.submit([(t, p) for t, p in ranked if t in warm], THETA, TTL_S,
+    WRITER.submit([(t, p, k[t]) for t, p in ranked if t in warm], THETA, TTL_S,
                   episode_id=h.episode_id, workflow_id=wf)
 
-    used = MODEL_NAME if MODEL_NAME != "lgbm" or h.signals is not None else "ensemble (no signals in hint)"
+    used = MODEL_NAME if MODEL_NAME not in ACTION_MODELS or action_used else "ensemble (no signals in hint)"
     return Prediction(
         workflow_id=wf, episode_id=h.episode_id, model=used,
         ranked=[ToolProb(tool=t, p=round(p, 6)) for t, p in ranked],
-        prewarm=[ToolProb(tool=t, p=round(p, 6)) for t, p in ranked if t in warm],
+        prewarm=[ToolProb(tool=t, p=round(p, 6), k=k[t]) for t, p in ranked if t in warm],
         theta=THETA, ttl_s=TTL_S, latency_ms=round(latency * 1000, 3))

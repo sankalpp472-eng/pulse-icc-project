@@ -70,7 +70,7 @@ def build_graph(episode_id: str, tools, customer, max_steps: int,
     model = _make_model(tools.schemas)
 
     def hint(state: State):
-        emit_hint(episode_id, state["trajectory"])
+        emit_hint(episode_id, state["trajectory"], state["messages"])
         return {}
 
     def agent(state: State):

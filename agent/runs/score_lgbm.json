@@ -1,0 +1,540 @@
+{
+  "summary": {
+    "hints_sent": 25,
+    "hints_answered": 25,
+    "llm_steps": 25,
+    "tool_steps": 17,
+    "top1_accuracy": 0.706,
+    "top3_accuracy": 0.824,
+    "prewarm_hit_rate": 0.706,
+    "prewarmed_per_step": 1.0,
+    "wasted_per_step": 0.52,
+    "hint_rtt_ms_median": 45.89,
+    "lead_time_s_median (LLM think after hint)": 1.21
+  },
+  "steps": [
+    {
+      "step": 1,
+      "trajectory_len": 0,
+      "true_next": "(answered customer)",
+      "top3": [
+        "get_reservation_details",
+        "get_user_details",
+        "search_direct_flight"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 36.54,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 0.833,
+      "rate_wait_s": 0.0
+    },
+    {
+      "step": 2,
+      "trajectory_len": 0,
+      "true_next": "get_user_details",
+      "top3": [
+        "get_user_details",
+        "get_reservation_details",
+        "search_direct_flight"
+      ],
+      "prewarm": [
+        "get_user_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 32.61,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 0.719,
+      "rate_wait_s": 0.0
+    },
+    {
+      "step": 3,
+      "trajectory_len": 1,
+      "true_next": "(answered customer)",
+      "top3": [
+        "get_reservation_details",
+        "calculate",
+        "think"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 35.7,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 1.215,
+      "rate_wait_s": 20.0
+    },
+    {
+      "step": 4,
+      "trajectory_len": 1,
+      "true_next": "get_reservation_details",
+      "top3": [
+        "get_reservation_details",
+        "calculate",
+        "search_direct_flight"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 38.59,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 0.676,
+      "rate_wait_s": 29.0
+    },
+    {
+      "step": 5,
+      "trajectory_len": 2,
+      "true_next": "search_direct_flight",
+      "top3": [
+        "search_direct_flight",
+        "get_reservation_details",
+        "think"
+      ],
+      "prewarm": [
+        "search_direct_flight"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 31.97,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 1.252,
+      "rate_wait_s": 27.0
+    },
+    {
+      "step": 6,
+      "trajectory_len": 3,
+      "true_next": "search_direct_flight",
+      "top3": [
+        "search_direct_flight",
+        "search_onestop_flight",
+        "think"
+      ],
+      "prewarm": [
+        "search_direct_flight"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 17.58,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 1.21,
+      "rate_wait_s": 31.0
+    },
+    {
+      "step": 7,
+      "trajectory_len": 4,
+      "true_next": "search_direct_flight",
+      "top3": [
+        "search_direct_flight",
+        "search_onestop_flight",
+        "calculate"
+      ],
+      "prewarm": [
+        "search_direct_flight",
+        "search_onestop_flight"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 63.26,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 1,
+      "think_s": 0.881,
+      "rate_wait_s": 32.0
+    },
+    {
+      "step": 8,
+      "trajectory_len": 5,
+      "true_next": "(answered customer)",
+      "top3": [
+        "search_direct_flight",
+        "search_onestop_flight",
+        "think"
+      ],
+      "prewarm": [
+        "search_direct_flight",
+        "search_onestop_flight"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 45.89,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 2,
+      "think_s": 4.556,
+      "rate_wait_s": 34.0
+    },
+    {
+      "step": 9,
+      "trajectory_len": 5,
+      "true_next": "(answered customer)",
+      "top3": [
+        "think",
+        "search_direct_flight",
+        "search_onestop_flight"
+      ],
+      "prewarm": [],
+      "hint_ok": true,
+      "rtt_ms": 45.89,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 0,
+      "think_s": 3.516,
+      "rate_wait_s": 52.0
+    },
+    {
+      "step": 10,
+      "trajectory_len": 5,
+      "true_next": "(answered customer)",
+      "top3": [
+        "cancel_reservation",
+        "update_reservation_flights",
+        "think"
+      ],
+      "prewarm": [
+        "cancel_reservation"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 37.12,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 1.971,
+      "rate_wait_s": 30.0
+    },
+    {
+      "step": 11,
+      "trajectory_len": 5,
+      "true_next": "cancel_reservation",
+      "top3": [
+        "cancel_reservation",
+        "update_reservation_flights",
+        "book_reservation"
+      ],
+      "prewarm": [
+        "cancel_reservation"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 45.44,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 2.853,
+      "rate_wait_s": 41.0
+    },
+    {
+      "step": 12,
+      "trajectory_len": 6,
+      "true_next": "book_reservation",
+      "top3": [
+        "book_reservation",
+        "search_direct_flight",
+        "calculate"
+      ],
+      "prewarm": [
+        "book_reservation"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 37.66,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 2.923,
+      "rate_wait_s": 53.0
+    },
+    {
+      "step": 13,
+      "trajectory_len": 7,
+      "true_next": "get_user_details",
+      "top3": [
+        "think",
+        "calculate",
+        "search_direct_flight"
+      ],
+      "prewarm": [
+        "think"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 21.9,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 0.981,
+      "rate_wait_s": 50.0
+    },
+    {
+      "step": 14,
+      "trajectory_len": 8,
+      "true_next": "(answered customer)",
+      "top3": [
+        "book_reservation",
+        "get_reservation_details",
+        "search_direct_flight"
+      ],
+      "prewarm": [
+        "book_reservation"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 70.51,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 2.352,
+      "rate_wait_s": 24.0
+    },
+    {
+      "step": 15,
+      "trajectory_len": 8,
+      "true_next": "(answered customer)",
+      "top3": [
+        "book_reservation",
+        "think",
+        "cancel_reservation"
+      ],
+      "prewarm": [
+        "book_reservation"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 42.14,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 2.036,
+      "rate_wait_s": 45.0
+    },
+    {
+      "step": 16,
+      "trajectory_len": 8,
+      "true_next": "book_reservation",
+      "top3": [
+        "book_reservation",
+        "cancel_reservation",
+        "END"
+      ],
+      "prewarm": [
+        "book_reservation"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 50.01,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 1.585,
+      "rate_wait_s": 35.0
+    },
+    {
+      "step": 17,
+      "trajectory_len": 8,
+      "true_next": "book_reservation",
+      "top3": [
+        "END",
+        "book_reservation",
+        "think"
+      ],
+      "prewarm": [],
+      "hint_ok": true,
+      "rtt_ms": 54.88,
+      "top1_hit": false,
+      "top3_hit": true,
+      "prewarm_hit": false,
+      "wasted": 0,
+      "think_s": 1.387,
+      "rate_wait_s": 17.0
+    },
+    {
+      "step": 18,
+      "trajectory_len": 8,
+      "true_next": "book_reservation",
+      "top3": [
+        "book_reservation",
+        "END",
+        "calculate"
+      ],
+      "prewarm": [
+        "book_reservation"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 58.04,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 1.347,
+      "rate_wait_s": 22.0
+    },
+    {
+      "step": 19,
+      "trajectory_len": 8,
+      "true_next": "get_user_details",
+      "top3": [
+        "book_reservation",
+        "END",
+        "calculate"
+      ],
+      "prewarm": [
+        "book_reservation"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 61.57,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 0.929,
+      "rate_wait_s": 46.0
+    },
+    {
+      "step": 20,
+      "trajectory_len": 8,
+      "true_next": "get_reservation_details",
+      "top3": [
+        "book_reservation",
+        "get_reservation_details",
+        "transfer_to_human_agents"
+      ],
+      "prewarm": [
+        "book_reservation"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 82.86,
+      "top1_hit": false,
+      "top3_hit": true,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 1.035,
+      "rate_wait_s": 22.0
+    },
+    {
+      "step": 21,
+      "trajectory_len": 8,
+      "true_next": "get_reservation_details",
+      "top3": [
+        "get_reservation_details",
+        "search_direct_flight",
+        "think"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 92.65,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 0.986,
+      "rate_wait_s": 23.0
+    },
+    {
+      "step": 22,
+      "trajectory_len": 8,
+      "true_next": "get_user_details",
+      "top3": [
+        "get_reservation_details",
+        "search_direct_flight",
+        "think"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 89.18,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 1.723,
+      "rate_wait_s": 22.0
+    },
+    {
+      "step": 23,
+      "trajectory_len": 8,
+      "true_next": "get_reservation_details",
+      "top3": [
+        "get_reservation_details",
+        "transfer_to_human_agents",
+        "think"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 69.72,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 1.368,
+      "rate_wait_s": 44.0
+    },
+    {
+      "step": 24,
+      "trajectory_len": 8,
+      "true_next": "get_reservation_details",
+      "top3": [
+        "get_reservation_details",
+        "search_direct_flight",
+        "think"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 93.22,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 0.848,
+      "rate_wait_s": 44.0
+    },
+    {
+      "step": 25,
+      "trajectory_len": 8,
+      "true_next": "(answered customer)",
+      "top3": [
+        "get_reservation_details",
+        "search_direct_flight",
+        "cancel_reservation"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 84.99,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 1.165,
+      "rate_wait_s": 19.0
+    }
+  ]
+}

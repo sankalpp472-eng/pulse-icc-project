@@ -14,7 +14,7 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 
 1. **Agent** (`agent/`) — A custom ReAct agent (reason → act → observe, one tool call at a time) on tau-bench's airline domain, with an LLM-simulated customer. LLMs via Groq / OpenRouter / Ollama. Sends a prediction hint (workflow ID, episode, trajectory so far) to the predictor before every LLM step.
 
-2. **Prediction Service** (`predictor/`, Python + scikit-learn + FastAPI) — Graph + history + trajectory models (and an ensemble) return ranked next-tool probabilities; tools with P ≥ θ become `PrewarmRequest` objects (CRD). Target: p95 < 50 ms at 10 hints/s.
+2. **Prediction Service** (`predictor/`, Python + scikit-learn + LightGBM + FastAPI) — Two families. Tool-only models (graph / history / trajectory / ensemble / lr) rank the next tool from the trajectory. Next-action models (`gbt` = LightGBM gradient-boosted trees, main; `lr_action`; `ngram_action` baseline; `action_model.py`, `train_action.py`) predict the next LLM step among the 14 tools + RESPOND from the trajectory plus agent-side signals (numbers/flags only, `signals.py`), and a fan-out width k (pending-ID rule) that becomes `desiredReplicas`. Tools with P ≥ θ become `PrewarmRequest` objects (CRD); RESPOND/END are never prewarmed. Target: p95 < 50 ms at 10 hints/s.
 
 3. **Prewarm Controller** (`controller/prewarm_controller.py`, Python) — Watches `PrewarmRequest` objects and sends the tool one MCP `ping`, which makes Knative start a pod if the tool is at zero. TTL = the tools' Knative idle window (`autoscaling.knative.dev/window`, 60 s); Knative scales unused tools back to zero, and the controller marks them `Evicted`. Contract and status fields: `deploy/prewarm/README.md`.
 

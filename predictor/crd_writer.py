@@ -78,11 +78,13 @@ class CRDWriter:
 
     # ---- called by service.py: returns immediately
     def submit(self, prewarm, theta, ttl_s, episode_id="", workflow_id=""):
-        """prewarm = [(tool, probability), ...] -- the tools at or above theta."""
+        """prewarm = [(tool, probability[, k]), ...] -- the tools at or above theta; k -> desiredReplicas."""
         if self.mode == "off":
             return
-        for tool, p in prewarm:
-            self._q.put(make_object(tool, p, theta, ttl_s, episode_id, workflow_id,
+        for item in prewarm:                      # (tool, p) or (tool, p, k replicas)
+            tool, p = item[0], item[1]
+            k = item[2] if len(item) > 2 else 1
+            self._q.put(make_object(tool, p, theta, ttl_s, episode_id, workflow_id, desired_replicas=k,
                                     namespace=self.namespace))
 
     def flush(self, timeout=5.0):

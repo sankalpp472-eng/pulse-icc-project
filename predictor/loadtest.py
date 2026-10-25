@@ -7,6 +7,7 @@ Start the API first (service.py), in another terminal.
 
     python predictor/loadtest.py                               # run from the repo root
     python predictor/loadtest.py --rates 10 --duration 60 --url http://127.0.0.1:8000
+    python predictor/loadtest.py --signals      # next-action models: start the API with PREDICTOR_MODEL=gbt first
 """
 
 import argparse
@@ -30,7 +31,16 @@ def pct(xs, q):
     return xs[min(len(xs) - 1, int(round(q / 100 * (len(xs) - 1))))]
 
 
-def make_hints(seed):
+def make_hints(seed, with_signals=False):
+    if with_signals:   # one hint per LLM step of the test conversations, with real signals (action models)
+        from signals import SIGNAL_KEYS
+        rows = pd.read_csv(HERE / "data" / "action_rows.csv")
+        rows = rows[rows.split == "test"]
+        hints = [{"workflow_id": r.workload, "episode_id": f"load-{r.trace}",
+                  "trajectory": [t for t in (r.last2, r.last1) if t != "START"],
+                  "signals": {k: int(getattr(r, k)) for k in SIGNAL_KEYS}} for r in rows.itertuples()]
+        random.Random(seed).shuffle(hints)
+        return hints
     seqs = sequences_from_steps(pd.read_csv(HERE / "data" / "test.csv"))
     seqs.pop("airline", None)
     hints = [{"workflow_id": wf, "episode_id": f"load-{i}", "trajectory": traj}
@@ -69,9 +79,11 @@ async def main():
     p.add_argument("--rates", type=float, nargs="+", default=[1, 5, 10, 20])
     p.add_argument("--duration", type=float, default=30, help="seconds per rate")
     p.add_argument("--seed", type=int, default=252)
+    p.add_argument("--signals", action="store_true",
+                   help="send signals (for PREDICTOR_MODEL=gbt / lr_action / ngram_action)")
     a = p.parse_args()
 
-    hints = make_hints(a.seed)
+    hints = make_hints(a.seed, a.signals)
     rows = []
     async with httpx.AsyncClient(timeout=5.0) as client:
         await client.post(a.url + "/predict", json=hints[0])          # warm-up

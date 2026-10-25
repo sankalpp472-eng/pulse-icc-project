@@ -21,6 +21,9 @@ GRAPHS_DIR = Path(__file__).resolve().parent / "graphs"
 START, END = "START", "END"
 POOLED = "airline"
 MODEL_NAMES = ("graph", "history", "trajectory", "ensemble", "lr")
+# PREDICTOR_MODEL name -> model inside action_model.pkl (lgbm kept as an alias of gbt)
+ACTION_MODELS = {"gbt": "gbt", "lgbm": "gbt", "lr_action": "lr", "ngram_action": "ngram"}
+NO_PREWARM = {"END", "RESPOND"}
 
 
 # ----------------------------------------------------------------- helpers
@@ -160,15 +163,16 @@ class Predictor:
         return self.models.get(workflow_id) or self.models[POOLED]
 
     def proba(self, workflow_id, trajectory, model="ensemble", signals=None):
-        """{tool: probability} over every possible next tool (incl. END). Sums to 1.
-        model="lgbm" needs the hint's signals and a loaded LightGBM model (predictor/data/lgbm.pkl);
-        without either it falls back to the ensemble."""
+        """{action: probability}, sums to 1.
+        Tool-only models (graph, history, trajectory, ensemble, lr): every tool + END.
+        Action models (gbt, lr_action, ngram_action; needs predictor/data/action_model.pkl and the
+        hint's signals): every tool + RESPOND. Without signals or the model, the ensemble answers."""
         m = self.model_for(workflow_id)
         traj = list(trajectory)
-        if model == "lgbm":
-            lgbm = getattr(self, "lgbm", None)
-            if lgbm is not None and signals is not None:
-                return lgbm.proba(m.workflow_id, traj, signals, m.vocab)
+        if model in ACTION_MODELS:
+            action = getattr(self, "action", None)
+            if action is not None and signals is not None:
+                return action.proba(ACTION_MODELS[model], m.workflow_id, traj, signals)
             model = "ensemble"
         if model == "graph":
             return m.p_graph(traj)
@@ -189,8 +193,9 @@ class Predictor:
 
 
 def prewarm_set(ranked, theta):
-    """FR-5: tools with probability >= theta. END is never prewarmed (it is not a function)."""
-    return [t for t, p in ranked if p >= theta and t != END]
+    """FR-5: tools with probability >= theta. END and RESPOND are never prewarmed (not functions):
+    on a step where the agent will most likely answer the customer, nothing is prewarmed."""
+    return [t for t, p in ranked if p >= theta and t not in NO_PREWARM]
 
 
 def log_loss(p_true):

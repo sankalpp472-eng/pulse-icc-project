@@ -1,40 +1,51 @@
 """
-Signals: what the LightGBM predictor knows about the conversation besides the tool names.
+Signals: what the predictor knows about the conversation besides the last tools.
 
 ONE definition, used in two places so training and live use can never disagree:
-  - predictor/build_lgbm_data.py  computes them from the recorded tau-bench conversations
-  - agent/agent.py (via agent/hints.py) computes them live and sends them in the hint
+  - predictor/build_action_data.py  computes them from the recorded tau-bench conversations
+  - agent/hints.py                  computes them live (from the agent's messages) and sends them
 
-Only numbers and yes/no flags leave this function: no raw customer text, no tool output
-(the PRD: traces keep structure and timing, never raw prompts).
+Only numbers and yes/no flags leave this module: no raw customer text, no tool output, no IDs
+(the PRD: the trace store keeps structure and timing, never raw prompts).
 
-Input = the conversation so far as a list of events, oldest first:
+Input = the conversation so far, oldest first, as events:
     ("user", "<customer message>")
+    ("respond",)                                 the agent answered the customer (an LLM step, no tool)
+    ("call", "<tool name>", {arguments})         the agent called a tool (an LLM step)
     ("tool", "<tool name>", "<tool result text>")
+
+Features (all per the predictor spec):
+  position / usage   step, n_calls, n_distinct, last_repeat, calls_since_user, last_event_user
+  tool output        last_err, pending_ids, out_size
+  customer intent    kw_* flags (crude regexes; an intent classifier could replace them)
+The sequence features (last tool, last two tools) come from the hint's trajectory.
 """
 
 import json
 import re
 
-# Customer intent: does ANY customer message so far mention ...
 INTENT_WORDS = {
-    "kw_cancel": r"\bcancel",
-    "kw_change": r"\b(change|modify|switch|move|reschedul)",
-    "kw_book":   r"\b(book|new (flight|reservation)|reserve)",
-    "kw_bag":    r"\b(bag|baggage|luggage)",
-    "kw_comp":   r"\b(refund|compensat|certificate|delay)",
-    "kw_pass":   r"\b(passenger|name)\b",
-    "kw_cabin":  r"\b(upgrade|cabin|business|economy)",
-    "kw_ins":    r"\binsurance",
-    "kw_human":  r"\b(human|supervisor|representative|manager)",
+    "kw_cancel":  r"\bcancel",
+    "kw_change":  r"\b(change|modify|switch|move|reschedul)",
+    "kw_bag":     r"\b(bag|baggage|luggage)",
+    "kw_book":    r"\b(book|new (flight|reservation|trip)|reserve)",
+    "kw_upgrade": r"\b(upgrade|business class|first class)",
+    "kw_refund":  r"\b(refund|compensat|certificate|voucher|money back)",
+    "kw_all":     r"\b(all|every|each|both)\b",
+    "kw_pass":    r"\b(passenger|name)\b",
+    "kw_ins":     r"\binsurance",
+    "kw_delay":   r"\b(delay|delayed|cancelled by|missed)",
+    "kw_human":   r"\b(human|supervisor|representative|manager)",
 }
 _INTENT_RE = {k: re.compile(v, re.I) for k, v in INTENT_WORDS.items()}
 
-RESULT_KEYS = ["n_calls", "user_turns_since_tool", "last_err", "last_empty", "last_n_items",
-               "res_seen", "res_basic", "res_ins", "res_round", "user_n_res", "member"]
+# Reservation-style IDs: 5-8 upper-case letters/digits with at least one digit (e.g. "UM3OG5")
+_ID_RE = re.compile(r"\b(?=[A-Z0-9]*\d)[A-Z0-9]{5,8}\b")
+
+POSITION_KEYS = ["step", "n_calls", "n_distinct", "last_repeat", "calls_since_user", "last_event_user"]
+OUTPUT_KEYS = ["last_err", "pending_ids", "out_size"]
 INTENT_KEYS = list(INTENT_WORDS)
-SIGNAL_KEYS = RESULT_KEYS + INTENT_KEYS
-MEMBER = {"regular": 0, "silver": 1, "gold": 2}
+SIGNAL_KEYS = POSITION_KEYS + OUTPUT_KEYS + INTENT_KEYS
 
 
 def _json(text):
@@ -44,53 +55,117 @@ def _json(text):
         return None
 
 
-def compute_signals(events, with_intent=True) -> dict:
+def _ids_in_output(data):
+    """IDs listed in a tool result, e.g. get_user_details -> "reservations": ["UM3OG5", ...]."""
+    found = set()
+    if isinstance(data, dict):
+        for v in data.values():
+            if isinstance(v, list) and v and all(isinstance(x, str) for x in v):
+                found |= {x for x in v if _ID_RE.fullmatch(x)}
+    return found
+
+
+def _arg_values(args):
+    vals = set()
+    for v in (args or {}).values():
+        if isinstance(v, str):
+            vals.add(v)
+    return vals
+
+
+def compute_signals(events) -> dict:
     s = {k: 0 for k in SIGNAL_KEYS}
+    s["last_event_user"] = 1                       # a conversation starts with the customer
+    seen, fetched, distinct = set(), set(), set()
+    last_tool, repeat = None, 0
     for ev in events:
-        if ev[0] == "user":
-            s["user_turns_since_tool"] += 1
-            if with_intent:
-                for k, rx in _INTENT_RE.items():
-                    if rx.search(ev[1] or ""):
-                        s[k] = 1
-            continue
-        _, name, result = ev
-        result = result or ""
-        s["n_calls"] += 1
-        s["user_turns_since_tool"] = 0
-        s["last_err"] = int(result.lstrip().lower().startswith("error"))
-        data = _json(result)
-        s["last_empty"] = int(result.strip() in ("", "[]", "{}", "null") or data == [] or data == {})
-        if isinstance(data, list):
-            s["last_n_items"] = len(data)
-        elif isinstance(data, dict):
-            s["last_n_items"] = 1
-        else:
-            s["last_n_items"] = result.count("flight_number")
-        if name == "get_reservation_details" and isinstance(data, dict):
-            s["res_seen"] += 1
-            s["res_basic"] = int(data.get("cabin") == "basic_economy")
-            s["res_ins"] = int(data.get("insurance") == "yes")
-            s["res_round"] = int(data.get("flight_type") == "round_trip")
-        if name == "get_user_details" and isinstance(data, dict):
-            s["user_n_res"] = len(data.get("reservations") or [])
-            s["member"] = MEMBER.get(str(data.get("membership", "")).lower(), 0)
-    if not with_intent:
-        for k in INTENT_KEYS:
-            s.pop(k)
+        kind = ev[0]
+        if kind == "user":
+            s["calls_since_user"] = 0
+            s["last_event_user"] = 1
+            text = ev[1] or ""
+            for k, rx in _INTENT_RE.items():
+                if rx.search(text):
+                    s[k] = 1
+            seen |= set(_ID_RE.findall(text))      # IDs the customer typed
+        elif kind == "respond":
+            s["step"] += 1
+        elif kind == "call":
+            _, name, args = ev
+            s["step"] += 1
+            s["n_calls"] += 1
+            s["calls_since_user"] += 1
+            distinct.add(name)
+            repeat = repeat + 1 if name == last_tool else 1
+            last_tool = name
+            fetched |= _arg_values(args)
+        elif kind == "tool":
+            result = ev[2] or ""
+            s["last_event_user"] = 0
+            s["last_err"] = int(result.lstrip().lower().startswith("error"))
+            s["out_size"] = len(result)
+            seen |= _ids_in_output(_json(result))
+    s["step"] += 1                                  # the step this hint is for
+    s["n_distinct"] = len(distinct)
+    s["last_repeat"] = repeat
+    s["pending_ids"] = len(seen - fetched)
     return s
 
 
-def events_from_messages(messages, trajectory):
-    """Agent side: OpenAI-style messages + the tool names in call order -> events.
-    The k-th tool message is the result of the k-th tool in the trajectory."""
-    events, k = [], 0
+def pending_pool(events) -> set:
+    """The pending IDs themselves (training only: which tools consume them). Never sent anywhere."""
+    seen, fetched = set(), set()
+    for ev in events:
+        if ev[0] == "user":
+            seen |= set(_ID_RE.findall(ev[1] or ""))
+        elif ev[0] == "call":
+            fetched |= _arg_values(ev[2])
+        elif ev[0] == "tool":
+            seen |= _ids_in_output(_json(ev[2] or ""))
+    return seen - fetched
+
+
+def uses_pending(args, pool) -> bool:
+    return bool(_arg_values(args) & pool)
+
+
+def _from_langchain(m) -> dict:
+    kind = getattr(m, "type", "")
+    if kind == "human":
+        return {"role": "user", "content": m.content}
+    if kind == "ai":
+        return {"role": "assistant", "content": m.content,
+                "tool_calls": [{"function": {"name": tc["name"], "arguments": tc.get("args") or {}}}
+                               for tc in (getattr(m, "tool_calls", None) or [])]}
+    if kind == "tool":
+        return {"role": "tool", "content": m.content, "name": getattr(m, "name", None)}
+    return {"role": kind}
+
+
+def events_from_messages(messages, trajectory=None):
+    """Agent side: OpenAI-style messages (agent/agent.py) -> events.
+    Tool results are matched to calls in order; `trajectory` is a fallback for tool names."""
+    events, calls = [], []
     for m in messages:
+        if not isinstance(m, dict):              # LangChain message objects (agent/langgraph_agent.py)
+            m = _from_langchain(m)
         role = m.get("role")
         if role == "user":
             events.append(("user", m.get("content") or ""))
+        elif role == "assistant":
+            tcs = m.get("tool_calls") or []
+            if not tcs:
+                events.append(("respond",))
+            for tc in tcs:
+                fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+                args = fn.get("arguments")
+                if isinstance(args, str):
+                    args = _json(args) or {}
+                events.append(("call", fn.get("name", ""), args or {}))
+                calls.append(fn.get("name", ""))
         elif role == "tool":
-            name = m.get("name") or (trajectory[k] if k < len(trajectory) else "")
+            k = sum(1 for e in events if e[0] == "tool")
+            name = m.get("name") or (calls[k] if k < len(calls) else
+                                     (trajectory[k] if trajectory and k < len(trajectory) else ""))
             events.append(("tool", name, m.get("content") or ""))
-            k += 1
     return events
