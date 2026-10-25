@@ -1,0 +1,261 @@
+{
+  "started": "2026-10-23T14:54:53",
+  "workload": "W1 airline change/cancel (tau-bench), live agent",
+  "task_ids": [
+    20,
+    22
+  ],
+  "models": {
+    "backend": "groq",
+    "agent": "openai/gpt-oss-120b",
+    "user_simulator": "openai/gpt-oss-20b",
+    "api_keys_available": 4
+  },
+  "config": "C0",
+  "knative": {
+    "version": "1.23.0",
+    "tool_min_scale": [
+      "0"
+    ],
+    "tool_window": [
+      "60s"
+    ],
+    "autoscaler_overrides": "none (Knative defaults: stable-window 60s, scale-to-zero-grace-period 30s, scale-to-zero-pod-retention-period 0s)",
+    "ingress": "http://aaf5a726ed648425492650a95eaa4443-1004156480.ap-south-1.elb.amazonaws.com/mcp",
+    "host_template": "{svc}.default.example.com"
+  },
+  "tools": [
+    {
+      "service": "book-reservation",
+      "revision": "book-reservation-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "calculate",
+      "revision": "calculate-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "cancel-reservation",
+      "revision": "cancel-reservation-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "get-reservation-details",
+      "revision": "get-reservation-details-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "get-user-details",
+      "revision": "get-user-details-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "list-all-airports",
+      "revision": "list-all-airports-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "search-direct-flight",
+      "revision": "search-direct-flight-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "search-onestop-flight",
+      "revision": "search-onestop-flight-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "send-certificate",
+      "revision": "send-certificate-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "think",
+      "revision": "think-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "transfer-to-human-agents",
+      "revision": "transfer-to-human-agents-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "update-reservation-baggages",
+      "revision": "update-reservation-baggages-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "update-reservation-flights",
+      "revision": "update-reservation-flights-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "update-reservation-passengers",
+      "revision": "update-reservation-passengers-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    }
+  ],
+  "tool_images": [
+    "docker.io/sankalps2003/pulse-mcp-tools:0.2"
+  ],
+  "database": "redis (shared, reset per episode)",
+  "cluster": {
+    "context": "iam-root-account@pulse-eks.ap-south-1.eksctl.io",
+    "nodes": 2,
+    "kubernetes": "v1.34.11-eks-cfb47f5"
+  },
+  "measurement": {
+    "cold_if_latency_over_s": 1.0,
+    "pod_poll_interval_s": 1.0
+  },
+  "code": {
+    "git_commit": "ade3c75",
+    "uncommitted_changes": true
+  },
+  "db_reset_per_episode": true,
+  "repeats": 1,
+  "context_budget_tokens": 6000,
+  "context_trimming": "sent copy only, oldest first, newest 4 messages kept: old tool results compacted, then replaced by a neutral note, then old long messages cut to 300 chars; saved traces are complete",
+  "fixed_prompt_tokens_estimate": 2800
+}

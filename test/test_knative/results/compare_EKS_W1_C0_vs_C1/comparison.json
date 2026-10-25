@@ -1,0 +1,32 @@
+[
+  {
+    "run": "w1_replay_20261022-163742",
+    "config": "C0",
+    "seed": 252,
+    "window": "60s",
+    "calls": 484,
+    "real_cold_starts": 86,
+    "slow_warm_calls_over_1s": 3,
+    "pods_started": 93,
+    "pod_seconds": 12419,
+    "p50_ms": 316.8,
+    "p95_ms": 1894.8,
+    "p99_ms": 2232.2,
+    "mean_ms": 587.6
+  },
+  {
+    "run": "w1_replay_20261022-170618",
+    "config": "C1",
+    "seed": 252,
+    "window": "60s",
+    "calls": 484,
+    "real_cold_starts": 0,
+    "slow_warm_calls_over_1s": 7,
+    "pods_started": 14,
+    "pod_seconds": 21706,
+    "p50_ms": 307.0,
+    "p95_ms": 540.7,
+    "p99_ms": 1302.7,
+    "mean_ms": 424.9
+  }
+]

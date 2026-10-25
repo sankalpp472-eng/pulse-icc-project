@@ -1,0 +1,12 @@
+episode,task_id,task_set,call_idx,tool,t_start,latency_ms,cold,cold_by_pod,cold_by_latency,pod,idle_gap_s,think_s,rate_wait_s,transport_ok,tool_error
+w1-task20-1792747497,20,safe,0,get_reservation_details,1792747505.488,2140.7,True,True,True,get-reservation-details-00001-deployment-679755cd6f-7tf2s,,0.599,0.0,True,False
+w1-task20-1792747497,20,safe,1,get_user_details,1792747549.188,328.9,False,False,False,,,8.308,24.0,True,False
+w1-task20-1792747497,20,safe,2,search_direct_flight,1792747550.599,2263.9,True,True,True,search-direct-flight-00001-deployment-798589894d-56tpn,,1.016,0.0,True,False
+w1-task20-1792747497,20,safe,3,update_reservation_flights,1792747595.118,1983.3,True,True,True,update-reservation-flights-00001-deployment-77b65d58c7-c25b7,,1.857,37.0,True,False
+w1-task22-1792747670,22,safe,0,get_user_details,1792747720.352,228.6,False,False,False,,170.8,0.74,26.0,True,False
+w1-task22-1792747670,22,safe,1,get_reservation_details,1792747742.676,410.5,False,False,False,,235.0,1.021,21.0,True,False
+w1-task22-1792747670,22,safe,2,search_direct_flight,1792747774.179,1650.2,True,True,True,search-direct-flight-00001-deployment-798589894d-qx4lm,221.3,0.979,30.0,True,False
+w1-task22-1792747670,22,safe,3,update_reservation_flights,1792747824.512,2069.0,True,True,True,update-reservation-flights-00001-deployment-77b65d58c7-mtb4t,227.4,1.734,39.0,True,False
+w1-task22-1792747670,22,safe,4,get_reservation_details,1792747865.09,1663.8,True,True,True,get-reservation-details-00001-deployment-679755cd6f-6z9r9,122.0,1.254,37.0,True,False
+w1-task22-1792747670,22,safe,5,update_reservation_flights,1792747928.77,1990.9,True,True,True,update-reservation-flights-00001-deployment-77b65d58c7-prhpc,102.2,1.172,51.0,True,False
+w1-task22-1792747670,22,safe,6,transfer_to_human_agents,1792748021.968,2020.7,True,False,True,,,0.863,45.0,True,False

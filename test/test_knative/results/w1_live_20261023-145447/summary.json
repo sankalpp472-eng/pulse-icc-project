@@ -1,0 +1,55 @@
+{
+  "stop_reason": "all tasks done",
+  "episodes": 2,
+  "tool_calls": 11,
+  "transport_failures": 0,
+  "cold_calls": 8,
+  "cold_share": 0.727,
+  "cold_p50_ms": 2005.8000000000002,
+  "warm_p50_ms": 328.9,
+  "all_calls_p50_ms": 1983.3,
+  "signals_agree": 10,
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 3,
+      "cold": 2
+    },
+    "get_user_details": {
+      "calls": 2,
+      "cold": 0
+    },
+    "search_direct_flight": {
+      "calls": 2,
+      "cold": 2
+    },
+    "update_reservation_flights": {
+      "calls": 3,
+      "cold": 3
+    },
+    "transfer_to_human_agents": {
+      "calls": 1,
+      "cold": 1
+    }
+  },
+  "agent_model": "openai/gpt-oss-120b",
+  "user_model": "openai/gpt-oss-20b",
+  "database": "redis (shared, reset per episode)",
+  "config": "C0",
+  "tool_window": [
+    "60s"
+  ],
+  "tool_images": [
+    "docker.io/sankalps2003/pulse-mcp-tools:0.2"
+  ],
+  "api_keys_available": 4,
+  "key_switches": [
+    {
+      "time": "2026-10-23 14:55:49",
+      "model": "openai/gpt-oss-120b",
+      "exhausted_key": 1,
+      "organization": "org_01m3p74bbhecctpxpppsdnk4x5",
+      "switched_to": 2
+    }
+  ],
+  "tool_results_trimmed_from_context": 4
+}

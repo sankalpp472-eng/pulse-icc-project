@@ -1,0 +1,91 @@
+{
+  "episodes": 15,
+  "tool_calls": 102,
+  "transport_failures": 0,
+  "cold_calls": 25,
+  "cold_share": 0.245,
+  "latency_ms": {
+    "all": {
+      "p50": 389.0,
+      "p95": 2108.8,
+      "p99": 3019.1,
+      "mean": 827.6
+    },
+    "cold": {
+      "p50": 1763.7,
+      "p95": 3019.1,
+      "max": 3390.9
+    },
+    "warm": {
+      "p50": 359.6,
+      "p95": 859.3,
+      "max": 983.3
+    }
+  },
+  "cold_start_time_added_s": 40.0,
+  "signals_agree": 94,
+  "pods_started": 35,
+  "pod_seconds_seen": 3368.0,
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 39,
+      "cold": 6,
+      "cold_share": 0.15
+    },
+    "get_user_details": {
+      "calls": 18,
+      "cold": 3,
+      "cold_share": 0.17
+    },
+    "search_direct_flight": {
+      "calls": 15,
+      "cold": 4,
+      "cold_share": 0.27
+    },
+    "update_reservation_flights": {
+      "calls": 15,
+      "cold": 3,
+      "cold_share": 0.2
+    },
+    "cancel_reservation": {
+      "calls": 9,
+      "cold": 4,
+      "cold_share": 0.44
+    },
+    "search_onestop_flight": {
+      "calls": 3,
+      "cold": 2,
+      "cold_share": 0.67
+    },
+    "transfer_to_human_agents": {
+      "calls": 3,
+      "cold": 3,
+      "cold_share": 1.0
+    }
+  },
+  "config": "C0",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": null,
+    "traces": [
+      "test/test_knative/results/w1_live_20261023-135307",
+      "test/test_knative/results/w1_live_20261023-145447"
+    ],
+    "tasks": null,
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 3,
+    "sequential": false,
+    "predictor_url": null,
+    "workflow_id": "W1"
+  },
+  "hints": null
+}

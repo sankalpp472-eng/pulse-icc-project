@@ -1,0 +1,4 @@
+episode,task_id,task_set,call_idx,tool,t_start,latency_ms,cold,cold_by_pod,cold_by_latency,pod,idle_gap_s,think_s,rate_wait_s,transport_ok,tool_error
+w1-task4-1792688465,4,multi,0,get_user_details,1792688472.238,5198.4,True,True,True,get-user-details-00008-deployment-5fbf965dc-6lcjh,,0.758,0.0,True,False
+w1-task4-1792688465,4,multi,1,get_reservation_details,1792688488.941,15595.8,True,True,True,get-reservation-details-00008-deployment-645f5f8bff-dbzcr,,1.201,10.0,True,False
+w1-task4-1792688465,4,multi,2,update_reservation_baggages,1792688556.756,9996.4,True,True,True,update-reservation-baggages-00008-deployment-6d5869d85f-wc7sg,,1.25,37.0,True,False

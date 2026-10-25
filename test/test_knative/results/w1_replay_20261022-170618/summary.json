@@ -1,0 +1,125 @@
+{
+  "episodes": 56,
+  "tool_calls": 484,
+  "transport_failures": 0,
+  "cold_calls": 7,
+  "cold_share": 0.014,
+  "latency_ms": {
+    "all": {
+      "p50": 307.0,
+      "p95": 540.7,
+      "p99": 1302.7,
+      "mean": 424.9
+    },
+    "cold": {
+      "p50": 1783.0,
+      "p95": 20054.8,
+      "max": 20054.8
+    },
+    "warm": {
+      "p50": 305.9,
+      "p95": 516.1,
+      "max": 915.7
+    }
+  },
+  "cold_start_time_added_s": 42.8,
+  "signals_agree": 477,
+  "pods_started": 14,
+  "pod_seconds_seen": 21706.0,
+  "per_tool": {
+    "search_direct_flight": {
+      "calls": 138,
+      "cold": 1,
+      "cold_share": 0.01
+    },
+    "get_reservation_details": {
+      "calls": 113,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "get_user_details": {
+      "calls": 45,
+      "cold": 2,
+      "cold_share": 0.04
+    },
+    "update_reservation_flights": {
+      "calls": 45,
+      "cold": 1,
+      "cold_share": 0.02
+    },
+    "think": {
+      "calls": 30,
+      "cold": 2,
+      "cold_share": 0.07
+    },
+    "book_reservation": {
+      "calls": 24,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "search_onestop_flight": {
+      "calls": 19,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "update_reservation_baggages": {
+      "calls": 18,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "cancel_reservation": {
+      "calls": 14,
+      "cold": 1,
+      "cold_share": 0.07
+    },
+    "calculate": {
+      "calls": 14,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "list_all_airports": {
+      "calls": 9,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "transfer_to_human_agents": {
+      "calls": 8,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "update_reservation_passengers": {
+      "calls": 6,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "send_certificate": {
+      "calls": 1,
+      "cold": 0,
+      "cold_share": 0.0
+    }
+  },
+  "config": "C1",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": null,
+    "traces": [
+      "test/test_knative/data/w1_eks5_traces.jsonl"
+    ],
+    "tasks": null,
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": false,
+    "predictor_url": null,
+    "workflow_id": "W1"
+  },
+  "hints": null
+}

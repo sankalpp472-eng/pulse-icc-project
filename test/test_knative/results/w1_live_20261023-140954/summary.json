@@ -1,0 +1,26 @@
+{
+  "stop_reason": "all tasks done",
+  "episodes": 0,
+  "tool_calls": 0,
+  "transport_failures": 0,
+  "cold_calls": 0,
+  "cold_share": null,
+  "cold_p50_ms": null,
+  "warm_p50_ms": null,
+  "all_calls_p50_ms": null,
+  "signals_agree": 0,
+  "per_tool": {},
+  "agent_model": "openai/gpt-oss-120b",
+  "user_model": "openai/gpt-oss-20b",
+  "database": "redis (shared, reset per episode)",
+  "config": "C0",
+  "tool_window": [
+    "60s"
+  ],
+  "tool_images": [
+    "docker.io/sankalps2003/pulse-mcp-tools:0.2"
+  ],
+  "api_keys_available": 4,
+  "key_switches": [],
+  "tool_results_trimmed_from_context": 0
+}

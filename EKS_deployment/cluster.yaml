@@ -4,6 +4,11 @@
 #
 # PRD 7.1 cloud tier: 2 worker nodes, 2-4 vCPU, 16 GB, 50 GB SSD each.
 # Fixed size (min = max = 2): no node autoscaling, so a cold start never includes booting a new node.
+#
+# Instance type: m7i-flex.large (2 vCPU, 8 GiB). Accounts on the AWS *Free plan* can only launch
+# free-tier-eligible types (t3.xlarge is refused: "not eligible for Free Tier"); m7i-flex.large is the
+# largest eligible one. On a paid plan you may switch back to t3.xlarge (4 vCPU, 16 GiB).
+#   aws ec2 describe-instance-types --region ap-south-1 --filters Name=free-tier-eligible,Values=true
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
@@ -14,8 +19,8 @@ metadata:
     project: pulse-ds252
 
 managedNodeGroups:
-  - name: workers
-    instanceType: t3.xlarge   # 4 vCPU, 16 GiB
+  - name: workers-m7i
+    instanceType: m7i-flex.large   # 2 vCPU, 8 GiB (free-tier eligible)
     desiredCapacity: 2
     minSize: 2
     maxSize: 2

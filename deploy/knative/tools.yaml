@@ -23,8 +23,6 @@ spec:
           env:
             - name: TOOLS
               value: book_reservation
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -62,8 +60,6 @@ spec:
           env:
             - name: TOOLS
               value: calculate
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -101,8 +97,6 @@ spec:
           env:
             - name: TOOLS
               value: cancel_reservation
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -140,8 +134,6 @@ spec:
           env:
             - name: TOOLS
               value: get_reservation_details
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -179,8 +171,6 @@ spec:
           env:
             - name: TOOLS
               value: get_user_details
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -218,8 +208,6 @@ spec:
           env:
             - name: TOOLS
               value: list_all_airports
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -257,8 +245,6 @@ spec:
           env:
             - name: TOOLS
               value: search_direct_flight
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -296,8 +282,6 @@ spec:
           env:
             - name: TOOLS
               value: search_onestop_flight
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -335,8 +319,6 @@ spec:
           env:
             - name: TOOLS
               value: send_certificate
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -374,8 +356,6 @@ spec:
           env:
             - name: TOOLS
               value: think
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -413,8 +393,6 @@ spec:
           env:
             - name: TOOLS
               value: transfer_to_human_agents
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -452,8 +430,6 @@ spec:
           env:
             - name: TOOLS
               value: update_reservation_baggages
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -491,8 +467,6 @@ spec:
           env:
             - name: TOOLS
               value: update_reservation_flights
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:
@@ -530,8 +504,6 @@ spec:
           env:
             - name: TOOLS
               value: update_reservation_passengers
-            - name: REDIS_URL
-              value: redis://redis.default.svc.cluster.local:6379/0
           # /healthz answers only once the MCP server is up (data loaded, routes mounted).
           # No periodSeconds -> Knative probes aggressively while the pod starts.
           readinessProbe:

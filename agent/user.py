@@ -6,12 +6,24 @@ HumanUser     -- you type the customer's messages yourself (for debugging).
 """
 
 import os
+import re
 import time
+
+from openai import APIStatusError
 
 from llm import chat
 from prompts import USER_SIM_PROMPT
 
 STOP = "###STOP###"
+
+
+def _failed_text(e: APIStatusError) -> str | None:
+    """gpt-oss on Groq sometimes wraps the customer's line in a fake tool call
+    ({"name": "assistant<|channel|>final", "arguments": <the line>}); recover the line."""
+    body = e.body if isinstance(e.body, dict) else {}
+    gen = (body.get("error", body) or {}).get("failed_generation") or ""
+    m = re.search(r'"arguments":\s*(.*)\}\s*$', gen, re.S)
+    return m.group(1).strip().strip('"').strip() if m else None
 
 
 class SimulatedUser:
@@ -22,9 +34,26 @@ class SimulatedUser:
                          {"role": "user", "content": "Hi! How can I help you today?"}]
 
     def _next(self) -> str:
-        r = chat(self.messages, model=self.model)
-        self.last_latency_s = r.latency_s          # customer "think" time (rate-limit waits excluded)
-        text = (r.message.content or "").strip()
+        # The simulator has no tools, yet gpt-oss on Groq may still emit a malformed tool call
+        # (HTTP 400 tool_use_failed): retry, then fall back to the text inside the failed call.
+        for attempt in range(1, 4):
+            t0 = time.perf_counter()
+            try:
+                r = chat(self.messages, model=self.model)
+                self.last_latency_s = r.latency_s  # customer "think" time (rate-limit waits excluded)
+                text = (r.message.content or "").strip()
+                break
+            except APIStatusError as e:
+                if e.status_code != 400 or "tool_use_failed" not in str(e):
+                    raise
+                recovered = _failed_text(e)
+                print(f"  [user sim] malformed tool call from the model ({attempt}/3)")
+                if attempt == 3 and recovered:
+                    self.last_latency_s = time.perf_counter() - t0
+                    text = recovered
+                    break
+                if attempt == 3:
+                    raise
         self.messages.append({"role": "assistant", "content": text})
         return text
 

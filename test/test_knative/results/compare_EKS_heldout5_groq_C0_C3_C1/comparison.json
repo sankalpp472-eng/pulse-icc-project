@@ -1,0 +1,47 @@
+[
+  {
+    "run": "w1_replay_20261023-150403",
+    "config": "C0",
+    "seed": 252,
+    "window": "60s",
+    "calls": 102,
+    "real_cold_starts": 17,
+    "slow_warm_calls_over_1s": 16,
+    "pods_started": 19,
+    "pod_seconds": 2728,
+    "p50_ms": 582.3,
+    "p95_ms": 2368.0,
+    "p99_ms": 3665.7,
+    "mean_ms": 1047.5
+  },
+  {
+    "run": "w1_replay_20261023-151518",
+    "config": "C3",
+    "seed": 252,
+    "window": "60s",
+    "calls": 102,
+    "real_cold_starts": 13,
+    "slow_warm_calls_over_1s": 24,
+    "pods_started": 24,
+    "pod_seconds": 3140,
+    "p50_ms": 648.8,
+    "p95_ms": 3100.5,
+    "p99_ms": 5407.0,
+    "mean_ms": 1118.5
+  },
+  {
+    "run": "w1_replay_20261023-152853",
+    "config": "C1",
+    "seed": 252,
+    "window": "60s",
+    "calls": 102,
+    "real_cold_starts": 0,
+    "slow_warm_calls_over_1s": 22,
+    "pods_started": 14,
+    "pod_seconds": 7908,
+    "p50_ms": 400.2,
+    "p95_ms": 1900.8,
+    "p99_ms": 3195.9,
+    "mean_ms": 750.3
+  }
+]

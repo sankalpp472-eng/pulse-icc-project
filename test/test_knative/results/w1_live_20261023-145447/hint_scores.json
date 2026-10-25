@@ -1,0 +1,427 @@
+{
+  "summary": {
+    "hints_sent": 57,
+    "hints_answered": 20,
+    "llm_steps": 20,
+    "tool_steps": 11,
+    "top1_accuracy": 0.273,
+    "top3_accuracy": 0.545,
+    "prewarm_hit_rate": 0.273,
+    "prewarmed_per_step": 0.85,
+    "wasted_per_step": 0.7,
+    "hint_rtt_ms_median": 14.120000000000001,
+    "lead_time_s_median (LLM think after hint)": 1.021
+  },
+  "steps": [
+    {
+      "step": 1,
+      "trajectory_len": 0,
+      "true_next": "(answered customer)",
+      "top3": [
+        "get_reservation_details",
+        "get_user_details",
+        "END"
+      ],
+      "prewarm": [
+        "get_reservation_details",
+        "get_user_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 63.95,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 2,
+      "think_s": 0.772,
+      "rate_wait_s": 0.0
+    },
+    {
+      "step": 2,
+      "trajectory_len": 0,
+      "true_next": "get_reservation_details",
+      "top3": [
+        "get_reservation_details",
+        "get_user_details",
+        "END"
+      ],
+      "prewarm": [
+        "get_reservation_details",
+        "get_user_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 6.44,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 1,
+      "think_s": 0.599,
+      "rate_wait_s": 0.0
+    },
+    {
+      "step": 3,
+      "trajectory_len": 1,
+      "true_next": "(answered customer)",
+      "top3": [
+        "get_user_details",
+        "search_direct_flight",
+        "transfer_to_human_agents"
+      ],
+      "prewarm": [],
+      "hint_ok": true,
+      "rtt_ms": 18.56,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 0,
+      "think_s": 1.371,
+      "rate_wait_s": 7.0
+    },
+    {
+      "step": 4,
+      "trajectory_len": 1,
+      "true_next": "get_user_details",
+      "top3": [
+        "get_user_details",
+        "search_direct_flight",
+        "transfer_to_human_agents"
+      ],
+      "prewarm": [],
+      "hint_ok": true,
+      "rtt_ms": 16.02,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": false,
+      "wasted": 0,
+      "think_s": 8.308,
+      "rate_wait_s": 24.0
+    },
+    {
+      "step": 5,
+      "trajectory_len": 2,
+      "true_next": "search_direct_flight",
+      "top3": [
+        "transfer_to_human_agents",
+        "get_reservation_details",
+        "think"
+      ],
+      "prewarm": [
+        "transfer_to_human_agents"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 10.67,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 1.016,
+      "rate_wait_s": 0.0
+    },
+    {
+      "step": 6,
+      "trajectory_len": 3,
+      "true_next": "(answered customer)",
+      "top3": [
+        "search_direct_flight",
+        "search_onestop_flight",
+        "update_reservation_flights"
+      ],
+      "prewarm": [
+        "search_direct_flight"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 25.54,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 2.39,
+      "rate_wait_s": 0.0
+    },
+    {
+      "step": 7,
+      "trajectory_len": 3,
+      "true_next": "update_reservation_flights",
+      "top3": [
+        "search_direct_flight",
+        "search_onestop_flight",
+        "update_reservation_flights"
+      ],
+      "prewarm": [
+        "search_direct_flight"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 33.62,
+      "top1_hit": false,
+      "top3_hit": true,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 1.857,
+      "rate_wait_s": 37.0
+    },
+    {
+      "step": 8,
+      "trajectory_len": 4,
+      "true_next": "(answered customer)",
+      "top3": [
+        "END",
+        "update_reservation_flights",
+        "update_reservation_baggages"
+      ],
+      "prewarm": [],
+      "hint_ok": true,
+      "rtt_ms": 7.56,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 0,
+      "think_s": 1.598,
+      "rate_wait_s": 31.0
+    },
+    {
+      "step": 9,
+      "trajectory_len": 4,
+      "true_next": "(answered customer)",
+      "top3": [
+        "END",
+        "update_reservation_flights",
+        "update_reservation_baggages"
+      ],
+      "prewarm": [],
+      "hint_ok": true,
+      "rtt_ms": 7.66,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 0,
+      "think_s": 1.571,
+      "rate_wait_s": 37.0
+    },
+    {
+      "step": 1,
+      "trajectory_len": 0,
+      "true_next": "(answered customer)",
+      "top3": [
+        "get_reservation_details",
+        "get_user_details",
+        "END"
+      ],
+      "prewarm": [
+        "get_reservation_details",
+        "get_user_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 9.8,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 2,
+      "think_s": 1.161,
+      "rate_wait_s": 18.0
+    },
+    {
+      "step": 2,
+      "trajectory_len": 0,
+      "true_next": "get_user_details",
+      "top3": [
+        "get_reservation_details",
+        "get_user_details",
+        "END"
+      ],
+      "prewarm": [
+        "get_reservation_details",
+        "get_user_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 20.72,
+      "top1_hit": false,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 1,
+      "think_s": 0.74,
+      "rate_wait_s": 26.0
+    },
+    {
+      "step": 3,
+      "trajectory_len": 1,
+      "true_next": "get_reservation_details",
+      "top3": [
+        "get_reservation_details",
+        "get_user_details",
+        "think"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 9.47,
+      "top1_hit": true,
+      "top3_hit": true,
+      "prewarm_hit": true,
+      "wasted": 0,
+      "think_s": 1.021,
+      "rate_wait_s": 21.0
+    },
+    {
+      "step": 4,
+      "trajectory_len": 2,
+      "true_next": "search_direct_flight",
+      "top3": [
+        "get_reservation_details",
+        "search_direct_flight",
+        "search_onestop_flight"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 8.21,
+      "top1_hit": false,
+      "top3_hit": true,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 0.979,
+      "rate_wait_s": 30.0
+    },
+    {
+      "step": 5,
+      "trajectory_len": 3,
+      "true_next": "(answered customer)",
+      "top3": [
+        "search_direct_flight",
+        "search_onestop_flight",
+        "END"
+      ],
+      "prewarm": [
+        "search_direct_flight"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 12.22,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 3.306,
+      "rate_wait_s": 4.0
+    },
+    {
+      "step": 6,
+      "trajectory_len": 3,
+      "true_next": "update_reservation_flights",
+      "top3": [
+        "search_direct_flight",
+        "search_onestop_flight",
+        "END"
+      ],
+      "prewarm": [
+        "search_direct_flight"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 8.48,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 1.734,
+      "rate_wait_s": 39.0
+    },
+    {
+      "step": 7,
+      "trajectory_len": 4,
+      "true_next": "get_reservation_details",
+      "top3": [
+        "END",
+        "update_reservation_flights",
+        "update_reservation_baggages"
+      ],
+      "prewarm": [],
+      "hint_ok": true,
+      "rtt_ms": 10.6,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 0,
+      "think_s": 1.254,
+      "rate_wait_s": 37.0
+    },
+    {
+      "step": 8,
+      "trajectory_len": 5,
+      "true_next": "(answered customer)",
+      "top3": [
+        "get_reservation_details",
+        "END",
+        "search_direct_flight"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 25.16,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 2.716,
+      "rate_wait_s": 6.0
+    },
+    {
+      "step": 9,
+      "trajectory_len": 5,
+      "true_next": "update_reservation_flights",
+      "top3": [
+        "get_reservation_details",
+        "END",
+        "search_direct_flight"
+      ],
+      "prewarm": [
+        "get_reservation_details"
+      ],
+      "hint_ok": true,
+      "rtt_ms": 28.5,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 1,
+      "think_s": 1.172,
+      "rate_wait_s": 51.0
+    },
+    {
+      "step": 10,
+      "trajectory_len": 6,
+      "true_next": "(answered customer)",
+      "top3": [
+        "update_reservation_flights",
+        "update_reservation_baggages",
+        "search_direct_flight"
+      ],
+      "prewarm": [],
+      "hint_ok": true,
+      "rtt_ms": 24.07,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 0,
+      "think_s": 2.086,
+      "rate_wait_s": 42.0
+    },
+    {
+      "step": 11,
+      "trajectory_len": 6,
+      "true_next": "transfer_to_human_agents",
+      "top3": [
+        "update_reservation_flights",
+        "update_reservation_baggages",
+        "search_direct_flight"
+      ],
+      "prewarm": [],
+      "hint_ok": true,
+      "rtt_ms": 35.61,
+      "top1_hit": false,
+      "top3_hit": false,
+      "prewarm_hit": false,
+      "wasted": 0,
+      "think_s": 0.863,
+      "rate_wait_s": 45.0
+    }
+  ]
+}
