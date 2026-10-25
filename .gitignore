@@ -4,6 +4,4 @@ venv/
 .venv/
 __pycache__/
 *.pyc
-predictor/data/
-predictor/results/
 EKS_deployment/logs/

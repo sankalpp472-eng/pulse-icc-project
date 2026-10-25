@@ -1,0 +1,85 @@
+{
+  "accuracy": [
+    {
+      "model": "graph",
+      "steps": 895,
+      "top1": 0.17206703910614526,
+      "top3": 0.2435754189944134,
+      "log_loss": 2.2580056532857684
+    },
+    {
+      "model": "history",
+      "steps": 895,
+      "top1": 0.4424581005586592,
+      "top3": 0.8078212290502793,
+      "log_loss": 1.562232038825088
+    },
+    {
+      "model": "trajectory",
+      "steps": 895,
+      "top1": 0.4759776536312849,
+      "top3": 0.8145251396648044,
+      "log_loss": 1.5581180770320389
+    },
+    {
+      "model": "ensemble",
+      "steps": 895,
+      "top1": 0.4759776536312849,
+      "top3": 0.8156424581005587,
+      "log_loss": 1.4614525264869185
+    },
+    {
+      "model": "lr",
+      "steps": 895,
+      "top1": 0.4670391061452514,
+      "top3": 0.8201117318435754,
+      "log_loss": 1.5043509597222324
+    }
+  ],
+  "theta_sweep": [
+    {
+      "theta": 0.1,
+      "hit_rate": 0.7625806451612903,
+      "warmed_per_step": 1.9865921787709497,
+      "wasted_per_step": 1.3262569832402236
+    },
+    {
+      "theta": 0.2,
+      "hit_rate": 0.6154838709677419,
+      "warmed_per_step": 1.2335195530726257,
+      "wasted_per_step": 0.7005586592178771
+    },
+    {
+      "theta": 0.3,
+      "hit_rate": 0.5316129032258065,
+      "warmed_per_step": 0.8905027932960894,
+      "wasted_per_step": 0.4301675977653631
+    },
+    {
+      "theta": 0.5,
+      "hit_rate": 0.2709677419354839,
+      "warmed_per_step": 0.3486033519553073,
+      "wasted_per_step": 0.11396648044692738
+    },
+    {
+      "theta": 0.7,
+      "hit_rate": 0.09290322580645162,
+      "warmed_per_step": 0.09050279329608939,
+      "wasted_per_step": 0.01005586592178771
+    },
+    {
+      "theta": 0.9,
+      "hit_rate": 0.0,
+      "warmed_per_step": 0.0,
+      "wasted_per_step": 0.0
+    }
+  ],
+  "lead_time": {
+    "tool_steps": 46,
+    "think_s_median": 1.3105,
+    "cold_s_median": 3.9092000000000002,
+    "share_of_cold_start_hidden_median": 0.33523483065588866,
+    "calls_where_think_covers_cold_start": 0.043478260869565216
+  },
+  "sweep_model": "ensemble"
+}

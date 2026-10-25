@@ -1,0 +1,164 @@
+{
+  "ensemble": {
+    "metrics": {
+      "top1": 0.476,
+      "top3": 0.816,
+      "log_loss": 1.461
+    },
+    "theta_sweep": [
+      {
+        "theta": 0.2,
+        "hit_rate": 0.615,
+        "warmed_per_step": 1.234,
+        "wasted_per_step": 0.701
+      },
+      {
+        "theta": 0.3,
+        "hit_rate": 0.532,
+        "warmed_per_step": 0.891,
+        "wasted_per_step": 0.43
+      },
+      {
+        "theta": 0.5,
+        "hit_rate": 0.271,
+        "warmed_per_step": 0.349,
+        "wasted_per_step": 0.114
+      }
+    ]
+  },
+  "lgbm_names": {
+    "metrics": {
+      "top1": 0.478,
+      "top3": 0.791,
+      "log_loss": 1.503,
+      "rounds": 51
+    },
+    "theta_sweep": [
+      {
+        "theta": 0.2,
+        "hit_rate": 0.605,
+        "warmed_per_step": 1.209,
+        "wasted_per_step": 0.685
+      },
+      {
+        "theta": 0.3,
+        "hit_rate": 0.541,
+        "warmed_per_step": 0.989,
+        "wasted_per_step": 0.521
+      },
+      {
+        "theta": 0.5,
+        "hit_rate": 0.292,
+        "warmed_per_step": 0.389,
+        "wasted_per_step": 0.136
+      }
+    ]
+  },
+  "lgbm_results": {
+    "metrics": {
+      "top1": 0.604,
+      "top3": 0.848,
+      "log_loss": 1.208,
+      "rounds": 61
+    },
+    "theta_sweep": [
+      {
+        "theta": 0.2,
+        "hit_rate": 0.676,
+        "warmed_per_step": 1.24,
+        "wasted_per_step": 0.655
+      },
+      {
+        "theta": 0.3,
+        "hit_rate": 0.556,
+        "warmed_per_step": 0.802,
+        "wasted_per_step": 0.321
+      },
+      {
+        "theta": 0.5,
+        "hit_rate": 0.466,
+        "warmed_per_step": 0.57,
+        "wasted_per_step": 0.166
+      }
+    ]
+  },
+  "lgbm_intent": {
+    "metrics": {
+      "top1": 0.626,
+      "top3": 0.849,
+      "log_loss": 1.079,
+      "rounds": 67
+    },
+    "theta_sweep": [
+      {
+        "theta": 0.2,
+        "hit_rate": 0.705,
+        "warmed_per_step": 1.19,
+        "wasted_per_step": 0.58
+      },
+      {
+        "theta": 0.3,
+        "hit_rate": 0.595,
+        "warmed_per_step": 0.864,
+        "wasted_per_step": 0.349
+      },
+      {
+        "theta": 0.5,
+        "hit_rate": 0.506,
+        "warmed_per_step": 0.602,
+        "wasted_per_step": 0.164
+      }
+    ]
+  },
+  "saved": "intent",
+  "top_features": [
+    [
+      "last1",
+      27854
+    ],
+    [
+      "user_turns_since_tool",
+      18456
+    ],
+    [
+      "user_n_res",
+      12896
+    ],
+    [
+      "step",
+      8542
+    ],
+    [
+      "res_seen",
+      6550
+    ],
+    [
+      "last_n_items",
+      5106
+    ],
+    [
+      "kw_cancel",
+      3367
+    ],
+    [
+      "kw_bag",
+      3130
+    ],
+    [
+      "kw_book",
+      2561
+    ],
+    [
+      "wf",
+      2521
+    ],
+    [
+      "kw_human",
+      2457
+    ],
+    [
+      "kw_cabin",
+      2320
+    ]
+  ]
+}
