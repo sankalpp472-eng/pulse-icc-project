@@ -141,16 +141,16 @@ def main():
                        ready_s_median=statistics.median(r["ready_s"] for r in ok if r.get("ready_s") is not None))
 
     os.makedirs("results", exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    with open(f"results/c0_{stamp}.csv", "w", newline="") as f:
+    stamp = time.strftime("%Y-%m-%d_%H%M") + "_C0_single-function"
+    with open(f"results/{stamp}.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(dict.fromkeys(k for r in rows for k in r)))
         w.writeheader()
         w.writerows(rows)
-    with open(f"results/c0_{stamp}_summary.json", "w") as f:
+    with open(f"results/{stamp}_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     print("\n" + json.dumps(summary, indent=2))
-    print(f"\nSaved results/c0_{stamp}.csv and results/c0_{stamp}_summary.json")
+    print(f"\nSaved results/{stamp}.csv and results/{stamp}_summary.json")
 
 
 if __name__ == "__main__":

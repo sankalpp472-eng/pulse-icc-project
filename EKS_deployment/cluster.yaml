@@ -3,6 +3,8 @@
 #   eksctl delete cluster -f EKS_deployment/cluster.yaml      (when done: EKS and EC2 cost money by the hour)
 #
 # PRD 7.1 cloud tier: 2 worker nodes, 2-4 vCPU, 16 GB, 50 GB SSD each.
+# m7i-flex.large (2 vCPU, 8 GiB) is used instead of t3.xlarge (4 vCPU, 16 GiB) because it is
+# AWS Free Tier eligible (billed against the free credits): within the PRD's vCPU range, but half its memory.
 # Fixed size (min = max = 2): no node autoscaling, so a cold start never includes booting a new node.
 #
 # Instance type: m7i-flex.large (2 vCPU, 8 GiB). Accounts on the AWS *Free plan* can only launch
@@ -19,8 +21,8 @@ metadata:
     project: pulse-ds252
 
 managedNodeGroups:
-  - name: workers-m7i
-    instanceType: m7i-flex.large   # 2 vCPU, 8 GiB (free-tier eligible)
+  - name: workers
+    instanceType: m7i-flex.large   # 2 vCPU, 8 GiB (Free Tier eligible)
     desiredCapacity: 2
     minSize: 2
     maxSize: 2

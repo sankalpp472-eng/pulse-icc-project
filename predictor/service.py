@@ -9,7 +9,10 @@ Step 6: the prediction API.
   GET  /docs      interactive test page (FastAPI)
 
 Settings (environment variables):
-  PREDICTOR_MODEL  ensemble | trajectory | history | graph | lr   (default ensemble)
+  PREDICTOR_MODEL  ensemble | trajectory | history | graph | lr | lgbm   (default ensemble)
+                   lgbm needs predictor/data/lgbm.pkl (train_lgbm.py) and hints that carry
+                   "signals" (agent/hints.py); a hint without signals is answered by the ensemble
+  LGBM_PATH        default predictor/data/lgbm.pkl
   THETA            confidence threshold for prewarming             (default 0.3)
   TTL_S            TTL the controller should give a prewarmed pod  (default 60)
   MODEL_PATH       default predictor/data/model.pkl
@@ -33,6 +36,7 @@ from fastapi.responses import RedirectResponse
 from prometheus_client import Counter, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
 
+import lgbm_model  # noqa: F401  (needed so pickle can find the LightGBM wrapper)
 import models  # noqa: F401  (needed so pickle can find the model classes)
 from crd_writer import CRDWriter
 from models import POOLED, prewarm_set
@@ -46,6 +50,14 @@ AUDIT_LOG = os.getenv("AUDIT_LOG")
 
 with open(MODEL_PATH, "rb") as f:
     PRED = pickle.load(f)
+
+LGBM_PATH = Path(os.getenv("LGBM_PATH", HERE / "data" / "lgbm.pkl"))
+PRED.lgbm = None
+if MODEL_NAME == "lgbm":
+    if not LGBM_PATH.exists():
+        raise SystemExit(f"PREDICTOR_MODEL=lgbm but {LGBM_PATH} is missing: run predictor/train_lgbm.py")
+    with open(LGBM_PATH, "rb") as f:
+        PRED.lgbm = pickle.load(f)
 
 WRITER = CRDWriter()   # CRD_MODE=off|dryrun|k8s
 
@@ -62,6 +74,8 @@ class Hint(BaseModel):
     trajectory: list[str] = Field(default_factory=list, description="tools called so far, in order")
     current_tool: Optional[str] = Field(None, description="optional; used if trajectory is empty")
     ts: Optional[float] = None
+    signals: Optional[dict[str, float]] = Field(
+        None, description="numbers / yes-no flags from predictor/signals.py (no raw text); used by lgbm")
 
 
 class ToolProb(BaseModel):
@@ -102,7 +116,7 @@ async def predict(h: Hint):
     traj = h.trajectory or ([h.current_tool] if h.current_tool else [])
     wf = h.workflow_id if h.workflow_id in PRED.models else POOLED
 
-    ranked = PRED.rank(wf, traj, MODEL_NAME)
+    ranked = PRED.rank(wf, traj, MODEL_NAME, h.signals)
     warm = set(prewarm_set(ranked, THETA))
     latency = time.perf_counter() - t0
 
@@ -121,8 +135,9 @@ async def predict(h: Hint):
     WRITER.submit([(t, p) for t, p in ranked if t in warm], THETA, TTL_S,
                   episode_id=h.episode_id, workflow_id=wf)
 
+    used = MODEL_NAME if MODEL_NAME != "lgbm" or h.signals is not None else "ensemble (no signals in hint)"
     return Prediction(
-        workflow_id=wf, episode_id=h.episode_id, model=MODEL_NAME,
+        workflow_id=wf, episode_id=h.episode_id, model=used,
         ranked=[ToolProb(tool=t, p=round(p, 6)) for t, p in ranked],
         prewarm=[ToolProb(tool=t, p=round(p, 6)) for t, p in ranked if t in warm],
         theta=THETA, ttl_s=TTL_S, latency_ms=round(latency * 1000, 3))

@@ -17,9 +17,9 @@ Run with the agent's Python, from the project root:
   agent/.venv/Scripts/python test/test_knative/w1_replay.py                       # 46 episodes, 2/min
   agent/.venv/Scripts/python test/test_knative/w1_replay.py --episodes 92 --rate 4
   # replay OUR agent's live runs (w1_live result folders), with their real recorded gaps:
-  agent/.venv/Scripts/python test/test_knative/w1_replay.py --traces test/test_knative/results/w1_live_<time> ...
+  agent/.venv/Scripts/python test/test_knative/w1_replay.py --traces test/test_knative/results/<date>_C0_W1-live_<...> ...
 
-Output: test/test_knative/results/w1_replay_<time>/
+Output: test/test_knative/results/<date>_<time>_<config>_W1-replay_<traces>/  (e.g. 2026-10-22_1336_C3_W1-replay_task9-x3)
   run_config.json  replay parameters + Knative/cluster settings (read from the cluster), code version
   calls.csv        one row per tool call
   episodes.jsonl   one row per episode (trace source, planned gaps, timings)
@@ -47,8 +47,8 @@ os.environ.setdefault("TOOL_BACKEND", "mcp")
 os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:8081/mcp")
 os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 
-from c0_common import (COLD_LATENCY_S, PodWatcher, reset_db, run_config,  # noqa: E402
-                       shared_db, wait_all_ready, wait_all_zero)
+from c0_common import (COLD_LATENCY_S, PodWatcher, reset_db, run_config, run_dir,  # noqa: E402
+                       shared_db, tasks_tag, wait_all_ready, wait_all_zero)
 from tools import MCPToolBackend  # noqa: E402
 
 TRACES = HERE / "data" / "w1_tau_traces.jsonl"
@@ -253,15 +253,14 @@ def main():
     ap.add_argument("--predictor-url", help="C3: send the agent's hints to this predictor (e.g. http://127.0.0.1:8000); "
                                             "the prewarm controller must be running")
     ap.add_argument("--workflow-id", default="W1", help="workflow id sent in hints")
+    ap.add_argument("--label", default="", help="extra text at the end of the result folder name (e.g. eks)")
     a = ap.parse_args()
 
     episodes = plan(a)
-    out_dir = HERE / "results" / f"w1_replay_{time.strftime('%Y%m%d-%H%M%S')}"
-    out_dir.mkdir(parents=True)
     n_calls = sum(len(e["trace"]["calls"]) for e in episodes)
     span = episodes[-1]["start_offset_s"]
     print(f"W1 replay | {len(episodes)} episodes, {n_calls} tool calls, starts spread over {span / 60:.1f} min "
-          f"(rate {a.rate}/min, seed {a.seed}) | -> {out_dir}")
+          f"(rate {a.rate}/min, seed {a.seed})")
 
     db = "redis (shared, reset once at start)" if shared_db() else "in-memory per pod (no shared DB!)"
     params = {k: v for k, v in vars(a).items()}
@@ -289,6 +288,10 @@ def main():
                           "mechanism": "Option A: controller sends an MCP ping per PrewarmRequest; "
                                        "TTL = Knative idle window",
                           "hints": "sent at the recorded start of every LLM step of the trace"}
+    detail = (tasks_tag(cfg["task_ids"]) if a.traces or a.tasks else "taubench") + \
+        (f"-x{a.repeat}" if a.repeat > 1 else "") + ("" if a.traces else f"-{len(episodes)}ep")
+    out_dir = run_dir(cfg["config"], "replay", detail, a.label)
+    print(f"-> {out_dir}")
     (out_dir / "run_config.json").write_text(json.dumps(cfg, indent=2))
     print(f"config: {cfg['config']} | window {cfg['knative']['tool_window']} | images {cfg['tool_images']} | db: {db}")
 

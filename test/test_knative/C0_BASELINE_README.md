@@ -98,7 +98,7 @@ cd test/test_knative && python c0_baseline.py --trials 10 && cd ../..
 ```
 
 Each trial waits until Knative scales the function to zero by itself, then makes one cold call and
-five warm calls. Results: `test/test_knative/results/c0_<time>.csv` and `_summary.json`.
+five warm calls. Results: `test/test_knative/results/<date>_<time>_C0_single-function.csv` and `_summary.json`.
 
 **Our result:** 10/10 cold calls succeeded; cold p50 **1.69 s**, warm p50 **0.11 s**.
 
@@ -143,7 +143,7 @@ agent/.venv/Scripts/python deploy/knative/check_tools.py
 ```
 
 For each tool: wait until it is at zero, one cold MCP call, one warm MCP call. Results:
-`deploy/knative/results/tools_cold_warm_<time>.csv`.
+`deploy/knative/results/<date>_<time>_C0_tools-cold-warm.csv`.
 
 **Our results (16 Oct 2026, before the shared database):** 14/14 tools OK; cold p50
 **3.9–5.8 s** (range 2.7–12.2 s), warm p50 **51–64 ms**. Real MCP tools start much slower than
@@ -202,7 +202,7 @@ A call is **cold** if either says so. Nothing is forced cold: tools go cold only
 idleness, which is what C0 means. Each call also records the **idle gap** since that tool was last
 used.
 
-**Output:** `test/test_knative/results/w1_live_<time>/`
+**Output:** `test/test_knative/results/<date>_<time>_<config>_W1-live_<tasks>_<model>/` (e.g. `2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b`)
 
 | File | Contents |
 |---|---|
@@ -236,21 +236,21 @@ agent/.venv/Scripts/python test/test_knative/w1_replay.py
 | `--think-median S` | 1.5 | Median LLM "think" time before each call (seconds) |
 | `--user-turn-median S` | 8.0 | Median time per customer turn, added when the recorded agent talked to the customer between two calls |
 | `--seed N` | 252 | Fixes trace choice, start times and gaps: **same seed = same request sequence** for C0, C1 and C3 |
-| `--traces DIR ...` | τ-bench runs | Replay **our agent's live runs** instead: pass one or more `results/w1_live_<time>` folders. Each recorded episode is replayed once, with its **real** gaps (agent think time + the customer's reply time) |
+| `--traces DIR ...` | τ-bench runs | Replay **our agent's live runs** instead: pass one or more `results/<date>_C0_W1-live_...` folders. Each recorded episode is replayed once, with its **real** gaps (agent think time + the customer's reply time) |
 | `--tasks 4 9 10 23 27` | all | Only these tasks |
 | `--gap-scale X` | 1.0 | Multiply the recorded gaps of our traces (e.g. 2 = a slower LLM) |
 
 Example, replaying the two best-5 live runs (120b and 20b agents):
 
 ```bash
-agent/.venv/Scripts/python test/test_knative/w1_replay.py --traces test/test_knative/results/w1_live_<120b run> test/test_knative/results/w1_live_<20b run>
+agent/.venv/Scripts/python test/test_knative/w1_replay.py --traces test/test_knative/results/<120b live run> test/test_knative/results/<20b live run>
 ```
 
 It waits until all tools are at zero, resets the database once, then runs the episodes
 concurrently. Calls are labelled cold/warm after the run (latency > 1 s, or a new pod for that
 tool appeared during the call).
 
-**Output:** `test/test_knative/results/w1_replay_<time>/` with the same files as step 7
+**Output:** `test/test_knative/results/<date>_<time>_<config>_W1-replay_<traces>/` (e.g. `2026-10-19_0015_C0_W1-replay_taubench-46ep`) with the same files as step 7
 (`run_config.json` includes all replay parameters). `summary.json` adds p50/p95/p99 latency,
 total time added by cold starts, pods started and pod-seconds.
 

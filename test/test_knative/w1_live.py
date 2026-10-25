@@ -16,7 +16,7 @@ Run with the agent's Python, from the project root:
   agent/.venv/Scripts/python test/test_knative/w1_live.py --tasks 1 6     # specific tasks
   ... --agent-model openai/gpt-oss-120b --user-model openai/gpt-oss-20b    # choose the Groq models
 
-Output: test/test_knative/results/w1_live_<time>/
+Output: test/test_knative/results/<date>_<time>_<config>_W1-live_<tasks>_<model>/  (e.g. 2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b)
   run_config.json models, Knative settings (read from the cluster), image, database, git commit ...
   calls.csv       one row per tool call (cold/warm, latency, idle gap, think time ...)
   episodes.jsonl  one agent episode per line (full trace: steps, tool sequence, timings)
@@ -58,6 +58,7 @@ def parse_args():
     ap.add_argument("--agent-model", default="openai/gpt-oss-20b", help="model for the agent (same ids on Groq and OpenRouter)")
     ap.add_argument("--user-model", default="openai/gpt-oss-20b", help="model for the simulated customer")
     ap.add_argument("-v", "--verbose", action="store_true", help="print the conversation")
+    ap.add_argument("--label", default="", help="extra text at the end of the result folder name (e.g. eks)")
     return ap.parse_args()
 
 
@@ -75,8 +76,8 @@ import llm  # noqa: E402
 from agent import run_episode  # noqa: E402
 from tau_airline import load_tasks  # noqa: E402
 from tools import CALL_LOG  # noqa: E402
-from c0_common import (COLD_LATENCY_S, PodWatcher, reset_db, run_config,  # noqa: E402
-                       shared_db, wait_all_zero)
+from c0_common import (COLD_LATENCY_S, PodWatcher, reset_db, run_config, run_dir,  # noqa: E402
+                       shared_db, tasks_tag, wait_all_zero)
 
 CALL_FIELDS = ["episode", "task_id", "task_set", "call_idx", "tool", "t_start", "latency_ms", "cold",
                "cold_by_pod", "cold_by_latency", "pod", "idle_gap_s", "think_s", "rate_wait_s",
@@ -98,10 +99,8 @@ def main():
     ids = (a.tasks or SETS[a.set]) * a.repeats
     set_of = {i: name for name in ("safe", "multi") for i in SETS[name]}
     n_trimmed = 0
-    out_dir = HERE / "results" / f"w1_live_{time.strftime('%Y%m%d-%H%M%S')}"
-    out_dir.mkdir(parents=True)
     print(f"W1 live C0 | tasks {ids} | agent {llm.DEFAULT_MODEL}, user sim {os.environ['USER_MODEL']} "
-          f"| {llm.BACKEND}, {len(llm.KEYS)} key(s) | -> {out_dir}")
+          f"| {llm.BACKEND}, {len(llm.KEYS)} key(s)")
 
     db = "redis (shared, reset per episode)" if shared_db() else "in-memory per pod (no shared DB!)"
     cfg = run_config(ids, db, "W1 airline change/cancel (tau-bench), live agent",
@@ -113,6 +112,9 @@ def main():
                                           "compacted, then replaced by a neutral note, then old long messages cut "
                                           "to 300 chars; saved traces are complete",
                       "fixed_prompt_tokens_estimate": llm.FIXED_TOKENS})
+    detail = (tasks_tag(ids) if a.tasks else a.set) + (f"-x{a.repeats}" if a.repeats > 1 else "")
+    out_dir = run_dir(cfg["config"], "live", f"{detail}_{llm.DEFAULT_MODEL.split('/')[-1]}", a.label)
+    print(f"-> {out_dir}")
     (out_dir / "run_config.json").write_text(json.dumps(cfg, indent=2))
     print(f"config: {cfg['config']} | window {cfg['knative']['tool_window']} | images {cfg['tool_images']} | db: {db}")
     watcher = PodWatcher()

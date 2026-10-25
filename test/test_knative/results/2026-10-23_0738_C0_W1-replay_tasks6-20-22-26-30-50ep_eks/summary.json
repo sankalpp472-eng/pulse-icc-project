@@ -1,0 +1,105 @@
+{
+  "episodes": 50,
+  "tool_calls": 319,
+  "transport_failures": 0,
+  "cold_calls": 102,
+  "cold_share": 0.32,
+  "latency_ms": {
+    "all": {
+      "p50": 446.1,
+      "p95": 2984.7,
+      "p99": 5610.9,
+      "mean": 1038.3
+    },
+    "cold": {
+      "p50": 1868.3,
+      "p95": 5101.3,
+      "max": 20573.3
+    },
+    "warm": {
+      "p50": 368.0,
+      "p95": 619.5,
+      "max": 963.0
+    }
+  },
+  "cold_start_time_added_s": 209.7,
+  "signals_agree": 285,
+  "pods_started": 76,
+  "pod_seconds_seen": 8856.0,
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 144,
+      "cold": 21,
+      "cold_share": 0.15
+    },
+    "get_user_details": {
+      "calls": 41,
+      "cold": 14,
+      "cold_share": 0.34
+    },
+    "search_direct_flight": {
+      "calls": 33,
+      "cold": 14,
+      "cold_share": 0.42
+    },
+    "update_reservation_flights": {
+      "calls": 33,
+      "cold": 15,
+      "cold_share": 0.45
+    },
+    "cancel_reservation": {
+      "calls": 27,
+      "cold": 7,
+      "cold_share": 0.26
+    },
+    "transfer_to_human_agents": {
+      "calls": 15,
+      "cold": 11,
+      "cold_share": 0.73
+    },
+    "search_onestop_flight": {
+      "calls": 13,
+      "cold": 9,
+      "cold_share": 0.69
+    },
+    "think": {
+      "calls": 8,
+      "cold": 7,
+      "cold_share": 0.88
+    },
+    "calculate": {
+      "calls": 5,
+      "cold": 4,
+      "cold_share": 0.8
+    }
+  },
+  "config": "C0",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": 50,
+    "traces": null,
+    "tasks": [
+      6,
+      20,
+      22,
+      26,
+      30
+    ],
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": false,
+    "predictor_url": null,
+    "workflow_id": "W1",
+    "label": "eks"
+  },
+  "hints": null
+}
