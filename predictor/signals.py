@@ -39,8 +39,20 @@ INTENT_WORDS = {
 }
 _INTENT_RE = {k: re.compile(v, re.I) for k, v in INTENT_WORDS.items()}
 
-# Reservation-style IDs: 5-8 upper-case letters/digits with at least one digit (e.g. "UM3OG5")
+# Reservation-style IDs: 5-8 upper-case letters/digits with at least one digit (e.g. "UM3OG5").
+# Retail order IDs are written "#W7678072": the "#" is dropped everywhere (_norm), so the customer's
+# "W7678072", the order list and the tool argument all become the same ID.
 _ID_RE = re.compile(r"\b(?=[A-Z0-9]*\d)[A-Z0-9]{5,8}\b")
+# In what the customer types, a bare 5-digit number is a zip code (retail login), not an ID
+_TEXT_ID_RE = re.compile(r"\b(?!\d{5}\b)(?=[A-Z0-9]*\d)[A-Z0-9]{5,8}\b")
+# Retail: IDs nested in a result's list of objects that a read tool takes next
+# (get_order_details -> "items": [{"product_id": "8310926033", ...}] -> get_product_details).
+# item_id is left out: only write tools (return / exchange / modify) consume it.
+_NESTED_ID_KEYS = ("product_id",)
+
+
+def _norm(x: str) -> str:
+    return x.lstrip("#")
 
 POSITION_KEYS = ["step", "n_calls", "n_distinct", "last_repeat", "calls_since_user", "last_event_user"]
 OUTPUT_KEYS = ["last_err", "pending_ids", "out_size"]
@@ -56,12 +68,15 @@ def _json(text):
 
 
 def _ids_in_output(data):
-    """IDs listed in a tool result, e.g. get_user_details -> "reservations": ["UM3OG5", ...]."""
+    """IDs listed in a tool result, e.g. get_user_details -> "reservations": ["UM3OG5", ...]
+    (retail: "orders": ["#W7678072", ...]), and retail product IDs inside "items": [{...}, ...]."""
     found = set()
     if isinstance(data, dict):
         for v in data.values():
             if isinstance(v, list) and v and all(isinstance(x, str) for x in v):
-                found |= {x for x in v if _ID_RE.fullmatch(x)}
+                found |= {_norm(x) for x in v if _ID_RE.fullmatch(_norm(x))}
+            elif isinstance(v, list):
+                found |= {str(x[k]) for x in v if isinstance(x, dict) for k in _NESTED_ID_KEYS if x.get(k)}
     return found
 
 
@@ -69,7 +84,7 @@ def _arg_values(args):
     vals = set()
     for v in (args or {}).values():
         if isinstance(v, str):
-            vals.add(v)
+            vals.add(_norm(v))
     return vals
 
 
@@ -87,7 +102,7 @@ def compute_signals(events) -> dict:
             for k, rx in _INTENT_RE.items():
                 if rx.search(text):
                     s[k] = 1
-            seen |= set(_ID_RE.findall(text))      # IDs the customer typed
+            seen |= set(_TEXT_ID_RE.findall(text))      # IDs the customer typed
         elif kind == "respond":
             s["step"] += 1
         elif kind == "call":
@@ -117,7 +132,7 @@ def pending_pool(events) -> set:
     seen, fetched = set(), set()
     for ev in events:
         if ev[0] == "user":
-            seen |= set(_ID_RE.findall(ev[1] or ""))
+            seen |= set(_TEXT_ID_RE.findall(ev[1] or ""))
         elif ev[0] == "call":
             fetched |= _arg_values(ev[2])
         elif ev[0] == "tool":

@@ -251,7 +251,9 @@ def fig_examples(rows, eps, cfg, out):
 
 
 def main():
-    run = Path(sys.argv[1]) if len(sys.argv) > 1 else sorted((Path(__file__).parent / "results").glob("*_W1-replay_*"))[-1]
+    roots = [Path(__file__).parents[2] / "results" / d for d in ("local_runs", "cloud_runs")] + [Path(__file__).parent / "results"]
+    run = Path(sys.argv[1]) if len(sys.argv) > 1 else max(
+        (r for root in roots if root.exists() for r in root.glob("*_W1-replay_*")), key=lambda r: r.name)
     rows, eps, pods, cfg = load(run)
     out = run / "plots"
     out.mkdir(exist_ok=True)

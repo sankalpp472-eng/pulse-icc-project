@@ -9,9 +9,12 @@ Action model, step 2: train and evaluate the next-action predictor.
     python predictor/train_action.py                  # from the repo root: train on the 40 training tasks,
                                                       # score on the 10 held-out tasks, save the model
     python predictor/train_action.py --cv 5           # also 5-fold cross-validation over all 50 tasks
+    python predictor/train_action.py --domain retail  # retail (16 tools + RESPOND): 92 training tasks,
+                                                      # the speculator's 23 held-out tasks
 
-Reads  predictor/data/action_rows.csv (build_action_data.py)
-Writes predictor/data/action_model.pkl, predictor/results/action_eval_<time>.json
+Reads  predictor/data/action_rows.csv (build_action_data.py; retail: retail_action_rows.csv)
+Writes predictor/data/action_model.pkl (retail: action_model_retail.pkl),
+       predictor/results/action_eval_<time>.json (retail: action_eval_retail_<time>.json)
 """
 
 import argparse
@@ -177,9 +180,19 @@ def main():
     ap.add_argument("--thetas", type=float, nargs="+", default=[0.2, 0.3, 0.5])
     ap.add_argument("--cv", type=int, default=0, help="also run K-fold cross-validation by task over all tasks")
     ap.add_argument("--seed", type=int, default=252)
+    ap.add_argument("--domain", choices=["airline", "retail"], default="airline")
+    ap.add_argument("--split", choices=["steps_csv", "speculator"], default="steps_csv",
+                    help="airline only: speculator = the LLM speculator's held-out tasks "
+                         "(build_action_data.py --split speculator), saved as *_airline_specsplit")
     a = ap.parse_args()
+    if a.domain == "retail":
+        tag, rows_file = "_retail", "retail_action_rows.csv"
+    elif a.split == "speculator":
+        tag, rows_file = "_airline_specsplit", "airline_specsplit_action_rows.csv"
+    else:                                                     # airline keeps the original file names
+        tag, rows_file = "", "action_rows.csv"
 
-    rows = pd.read_csv(DATA / "action_rows.csv")
+    rows = pd.read_csv(DATA / rows_file)
     train, test = rows[rows.split == "train"], rows[rows.split == "test"]
     pred = fit_all(train, a.seed)
     res = {m: score(pred, m, test, a.thetas)[0] for m in MODEL_ORDER}
@@ -223,13 +236,15 @@ def main():
                     f"{st.mean(x['k1_mae'] for x in fans):.2f}"]
 
     print("\n".join(out_txt))
-    with open(DATA / "action_model.pkl", "wb") as f:
+    model_path = DATA / f"action_model{tag}.pkl"
+    with open(model_path, "wb") as f:
         pickle.dump(pred, f)
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"action_eval_{time.strftime('%Y%m%d-%H%M%S')}.json"
-    out.write_text(json.dumps({"heldout": res, "speed": speeds, "fanout": fan, "cv": cv_out,
+    out = RESULTS / f"action_eval{tag}_{time.strftime('%Y%m%d-%H%M%S')}.json"
+    out.write_text(json.dumps({"domain": a.domain, "test_tasks": sorted(test.task_id.unique()),
+                               "heldout": res, "speed": speeds, "fanout": fan, "cv": cv_out,
                                "thetas": a.thetas, "importance": pred.feature_importance}, indent=2))
-    print(f"\n-> {DATA / 'action_model.pkl'}\n-> {out}")
+    print(f"\n-> {model_path}\n-> {out}")
 
 
 if __name__ == "__main__":

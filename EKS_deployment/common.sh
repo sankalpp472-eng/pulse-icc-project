@@ -9,6 +9,9 @@
 #                       predictor never saw in training (its test split), same pacing      (~30 min)
 #                                                                                   (default: task9)
 #   LABEL      text at the end of every result folder name                       (default: eks)
+#   CONCURRENCY  requests one tool pod serves at once (default 1: parallel calls make the autoscaler
+#                start more pods; 0 = no limit, the setup of the runs before fan-out)
+#   MAX_SCALE    most pods per tool                                              (default: 10)
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,7 +19,8 @@ cd "$ROOT"
 PY=${PYTHON:-python}
 WORKLOAD=${WORKLOAD:-task9}
 LABEL=${LABEL:-eks}
-RESULTS="$ROOT/test/test_knative/results"
+RESULTS="$ROOT/results/cloud_runs"          # new runs; runs up to 25 Oct 2026 stay in test/test_knative/results
+export PULSE_RESULTS_DIR="$RESULTS"          # the Python runners write here too
 LOGS="$ROOT/EKS_deployment/logs"
 mkdir -p "$LOGS"
 
@@ -42,15 +46,18 @@ case "$WORKLOAD" in
 esac
 
 # Deploy the 14 tools with this min-scale (0 = C0/C3, 1 = C1), unless they already have it
+# and with CONCURRENCY requests per pod (default 1) and at most MAX_SCALE pods per tool (default 10),
+# see deploy/knative/deploy.sh. Compared as "min-scale concurrency max-scale"; a missing setting counts as 0.
 ensure_min_scale() {
-  local want=$1 have
+  local want="$1 ${CONCURRENCY:-1} ${MAX_SCALE:-10}" have
   have=$(kubectl get ksvc -l pulse/role=mcp-tool \
-    -o jsonpath='{range .items[*]}{.spec.template.metadata.annotations.autoscaling\.knative\.dev/min-scale}{"\n"}{end}' | sort -u)
+    -o jsonpath='{range .items[*]}{.spec.template.metadata.annotations.autoscaling\.knative\.dev/min-scale}|{.spec.template.spec.containerConcurrency}|{.spec.template.metadata.annotations.autoscaling\.knative\.dev/max-scale}{"\n"}{end}' \
+    | awk -F'|' '{print ($1 == "" ? 0 : $1), ($2 == "" ? 0 : $2), ($3 == "" ? 0 : $3)}' | sort -u)
   if [ "$have" = "$want" ]; then
-    echo "Tools already at min-scale $want"
+    echo "Tools already at min-scale / concurrency / max-scale $want"
   else
-    echo "Deploying the tools with min-scale $want ..."
-    SKIP_BUILD=1 bash deploy/knative/deploy.sh "$want"
+    echo "Deploying the tools with min-scale / concurrency / max-scale $want ..."
+    SKIP_BUILD=1 bash deploy/knative/deploy.sh "$1"    # CONCURRENCY / MAX_SCALE reach it via the environment
   fi
 }
 

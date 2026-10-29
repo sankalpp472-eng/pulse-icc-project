@@ -1,0 +1,46 @@
+{
+  "stop_reason": "all tasks done",
+  "episodes": 1,
+  "tool_calls": 8,
+  "transport_failures": 0,
+  "cold_calls": 0,
+  "cold_share": 0.0,
+  "cold_p50_ms": null,
+  "warm_p50_ms": 250.3,
+  "all_calls_p50_ms": 250.3,
+  "signals_agree": 8,
+  "per_tool": {
+    "get_user_details": {
+      "calls": 1,
+      "cold": 0
+    },
+    "get_reservation_details": {
+      "calls": 7,
+      "cold": 0
+    }
+  },
+  "agent_model": "qwen/qwen3.8-27b",
+  "user_model": "openai/gpt-oss-20b",
+  "database": "redis (shared, reset per episode)",
+  "config": "C3",
+  "tool_window": [
+    "60s"
+  ],
+  "tool_images": [
+    "docker.io/sankalps2003/pulse-mcp-tools:0.2"
+  ],
+  "api_keys_available": 4,
+  "key_switches": [],
+  "tool_results_trimmed_from_context": 4,
+  "parallel_steps": {
+    "replies": 1,
+    "calls": 7,
+    "widths": [
+      7
+    ],
+    "peak_pods_per_tool": {
+      "get_reservation_details": 1,
+      "get_user_details": 1
+    }
+  }
+}

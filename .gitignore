@@ -7,3 +7,8 @@ __pycache__/
 predictor/data/
 predictor/results/
 EKS_deployment/logs/
+baselines/*/data/
+
+# cloud runner image (EKS_deployment/cloud/build_image.sh)
+EKS_deployment/cloud/.build/
+EKS_deployment/cloud/.image-*

@@ -1,0 +1,32 @@
+[
+  {
+    "run": "2026-10-25_1742_C0_W1-replay_task30-x3_qwen-fanout",
+    "config": "C0",
+    "seed": 252,
+    "window": "60s",
+    "calls": 24,
+    "real_cold_starts": 24,
+    "slow_warm_calls_over_1s": 0,
+    "pods_started": 24,
+    "pod_seconds": 1749,
+    "p50_ms": 6100.6,
+    "p95_ms": 12909.5,
+    "p99_ms": 12914.0,
+    "mean_ms": 7382.5
+  },
+  {
+    "run": "2026-10-25_1747_C3_W1-replay_task30-x3_qwen-fanout",
+    "config": "C3",
+    "seed": 252,
+    "window": "60s",
+    "calls": 24,
+    "real_cold_starts": 24,
+    "slow_warm_calls_over_1s": 0,
+    "pods_started": 33,
+    "pod_seconds": 2287,
+    "p50_ms": 8661.3,
+    "p95_ms": 10245.5,
+    "p99_ms": 10255.2,
+    "mean_ms": 6500.4
+  }
+]

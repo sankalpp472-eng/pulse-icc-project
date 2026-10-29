@@ -1,0 +1,23 @@
+{
+  "status": "ok",
+  "model": "llm-speculator:openai/gpt-oss-20b",
+  "theta": 0.3,
+  "ttl_s": 60,
+  "keys": 4,
+  "dead_keys": 0,
+  "stats": {
+    "hints": 396,
+    "answered": 377,
+    "no_key_free": 18,
+    "errors": 1,
+    "unparsed": 0
+  },
+  "crd": {
+    "mode": "k8s",
+    "written": 254,
+    "created": 9,
+    "updated": 245,
+    "failed": 0,
+    "last_error": null
+  }
+}

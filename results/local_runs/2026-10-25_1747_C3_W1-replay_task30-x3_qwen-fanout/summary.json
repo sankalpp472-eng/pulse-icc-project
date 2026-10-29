@@ -1,0 +1,83 @@
+{
+  "episodes": 3,
+  "tool_calls": 24,
+  "transport_failures": 0,
+  "cold_calls": 24,
+  "cold_share": 1.0,
+  "latency_ms": {
+    "all": {
+      "p50": 8661.3,
+      "p95": 10245.5,
+      "p99": 10255.2,
+      "mean": 6500.4
+    },
+    "cold": {
+      "p50": 8661.3,
+      "p95": 10245.5,
+      "max": 10255.2
+    },
+    "warm": {
+      "p50": null,
+      "p95": null,
+      "max": null
+    }
+  },
+  "cold_start_time_added_s": 156.0,
+  "signals_agree": 24,
+  "pods_started": 33,
+  "pod_seconds_seen": 2287.0,
+  "peak_pods_per_tool": {
+    "get_reservation_details": 10,
+    "get_user_details": 2
+  },
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 21,
+      "cold": 21,
+      "cold_share": 1.0
+    },
+    "get_user_details": {
+      "calls": 3,
+      "cold": 3,
+      "cold_share": 1.0
+    }
+  },
+  "config": "C3",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": null,
+    "traces": [
+      "results/local_runs/2026-10-25_1726_C3_W1-live_task30_qwen3.8-27b_fanout-gbt"
+    ],
+    "tasks": null,
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 3,
+    "sequential": true,
+    "predictor_url": "http://127.0.0.1:8000",
+    "fanout": false,
+    "workflow_id": "W1",
+    "no_signals": false,
+    "label": "qwen-fanout",
+    "signals_matched": null
+  },
+  "fanout": {
+    "enabled": false,
+    "groups": 3,
+    "calls_in_groups": 21,
+    "max_width": 7,
+    "cold_calls_in_groups": 21
+  },
+  "hints": {
+    "sent": 9,
+    "answered": 9
+  }
+}

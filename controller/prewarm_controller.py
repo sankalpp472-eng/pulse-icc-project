@@ -3,11 +3,15 @@ Prewarm controller, Option A: "warm-up request + Knative's idle window as the TT
 
 Watches PrewarmRequest objects (deploy/prewarm/prewarmrequest-crd.yaml), written by the predictor
 (predictor/crd_writer.py with CRD_MODE=k8s). For every NEW or REFRESHED request (spec.requestedAt
-newer than the last one handled) it sends the tool's Knative service one MCP `ping` through the
+newer than the last one handled) it sends the tool's Knative service MCP `ping`s through the
 ingress -- the same path the agent's tool calls take:
 
     tool at zero  -> Knative's activator starts a pod (a cold start, but before the agent needs it)
     tool warm     -> the ping just counts as activity, so the idle window starts again
+
+spec.desiredReplicas = k (the predictor's fan-out width): if the tool has fewer than k pods, k pings go
+out at once. With containerConcurrency 1 (deploy/knative/gen_services.py) each needs its own pod, so
+Knative starts k pods for the coming burst of k parallel calls. Otherwise one ping.
 
 It never evicts anything: Knative scales the tool back to zero after its idle window
 (autoscaling.knative.dev/window) without traffic, so that window IS the TTL. A sweeper marks
@@ -17,11 +21,14 @@ Run from the project root, with the agent's Python (needs `kubernetes`), next to
 
     agent/.venv/Scripts/python controller/prewarm_controller.py
 
+or inside the cluster as the pulse-controller Deployment (EKS_deployment/cloud/), where it uses the pod's
+service account and calls the tools at http://{svc}.default.svc.cluster.local/mcp.
+
 Settings (environment):
-  KUBE_CONTEXT       cluster to watch      (default: current kubectl context)
+  KUBE_CONTEXT       cluster to watch      (default: current kubectl context; ignored in the cluster)
   CRD_NAMESPACE      namespace             (default: default)
   MCP_URL_TEMPLATE   ingress URL for a tool (default http://127.0.0.1:8081/mcp; EKS: set by EKS_deployment/use_eks.sh)
-  MCP_HOST_TEMPLATE  Host header           (default {svc}.default.example.com)
+  MCP_HOST_TEMPLATE  Host header           (default {svc}.default.example.com; empty = no Host header)
   MAX_REQUEST_AGE_S  ignore requests older than this, e.g. left over from an earlier run (default 30)
   CONTROLLER_LOG     one JSON line per action (default controller/results/controller.jsonl)
 """
@@ -61,7 +68,10 @@ def parse_iso(s: str | None) -> float | None:
 
 class Controller:
     def __init__(self):
-        config.load_kube_config(context=os.getenv("KUBE_CONTEXT") or None)
+        if os.getenv("KUBERNETES_SERVICE_HOST"):       # running in the cluster (EKS_deployment/cloud/)
+            config.load_incluster_config()
+        else:                                          # running on the laptop
+            config.load_kube_config(context=os.getenv("KUBE_CONTEXT") or None)
         self.crd = client.CustomObjectsApi()
         self.core = client.CoreV1Api()
         self.pool = ThreadPoolExecutor(max_workers=8)
@@ -96,34 +106,49 @@ class Controller:
             self.log(event="status_patch_failed", object=name, error=f"{e.status} {e.reason}")
 
     # ------------------------------------------------------------------ the warm-up
+    def ping(self, svc: str, tool: str) -> tuple[int, int]:
+        """One MCP ping through the ingress. Returns (HTTP code, ms)."""
+        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+        if HOST_TPL:                   # empty in the cluster: the URL itself names the service
+            headers["Host"] = HOST_TPL.format(svc=svc, tool=tool)
+        req = urllib.request.Request(URL_TPL.format(svc=svc, tool=tool), data=PING, method="POST", headers=headers)
+        t0 = time.perf_counter()
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                code = r.status
+        except urllib.error.HTTPError as e:
+            code = e.code              # any answer FROM THE POD (even 4xx) proves it is up ...
+        return code, int((time.perf_counter() - t0) * 1000)
+
     def warm(self, obj: dict):
         name, spec = obj["metadata"]["name"], obj["spec"]
         svc, requested = spec["service"], spec["requestedAt"]
         try:
-            cold = self.pods(svc) == 0
+            before = self.pods(svc)
+            cold = before == 0
+            # desiredReplicas = the predictor's fan-out width k. With containerConcurrency 1 every in-flight
+            # request needs its own pod, so k pings at once make Knative start k pods. A tool that already
+            # has k pods gets one ping, which just restarts its idle window.
+            k = max(1, int(spec.get("desiredReplicas") or 1))
+            n = k if before < k else 1
             ttl = self.window_s(svc)
             sent = now_iso()
             self.set_status(name, phase="Warming", lastRequestedAt=requested, lastPingAt=sent,
-                            wasCold=cold, effectiveTtlSeconds=ttl, message="warm-up ping sent")
-            req = urllib.request.Request(URL_TPL.format(svc=svc, tool=spec["tool"]), data=PING, method="POST",
-                                         headers={"Host": HOST_TPL.format(svc=svc, tool=spec["tool"]),
-                                                  "Content-Type": "application/json",
-                                                  "Accept": "application/json, text/event-stream"})
-            t0 = time.perf_counter()
-            try:
-                with urllib.request.urlopen(req, timeout=60) as r:
-                    code = r.status
-            except urllib.error.HTTPError as e:
-                code = e.code          # any answer FROM THE POD (even 4xx) proves it is up ...
-            ms = int((time.perf_counter() - t0) * 1000)
-            if code in (404, 502, 503, 504):   # ... but these come from the ingress/activator: not warm
-                raise RuntimeError(f"ingress answered HTTP {code}")
+                            wasCold=cold, effectiveTtlSeconds=ttl, message=f"{n} warm-up ping(s) sent")
+            with ThreadPoolExecutor(max_workers=n) as pool:
+                results = list(pool.map(lambda _: self.ping(svc, spec["tool"]), range(n)))
+            codes = [c for c, _ in results]
+            ms = max(m for _, m in results)
+            bad = [c for c in codes if c in (404, 502, 503, 504)]   # ... but these come from the ingress/activator
+            if bad:
+                raise RuntimeError(f"ingress answered HTTP {bad[0]} to {len(bad)} of {n} pings")
             ready = now_iso()
             expires = datetime.fromtimestamp(parse_iso(ready) + (ttl or 0), timezone.utc).isoformat(
                 timespec="milliseconds").replace("+00:00", "Z") if ttl else None
             self.set_status(name, phase="Ready", readyAt=ready, pingLatencyMs=ms, expiresAt=expires,
-                            evictedAt=None, message=f"ping answered (HTTP {code})")
-            self.log(event="warmed", tool=spec["tool"], service=svc, was_cold=cold, ping_ms=ms, http=code,
+                            evictedAt=None, message=f"{n} ping(s) answered (HTTP {codes[0]})")
+            self.log(event="warmed", tool=spec["tool"], service=svc, was_cold=cold, ping_ms=ms, http=codes[0],
+                     desired_replicas=k, pings=n, pods_before=before, pods_after=self.pods(svc),
                      probability=spec.get("probability"), episode=spec.get("episodeId"), requested_at=requested,
                      effective_ttl_s=ttl)
         except Exception as e:
@@ -168,7 +193,8 @@ class Controller:
                 print(f"sweep error: {type(e).__name__}: {e}")
 
     def run(self):
-        print(f"prewarm controller (Option A) | context {config.list_kube_config_contexts()[1]['name']} | "
+        ctx = "in-cluster" if os.getenv("KUBERNETES_SERVICE_HOST") else config.list_kube_config_contexts()[1]["name"]
+        print(f"prewarm controller (Option A) | context {ctx} | "
               f"namespace {NS} | ingress {URL_TPL} | log {LOG}")
         threading.Thread(target=self.sweep, daemon=True).start()
         while True:      # the watch times out every few minutes; just start it again

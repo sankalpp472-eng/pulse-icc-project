@@ -1,0 +1,352 @@
+{
+  "started": "2026-10-28T02:19:39",
+  "workload": "W1 airline change/cancel (tau-bench), replay of recorded traces",
+  "task_ids": [
+    6,
+    20,
+    22,
+    26,
+    30
+  ],
+  "models": {
+    "note": "replay: no LLM calls; traces recorded by gpt-4o and claude-3.5-sonnet (tau-bench), sampled gaps",
+    "trace_models": [
+      "claude-3.5-sonnet",
+      "gpt-4o"
+    ]
+  },
+  "config": "C0",
+  "knative": {
+    "version": "1.23.0",
+    "tool_min_scale": [
+      "0"
+    ],
+    "tool_window": [
+      "60s"
+    ],
+    "tool_container_concurrency": [
+      "1"
+    ],
+    "tool_max_scale": [
+      "10"
+    ],
+    "tool_target_utilization": [
+      "100"
+    ],
+    "autoscaler_overrides": "none (Knative defaults: stable-window 60s, scale-to-zero-grace-period 30s, scale-to-zero-pod-retention-period 0s)",
+    "ingress": "http://{svc}.default.svc.cluster.local/mcp",
+    "host_template": ""
+  },
+  "tools": [
+    {
+      "service": "book-reservation",
+      "revision": "book-reservation-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "calculate",
+      "revision": "calculate-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "cancel-reservation",
+      "revision": "cancel-reservation-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "get-reservation-details",
+      "revision": "get-reservation-details-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "get-user-details",
+      "revision": "get-user-details-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "list-all-airports",
+      "revision": "list-all-airports-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "search-direct-flight",
+      "revision": "search-direct-flight-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "search-onestop-flight",
+      "revision": "search-onestop-flight-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "send-certificate",
+      "revision": "send-certificate-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "think",
+      "revision": "think-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "transfer-to-human-agents",
+      "revision": "transfer-to-human-agents-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "update-reservation-baggages",
+      "revision": "update-reservation-baggages-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "update-reservation-flights",
+      "revision": "update-reservation-flights-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "update-reservation-passengers",
+      "revision": "update-reservation-passengers-00001",
+      "image": "docker.io/sankalps2003/pulse-mcp-tools:0.2",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    }
+  ],
+  "tool_images": [
+    "docker.io/sankalps2003/pulse-mcp-tools:0.2"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "cluster": {
+    "context": "",
+    "nodes": 3,
+    "kubernetes": "v1.34.11-eks-cfb47f5"
+  },
+  "measurement": {
+    "cold_if_latency_over_s": 1.0,
+    "pod_poll_interval_s": 1.0
+  },
+  "code": {
+    "git_commit": "3220900",
+    "uncommitted_changes": true,
+    "image": "294056656243.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261028-0159-3220900-dirty"
+  },
+  "runner": "pod pulse-run-1028-021919",
+  "replay": {
+    "episodes": 46,
+    "traces": null,
+    "tasks": [
+      6,
+      20,
+      22,
+      26,
+      30
+    ],
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": false,
+    "predictor_url": null,
+    "fanout": {
+      "enabled": true,
+      "groups": 32,
+      "calls_in_groups": 118,
+      "max_width": 7
+    },
+    "workflow_id": "W1",
+    "hint_timing": "fair",
+    "hint_context": false,
+    "hint_timeout": 1.0,
+    "no_signals": false,
+    "label": "cloud",
+    "signals_matched": null,
+    "traces_source": [
+      "test/test_knative/data/w1_tau_traces.jsonl"
+    ],
+    "planned_calls": 293,
+    "start_span_s": 1184.19
+  }
+}

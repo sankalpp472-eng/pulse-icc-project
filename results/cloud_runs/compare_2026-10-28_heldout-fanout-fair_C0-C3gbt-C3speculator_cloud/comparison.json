@@ -1,0 +1,50 @@
+[
+  {
+    "run": "2026-10-28_0219_C0_W1-replay_tasks6-20-22-26-30-46ep-fanout_cloud",
+    "config": "C0",
+    "seed": 252,
+    "predictor": null,
+    "window": "60s",
+    "calls": 293,
+    "real_cold_starts": 85,
+    "slow_warm_calls_over_1s": 2,
+    "pods_started": 74,
+    "pod_seconds": 9080,
+    "p50_ms": 49.4,
+    "p95_ms": 1825.8,
+    "p99_ms": 2029.4,
+    "mean_ms": 515.2
+  },
+  {
+    "run": "2026-10-28_0242_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_cloud-gbt",
+    "config": "C3",
+    "seed": 252,
+    "predictor": "gbt",
+    "window": "60s",
+    "calls": 293,
+    "real_cold_starts": 37,
+    "slow_warm_calls_over_1s": 0,
+    "pods_started": 65,
+    "pod_seconds": 8923,
+    "p50_ms": 42.0,
+    "p95_ms": 1504.7,
+    "p99_ms": 1843.7,
+    "mean_ms": 241.4
+  },
+  {
+    "run": "2026-10-28_0303_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_cloud-speculator",
+    "config": "C3",
+    "seed": 252,
+    "predictor": "llm-speculator:openai/gpt-oss-20b",
+    "window": "60s",
+    "calls": 293,
+    "real_cold_starts": 60,
+    "slow_warm_calls_over_1s": 0,
+    "pods_started": 74,
+    "pod_seconds": 9833,
+    "p50_ms": 40.8,
+    "p95_ms": 1659.4,
+    "p99_ms": 1709.1,
+    "mean_ms": 326.0
+  }
+]

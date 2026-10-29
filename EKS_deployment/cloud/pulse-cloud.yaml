@@ -1,0 +1,134 @@
+# Pulse's own components in the cluster, next to the Knative tools (applied by cloud_up.sh, which fills
+# in __IMAGE__ and __THETA__). The Groq keys come from the Secret pulse-llm-keys (cloud_up.sh makes it
+# from agent/.env). Runs are separate pods started by run_cloud.sh with the same image and account.
+#
+#   pulse-predictor   LightGBM next-action model (gbt): hints in, PrewarmRequests out    :8000
+#   pulse-speculator  LLM speculator (speculative-actions baseline), same API             :8000
+#   pulse-controller  watches PrewarmRequests, pings tools at http://{svc}.default.svc.cluster.local/mcp
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pulse
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pulse
+rules:
+  - apiGroups: ["pulse.iisc.ac.in"]                 # predictors write, the controller reconciles
+    resources: ["prewarmrequests", "prewarmrequests/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]                                 # pod watcher, cold/warm labels, controller's pod count
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]                                 # Redis reset between runs (kubectl exec deploy/redis)
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: ["serving.knative.dev"]              # tool settings for run_config.json, the controller's TTL
+    resources: ["services"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]                                 # Knative autoscaler config + version, node count
+    resources: ["configmaps", "namespaces", "nodes", "services"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pulse
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: pulse}
+subjects: [{kind: ServiceAccount, name: pulse, namespace: default}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pulse-predictor
+  namespace: default
+  labels: {app: pulse-predictor, pulse/role: system}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pulse-predictor}}
+  template:
+    metadata:
+      labels: {app: pulse-predictor, pulse/role: system}
+    spec:
+      serviceAccountName: pulse
+      containers:
+        - name: predictor
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "uvicorn", "service:app", "--app-dir", "predictor", "--host", "0.0.0.0", "--port", "8000"]
+          env:
+            - {name: PREDICTOR_MODEL, value: gbt}
+            - {name: CRD_MODE, value: k8s}
+            - {name: THETA, value: "__THETA__"}
+          ports: [{containerPort: 8000}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8000}, periodSeconds: 5}
+          resources: {requests: {cpu: 100m, memory: 384Mi}, limits: {memory: 1Gi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pulse-predictor, namespace: default}
+spec:
+  selector: {app: pulse-predictor}
+  ports: [{port: 8000, targetPort: 8000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pulse-speculator
+  namespace: default
+  labels: {app: pulse-speculator, pulse/role: system}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pulse-speculator}}
+  template:
+    metadata:
+      labels: {app: pulse-speculator, pulse/role: system}
+    spec:
+      serviceAccountName: pulse
+      containers:
+        - name: speculator
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "uvicorn", "service:app", "--app-dir", "baselines/llm_speculator", "--host", "0.0.0.0", "--port", "8000"]
+          env:
+            - {name: CRD_MODE, value: k8s}
+            - {name: THETA, value: "__THETA__"}
+          envFrom: [{secretRef: {name: pulse-llm-keys, optional: true}}]
+          ports: [{containerPort: 8000}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8000}, periodSeconds: 5}
+          resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 768Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pulse-speculator, namespace: default}
+spec:
+  selector: {app: pulse-speculator}
+  ports: [{port: 8000, targetPort: 8000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pulse-controller
+  namespace: default
+  labels: {app: pulse-controller, pulse/role: system}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pulse-controller}}
+  template:
+    metadata:
+      labels: {app: pulse-controller, pulse/role: system}
+    spec:
+      serviceAccountName: pulse
+      containers:
+        - name: controller
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          command: ["python", "controller/prewarm_controller.py"]
+          env:
+            - {name: CONTROLLER_LOG, value: /tmp/controller.jsonl}   # also printed: kubectl logs deploy/pulse-controller
+          resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 512Mi}}

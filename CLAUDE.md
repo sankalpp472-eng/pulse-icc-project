@@ -40,7 +40,7 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 | Controller | Python (`kubernetes` client); a Go/controller-runtime port is possible later |
 | Load generation | Trace replay (`test/test_knative/w1_replay.py`) and the live agent (`w1_live.py`) |
 | Metrics | Prometheus (`/metrics` on the predictor and the runners) |
-| Trace store | CSV / JSONL files per run (`test/test_knative/results/`) |
+| Trace store | CSV / JSONL files per run (`results/local_runs/` on kind, `results/cloud_runs/` on EKS; runs before 25 Oct 2026 in `test/test_knative/results/`) |
 
 ## Repository Layout
 

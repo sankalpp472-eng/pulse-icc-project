@@ -4,10 +4,10 @@
 #   bash EKS_deployment/run_all.sh                      # task-9 trace x3 per config (~30-40 min)
 #   WORKLOAD=taubench bash EKS_deployment/run_all.sh    # 46 tau-bench episodes per config (~1.5-2 h)
 #
-# Result: three run folders + test/test_knative/results/compare_<date>_<workload>_C0-C3-C1_eks/
+# Result: three run folders + results/cloud_runs/compare_<date>_<workload>_C0-C3-C1_eks/
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-RESULTS="$HERE/../test/test_knative/results"
+RESULTS="$HERE/../results/cloud_runs"
 newest() { ls -td "$RESULTS"/*_"$1"_W1-replay_* | head -1; }
 
 bash "$HERE/run_c0.sh" "$@"; C0=$(newest C0)

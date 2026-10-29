@@ -1,0 +1,17 @@
+# The runner image (EKS_deployment/cloud/Dockerfile): the agent, the replay / live runners, the predictor,
+# the LLM speculator and the prewarm controller. Pinned to the versions the models were trained with
+# (the scikit-learn / LightGBM pickles in predictor/data must load unchanged).
+openai==3.35.1
+python-dotenv==1.2.4
+mcp==2.3.0
+httpx==0.28.1
+numpy==2.4.6
+pandas==3.0.6
+scipy==1.17.1
+scikit-learn==1.9.1
+lightgbm==4.7.0
+fastapi==0.156.8
+pydantic==2.14.1
+uvicorn==0.54.0
+prometheus_client==0.26.0
+kubernetes==37.0.1

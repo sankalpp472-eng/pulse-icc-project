@@ -1,0 +1,131 @@
+{
+  "episodes": 46,
+  "tool_calls": 293,
+  "transport_failures": 0,
+  "cold_calls": 34,
+  "cold_share": 0.116,
+  "latency_ms": {
+    "all": {
+      "p50": 365.1,
+      "p95": 1905.0,
+      "p99": 2550.4,
+      "mean": 563.4
+    },
+    "cold": {
+      "p50": 1897.4,
+      "p95": 2712.5,
+      "max": 3025.0
+    },
+    "warm": {
+      "p50": 354.6,
+      "p95": 519.2,
+      "max": 937.7
+    }
+  },
+  "cold_start_time_added_s": 54.5,
+  "signals_agree": 272,
+  "pods_started": 31,
+  "pod_seconds_seen": 3282.0,
+  "peak_pods_per_tool": {
+    "get_reservation_details": 3,
+    "think": 1,
+    "search_direct_flight": 1,
+    "cancel_reservation": 1,
+    "update_reservation_flights": 1,
+    "calculate": 1,
+    "get_user_details": 1,
+    "transfer_to_human_agents": 1,
+    "search_onestop_flight": 1
+  },
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 132,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "get_user_details": {
+      "calls": 39,
+      "cold": 4,
+      "cold_share": 0.1
+    },
+    "update_reservation_flights": {
+      "calls": 31,
+      "cold": 7,
+      "cold_share": 0.23
+    },
+    "search_direct_flight": {
+      "calls": 29,
+      "cold": 2,
+      "cold_share": 0.07
+    },
+    "cancel_reservation": {
+      "calls": 26,
+      "cold": 4,
+      "cold_share": 0.15
+    },
+    "search_onestop_flight": {
+      "calls": 13,
+      "cold": 4,
+      "cold_share": 0.31
+    },
+    "transfer_to_human_agents": {
+      "calls": 13,
+      "cold": 5,
+      "cold_share": 0.38
+    },
+    "think": {
+      "calls": 7,
+      "cold": 5,
+      "cold_share": 0.71
+    },
+    "calculate": {
+      "calls": 3,
+      "cold": 3,
+      "cold_share": 1.0
+    }
+  },
+  "config": "C3",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": 46,
+    "traces": null,
+    "tasks": [
+      6,
+      20,
+      22,
+      26,
+      30
+    ],
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": false,
+    "predictor_url": "http://127.0.0.1:8000",
+    "fanout": true,
+    "workflow_id": "W1",
+    "hint_context": false,
+    "hint_timeout": 1.0,
+    "no_signals": false,
+    "label": "eks-gbt",
+    "signals_matched": "60 of 60 traces"
+  },
+  "fanout": {
+    "enabled": true,
+    "groups": 32,
+    "calls_in_groups": 118,
+    "max_width": 7,
+    "cold_calls_in_groups": 0
+  },
+  "hints": {
+    "sent": 207,
+    "answered": 207
+  }
+}

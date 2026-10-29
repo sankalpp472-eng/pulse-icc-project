@@ -1,14 +1,16 @@
 """
 ReAct-style agent for the tau-bench airline domain.
 
-Loop (one tool at a time):
-    hint -> LLM reasons -> tool call -> observation -> LLM reasons -> ...
+Loop:
+    hint -> LLM reasons -> tool call(s) -> observation(s) -> LLM reasons -> ...
     and when the LLM replies in plain text, the (simulated) user answers.
+Independent lookups requested in one reply run at the same time (parallel fan-out).
 
 Every LLM step is recorded with its think time, which is the window the
 prewarmer will have once hints are wired to the predictor.
 """
 
+import asyncio
 import json
 import time
 
@@ -17,7 +19,7 @@ from openai import APIStatusError
 
 from llm import CONTEXT_BUDGET, chat, est_tokens, fit_context
 from prompts import AGENT_SYSTEM_PROMPT
-from tools import TERMINATE_TOOLS, LocalToolBackend, make_tool_backend
+from tools import READ_ONLY_TOOLS, TERMINATE_TOOLS, LocalToolBackend, make_tool_backend
 from user import STOP, HumanUser, SimulatedUser
 
 
@@ -63,6 +65,17 @@ def _assistant_msg(m) -> dict:
     return msg
 
 
+def _run_calls(tools, parsed: list[tuple[str, dict]]) -> tuple[list[tuple[str, float]], bool]:
+    """Run one reply's tool calls. Several read-only calls on the MCP backend go out at once
+    (asyncio.gather); writes, or a mix, run in order (they change the shared database).
+    Returns ([(observation, latency_s)], ran_in_parallel)."""
+    if len(parsed) > 1 and hasattr(tools, "acall") and all(n in READ_ONLY_TOOLS for n, _ in parsed):
+        async def fire():
+            return await asyncio.gather(*(tools.acall(n, a) for n, a in parsed))
+        return [(obs, lat) for obs, lat, _ in asyncio.run(fire())], True
+    return [tools.call(n, a) for n, a in parsed], False
+
+
 def run_episode(task: dict, user: str = "sim", max_steps: int = 30,
                 verbose: bool = True) -> dict:
     episode_id = f"task{task['id']}-{int(time.time())}"
@@ -93,22 +106,30 @@ def run_episode(task: dict, user: str = "sim", max_steps: int = 30,
                "context_trimmed": trimmed, "prompt_tokens": r.prompt_tokens}
 
         if m.tool_calls:
-            # Native tool calling. Models occasionally emit >1 call; run them in order.
-            calls = []
-            for tc in m.tool_calls:
-                name = tc.function.name
+            # Native tool calling: one reply may hold several calls (independent lookups run at once)
+            parsed = {}                     # call index -> args (calls with invalid JSON are left out)
+            for k, tc in enumerate(m.tool_calls):
                 try:
-                    args = json.loads(tc.function.arguments or "{}")
-                    obs, tool_s = tools.call(name, args)
+                    parsed[k] = json.loads(tc.function.arguments or "{}")
                 except json.JSONDecodeError:
+                    pass
+            results, parallel = _run_calls(tools, [(m.tool_calls[k].function.name, a) for k, a in parsed.items()])
+            results = dict(zip(parsed, results))
+            calls = []
+            for k, tc in enumerate(m.tool_calls):
+                name = tc.function.name
+                if k in parsed:
+                    args, (obs, tool_s) = parsed[k], results[k]
+                else:
                     args, obs, tool_s = {}, "Error: arguments were not valid JSON", 0.0
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": obs})
                 trajectory.append(name)
                 calls.append({"tool": name, "args": args, "tool_s": round(tool_s, 4)})
                 if verbose:
-                    print(f"  [{step:>2}] think {r.latency_s:5.2f}s -> {name}({json.dumps(args)})")
+                    tag = f" [parallel x{len(parsed)}]" if parallel else ""
+                    print(f"  [{step:>2}] think {r.latency_s:5.2f}s -> {name}({json.dumps(args)}){tag}")
                     print(f"       obs: {obs[:200]}{'...' if len(obs) > 200 else ''}")
-            steps.append({**rec, "kind": "tool", "calls": calls})
+            steps.append({**rec, "kind": "tool", "calls": calls, "parallel": parallel})
             if any(c["tool"] in TERMINATE_TOOLS for c in calls):
                 end_reason = "transfer"
                 break
@@ -119,9 +140,11 @@ def run_episode(task: dict, user: str = "sim", max_steps: int = 30,
                 print(f"  [{step:>2}] think {r.latency_s:5.2f}s -> respond")
                 print(f"[agent] {text}")
             reply = customer.reply(text)
-            # How long the customer took to answer (LLM time, rate-limit waits excluded):
-            # recorded so a replay of this run can reproduce the real gap between tool calls.
-            steps.append({**rec, "kind": "respond", "user_s": round(getattr(customer, "last_latency_s", 0.0), 3)})
+            # How long the customer took to answer (LLM time or the simulated reading + typing delay,
+            # whichever is longer; rate-limit waits excluded): recorded so a replay of this run can
+            # reproduce the real gap between tool calls.
+            steps.append({**rec, "kind": "respond", "user_s": round(getattr(customer, "last_latency_s", 0.0), 3),
+                          "user_delay_s": round(getattr(customer, "last_delay_s", 0.0), 3)})
             if verbose:
                 print(f"[user]  {reply}")
             # End only on a standalone STOP. Small sim models often write
