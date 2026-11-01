@@ -160,6 +160,16 @@ R=results/cloud_runs
 This writes the latency CDF, percentiles, pod-seconds, cold starts, and `comparison.json` with the numbers.
 Only compare runs with the same workload and seed.
 
+### A7b. Or drive it all from the demo UI, inside the cluster
+
+```bash
+bash EKS_deployment/cloud/ui_cloud.sh up      # then open http://127.0.0.1:8765
+```
+
+The UI pod runs live / replay episodes and experiment runs next to the tools.
+Before tearing down, copy its runs home with `bash EKS_deployment/cloud/ui_cloud.sh fetch` (`eks_down.sh` also does it).
+The full UI guide is [ui/GUIDE.md](ui/GUIDE.md).
+
 ### A8. Tear down (~10 min). Do this every time.
 
 ```bash

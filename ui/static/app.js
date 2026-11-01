@@ -345,11 +345,14 @@ $("#rWhere").onchange = renderResults;
 function renderResults() {
   const w = $("#rWhere").value;
   const runs = RESULTS.runs.filter((r) => !w || r.where === w);
+  const wheres = [...new Set(RESULTS.runs.map((r) => r.where))];
+  $("#rWhere").innerHTML = `<option value="">all folders</option>` + wheres.map((x) => `<option ${x === w ? "selected" : ""}>${esc(x)}</option>`).join("");
   $("#rTbl tbody").innerHTML = runs.map((r) => `<tr>
       <td><input type="checkbox" data-path="${esc(r.path)}"></td>
-      <td class="name" title="${esc(r.path)}">${esc(r.name)}</td><td>${esc(r.config)}</td><td>${esc(r.predictor || "")}</td>
+      <td class="name" title="${esc(r.path)}">${esc(r.name)}</td><td class="muted">${esc(r.where)}</td><td>${esc(r.config)}</td><td>${esc(r.predictor || "")}</td>
       <td>${r.calls ?? ""}</td><td>${r.cold ?? ""}</td><td>${fmt(r.mean)}</td><td>${fmt(r.p50)}</td><td>${fmt(r.p95)}</td><td>${fmt(r.p99)}</td>
-      <td>${fmt(r.pod_seconds)}</td></tr>`).join("") || `<tr><td colspan="11" class="muted">No runs.</td></tr>`;
+      <td>${fmt(r.pod_seconds)}</td><td><a href="/api/results/zip?path=${encodeURIComponent(r.path)}" title="Download this run folder as a zip">zip</a></td></tr>`).join("") ||
+    `<tr><td colspan="13" class="muted">No runs.</td></tr>`;
   $$("#rTbl input").forEach((c) => (c.onchange = selChanged));
   selChanged();
   $("#rGallery").innerHTML = RESULTS.compares.map(galleryHtml).join("") || `<div class="empty">No comparison plots yet.</div>`;
@@ -439,7 +442,7 @@ function renderServices(sv) {
     pill.textContent = "ready"; pill.className = "pill ok";
     const h = p.health || {};
     $("#predInfo").innerHTML = `${esc(PREDICTORS[p.model] || p.model)} · θ ${p.theta} · CRDs ${esc(p.crd)}` +
-      (sv.controller ? ` · controller ${sv.controller.running ? "running" : "stopped"}` : "") +
+      (sv.controller ? ` · controller ${sv.controller.deployment ? "(deploy/" + esc(sv.controller.deployment) + ") " : ""}${sv.controller.running ? "running" : "not running"}` : "") +
       (h.crd && h.crd.written != null ? ` · ${h.crd.written} written` : "");
   }
 }
@@ -460,6 +463,13 @@ async function poll() {
     state = s;
     const c = s.cluster;
     clusterSeg.set(c.mode);
+    $("#inClusterPill").classList.toggle("hidden", !c.in_cluster);
+    if (c.in_cluster) {                      // the runner is this pod; run_cloud.sh is a laptop script
+      $("#xWhereHere").textContent = "This UI pod";
+      $("#xWherePod").classList.add("hidden");
+      $("#expNote").innerHTML = "Runs execute in this UI pod on the client node, next to the tools. New results go to the pod's own folder " +
+        "(<i>this pod</i> in Results): download them as zip, or <code>bash EKS_deployment/cloud/ui_cloud.sh fetch</code> before the cluster goes down.";
+    }
     $("#ctxName").textContent = c.context ? `(${c.context.replace(/^.*@/, "")})` : "";
     $$(".sim-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "sim"));
     minScaleSeg.set(String(s.sim_min_scale));

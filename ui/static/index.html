@@ -16,6 +16,7 @@
     </div>
   </div>
   <div class="cluster-switch">
+    <span class="pill ok hidden" id="inClusterPill" title="This UI runs as the pulse-ui pod inside the cluster">running in EKS</span>
     <span class="muted">Tools run on</span>
     <div class="seg" id="clusterSeg">
       <button data-mode="sim" class="on">Simulated cluster</button>
@@ -137,7 +138,7 @@
             <input type="range" id="xTheta" min="0.05" max="0.9" step="0.05" value="0.3">
           </label>
           <label>Runner
-            <div class="seg" id="xWhere"><button data-v="laptop" class="on">Laptop</button><button data-v="cluster">In-cluster pod</button></div>
+            <div class="seg" id="xWhere"><button data-v="laptop" class="on" id="xWhereHere">Laptop</button><button data-v="cluster" id="xWherePod">Run pod (run_cloud.sh)</button></div>
           </label>
           <label>Tasks
             <select id="xTasksPreset">
@@ -186,12 +187,12 @@
         <div class="card-head">
           <h3>Runs</h3>
           <div>
-            <select id="rWhere"><option value="">all</option><option value="cloud">cloud_runs</option><option value="local">local_runs</option><option value="legacy">before 25 Oct</option></select>
+            <select id="rWhere"><option value="">all folders</option></select>
             <button class="ghost small" id="rRefresh">↻</button>
           </div>
         </div>
         <div class="tbl-wrap"><table class="tbl" id="rTbl"><thead><tr>
-          <th></th><th>Run</th><th>Config</th><th>Predictor</th><th>Calls</th><th>Cold</th><th>Mean</th><th>p50</th><th>p95</th><th>p99</th><th>Pod-s</th></tr></thead><tbody></tbody></table></div>
+          <th></th><th>Run</th><th>Folder</th><th>Config</th><th>Predictor</th><th>Calls</th><th>Cold</th><th>Mean</th><th>p50</th><th>p95</th><th>p99</th><th>Pod-s</th><th></th></tr></thead><tbody></tbody></table></div>
         <div class="actions">
           <button class="primary" id="rCompare" disabled>Compare selected</button>
           <button id="rPlot" disabled>Make plots (plot_compare.py)</button>

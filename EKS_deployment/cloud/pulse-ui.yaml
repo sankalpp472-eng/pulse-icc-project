@@ -1,0 +1,47 @@
+# The demo UI (ui/server.py) inside the cluster, applied by ui_cloud.sh (fills in __IMAGE__ and __PLACE__).
+# Same image and service account as the other Pulse pods (cloud_up.sh first). It calls the tools at their
+# in-cluster URLs, starts its own predictor process (any model / theta) that writes PrewarmRequests, relies on
+# the pulse-controller Deployment for the prewarming, and runs experiments itself (results in /home/app/results).
+# ClusterIP only: no load balancer, no public address. Open it with `bash EKS_deployment/cloud/ui_cloud.sh`
+# (kubectl port-forward to http://127.0.0.1:8765).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pulse-ui
+  namespace: default
+  labels: {app: pulse-ui, pulse/role: ui}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}           # one UI at a time (it owns the run state)
+  selector: {matchLabels: {app: pulse-ui}}
+  template:
+    metadata:
+      labels: {app: pulse-ui, pulse/role: ui}
+    spec:
+      serviceAccountName: pulse
+__PLACE__
+      containers:
+        - name: ui
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          command: ["python", "ui/server.py"]
+          ports: [{containerPort: 8765}]
+          env:
+            - {name: UI_HOST, value: "0.0.0.0"}
+            - {name: UI_STATE_DIR, value: /home/app/ui-state}
+            - {name: UI_RESULTS_DIR, value: /home/app/results/cloud_runs}
+            - {name: CLUSTER_NAME, value: pulse-eks}
+          envFrom: [{secretRef: {name: pulse-llm-keys, optional: true}}]
+          readinessProbe:
+            httpGet: {path: /api/tasks, port: 8765}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources: {requests: {cpu: 500m, memory: 1Gi}, limits: {memory: 3Gi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pulse-ui, namespace: default}
+spec:
+  type: ClusterIP
+  selector: {app: pulse-ui}
+  ports: [{port: 8765, targetPort: 8765}]

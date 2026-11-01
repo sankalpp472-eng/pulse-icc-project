@@ -3,8 +3,10 @@ Pulse demo UI: run live and replay episodes, pick the predictor, watch the tools
 prewarms land, launch experiment runs and compare their results.
 
     agent/.venv/Scripts/python ui/server.py            # from the repo root, then open http://127.0.0.1:8765
+    bash EKS_deployment/cloud/ui_cloud.sh up             # or inside the EKS cluster, opened via port-forward
 
-Listens on 127.0.0.1 only. See ui/README.md.
+Listens on 127.0.0.1 (UI_HOST; the pod uses 0.0.0.0 behind a ClusterIP Service, never a load balancer).
+See ui/README.md.
 """
 
 import os
@@ -14,7 +16,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -96,7 +98,7 @@ class PredictorIn(BaseModel):
 def predictor_start(p: PredictorIn):
     crd = cluster.mode == "knative"
     st = services.start_predictor(p.model, p.theta, crd)
-    if crd and not ("controller" in services.procs and services.procs["controller"].alive()):
+    if crd and not services.controller_running():
         st = services.start_controller()
     return st
 
@@ -214,11 +216,23 @@ def results_plot(body: dict):
         raise HTTPException(400, str(e))
 
 
+@app.get("/api/results/zip")
+def results_zip(path: str):
+    try:
+        data, name = backend.zip_folder(path)
+    except ValueError:
+        raise HTTPException(404)
+    return Response(data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
 @app.get("/files/{path:path}")
 def files(path: str):
-    p = (ROOT / path).resolve()
-    allowed = [d.resolve() for d in backend.RESULT_DIRS.values()]
-    if not any(a in p.parents for a in allowed) or not p.is_file() or p.suffix not in (".png", ".json", ".csv", ".jsonl"):
+    try:
+        p = backend.result_path(path)
+    except ValueError:
+        raise HTTPException(404)
+    if not p.is_file() or p.suffix not in (".png", ".json", ".csv", ".jsonl"):
         raise HTTPException(404)
     return FileResponse(p)
 
@@ -233,9 +247,12 @@ app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
 @app.on_event("startup")
 def _startup():
+    # in the cluster: use the real tools from the start (they are right next to the UI)
+    if backend.IN_CLUSTER and cluster.detect()["reachable"]:
+        cluster.mode = "knative"
     # load the main predictor right away: importing LightGBM + the models takes up to a minute on a laptop
     if os.getenv("UI_AUTOSTART_PREDICTOR", "1") != "0":
-        services.start_predictor("gbt", 0.3, crd=False)
+        services.start_predictor("gbt", 0.3, crd=cluster.mode == "knative")
 
 
 @app.on_event("shutdown")
@@ -249,5 +266,5 @@ def _shutdown():
 
 if __name__ == "__main__":
     port = int(os.getenv("UI_PORT", "8765"))
-    print(f"Pulse demo UI: http://127.0.0.1:{port}")
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    print(f"Pulse demo UI: http://127.0.0.1:{port}" + (" (in the cluster: open it with ui_cloud.sh)" if backend.IN_CLUSTER else ""))
+    uvicorn.run(app, host=os.getenv("UI_HOST", "127.0.0.1"), port=port, log_level="warning")

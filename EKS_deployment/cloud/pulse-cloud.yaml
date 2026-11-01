@@ -28,9 +28,9 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list"]
-  - apiGroups: ["serving.knative.dev"]              # tool settings for run_config.json, the controller's TTL
-    resources: ["services"]
-    verbs: ["get", "list"]
+  - apiGroups: ["serving.knative.dev"]              # tool settings for run_config.json, the controller's TTL;
+    resources: ["services"]                         # patch: the UI switches the tools' min-scale (C1 <-> C0/C3)
+    verbs: ["get", "list", "watch", "patch"]
   - apiGroups: [""]                                 # Knative autoscaler config + version, node count
     resources: ["configmaps", "namespaces", "nodes", "services"]
     verbs: ["get", "list"]

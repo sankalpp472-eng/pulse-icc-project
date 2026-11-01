@@ -1,17 +1,45 @@
 # Pulse demo UI
 
+> **New to the UI?** Read **[GUIDE.md](GUIDE.md)**: setups, step-by-step recipes (demo, chat, experiments, plots),
+> how to read every screen element, and where all results end up.
+
 A browser UI on top of Pulse. You can:
 - watch an LLM agent call the 14 airline tools, live or replayed
 - see the predictor rank the next action before every LLM step
 - watch prewarms start pods before the calls arrive
 - launch the experiment runs (C0 / C1 / C3) and compare their results
 
+It runs in one of two places:
+
+| Where | Start it | Good for |
+|---|---|---|
+| **Inside EKS** (recommended for real-cluster demos) | `bash EKS_deployment/cloud/ui_cloud.sh up` | The laptop only opens a browser tab: the UI, predictor, agent, runs and tools all run in the cluster |
+| **On the laptop** | `agent/.venv/Scripts/python ui/server.py` | The simulated cluster (no cluster at all), or a light kind / EKS session from the laptop |
+
+Either way, open **http://127.0.0.1:8765**.
+- **Laptop:** the server listens on localhost only. It loads the LightGBM predictor in the background at launch, which takes about a minute.
+- **EKS:** the UI is reachable only through your `kubectl port-forward`, because its Service is ClusterIP: no load balancer, no public address.
+
+## Running it inside EKS
+
+Do steps A1–A3 of [RUN_EXPERIMENTS.md](../RUN_EXPERIMENTS.md) first (image, cluster, `cloud_up.sh`). Then:
+
 ```bash
-agent/.venv/Scripts/python ui/server.py        # from the repo root
+bash EKS_deployment/cloud/ui_cloud.sh up       # deploy the pulse-ui pod, then port-forward (keep it running)
+bash EKS_deployment/cloud/ui_cloud.sh open     # re-open the tunnel later (the UI keeps running in the cluster)
+bash EKS_deployment/cloud/ui_cloud.sh fetch    # copy the runs made in the UI to results/cloud_runs/
+bash EKS_deployment/cloud/ui_cloud.sh down     # remove the UI
 ```
 
-Then open **http://127.0.0.1:8765**. The server listens on localhost only.
-It starts the LightGBM predictor in the background at launch; loading takes about a minute on this laptop.
+What changes when the UI runs in the cluster:
+- **Placement:** the pod runs on the **client node**, next to the run pods and away from the tools. It uses the `pulse` service account and the `pulse-llm-keys` Secret.
+- **Tools:** it starts in **Knative** mode and calls the tools at `http://<tool>.default.svc.cluster.local/mcp`, with no laptop→load-balancer delay.
+- **Prewarming:** the predictor you pick on the Predictor card (any model, any θ) runs in the UI pod and writes PrewarmRequests. The **`pulse-controller` Deployment** does the prewarming, and the activity feed reads its log.
+- **Experiment runs:** they run **in the UI pod**. C1 is set by patching the tools' min-scale, so no bash or `deploy.sh` is needed.
+- **New results go to the pod's own folder** (*this pod* in Results), and they are lost when the pod or cluster goes. Use the **zip** link per run, or `ui_cloud.sh fetch`, **before `eks_down.sh`**. The results from before the image was built are included read-only, for comparisons.
+- **Plots:** *Make plots* works in the pod, which has matplotlib.
+- **Rebuilds:** after changing `ui/` or any code, rebuild the image (`build_image.sh`), then `ui_cloud.sh up` again.
+- **Existing clusters:** if `cloud_up.sh` ran before 1 Nov 2026, run it once more, so the `pulse` role may patch the tools' min-scale (C1).
 
 ## Two places the tools can run (top bar)
 
@@ -79,6 +107,7 @@ This tab is a form for the same runners as [RUN_EXPERIMENTS.md](../RUN_EXPERIMEN
 | `sim_cluster.py` | The simulated Knative cluster |
 | `static/` | The page (plain HTML / CSS / JS, no build step) |
 | `.state/` | Logs and pid files of the processes the UI starts (git-ignored) |
+| `../EKS_deployment/cloud/pulse-ui.yaml`, `ui_cloud.sh` | The pulse-ui Deployment + ClusterIP Service, and the script that deploys / opens / fetches / removes it |
 
 Settings (environment):
 
@@ -88,6 +117,9 @@ Settings (environment):
 | `UI_PREDICTOR_PORT` | 8000 | Port of the predictor the UI starts |
 | `UI_AUTOSTART_PREDICTOR` | 1 | Set to 0 to skip loading gbt at launch |
 | `PLOT_PYTHON` | | Python used for the plots |
+| `UI_HOST` | 127.0.0.1 | Bind address (`0.0.0.0` in the pod, behind the ClusterIP Service) |
+| `UI_RESULTS_DIR` | | Where new runs and plots go (the pod: `/home/app/results/cloud_runs`); unset = `results/` |
+| `UI_STATE_DIR` | `ui/.state` | Logs and pid files |
 
 ## Notes
 
