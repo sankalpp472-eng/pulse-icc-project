@@ -55,6 +55,7 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 | `test/test_cold_start/` | The OpenFaaS CE tests that led to the move to Knative |
 | `EKS_deployment/` | EKS cluster, Knative setup, `run_c0/c1/c3/all.sh` |
 | `workloads/` | Workload spreadsheet (prompts, graphs, real traces) |
+| `ui/` | Demo UI (`agent/.venv/Scripts/python ui/server.py` → http://127.0.0.1:8765): live / replay episodes on a simulated or real cluster, predictor choice, experiment runs, results |
 | `docs/` | PRD and the Knative decision document |
 
 Result folders are named `<date>_<time>_<config>_W1-<replay|live>_<details>[_label]`, e.g. `2026-10-22_1336_C3_W1-replay_task9-x3`.
