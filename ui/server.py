@@ -92,12 +92,13 @@ def sim_min_scale(body: dict):
 class PredictorIn(BaseModel):
     model: str = "gbt"
     theta: float = 0.3
+    policy: dict | None = None      # {"policy": "theta"|"topk", "top_k", "p_min", "lookahead", "theta_next"}
 
 
 @app.post("/api/predictor/start")
 def predictor_start(p: PredictorIn):
     crd = cluster.mode == "knative"
-    st = services.start_predictor(p.model, p.theta, crd)
+    st = services.start_predictor(p.model, p.theta, crd, p.policy)
     if crd and not services.controller_running():
         st = services.start_controller()
     return st
@@ -121,8 +122,9 @@ def session_start(cfg: dict):
         if not services.wait_predictor(timeout=1 if services.predictor_ready() else 90):
             raise HTTPException(400, "Start the predictor first (Predictor card), or choose 'none (C0)'")
         pred = backend.PREDICTOR_URL
-        cfg["predictor"] = services.procs["predictor"].info["model"]
-        cfg["theta"] = services.procs["predictor"].info["theta"]
+        info = services.procs["predictor"].info
+        cfg["predictor"], cfg["theta"] = info["model"], info["theta"]
+        cfg["policy_label"] = backend.policy_label(info.get("policy"), info["theta"])
     if cluster.mode == "sim" and cfg.get("fresh", True):
         sim.set_min_scale(sim.min_scale)
     s = Session(cfg, cluster, sim if cluster.mode == "sim" else None, pred)
@@ -156,6 +158,28 @@ def sim_reset():
     old = sim.min_scale
     sim = SimCluster(backend.TOOL_NAMES, min_scale=old)
     return {"ok": True}
+
+
+@app.post("/api/demo/prepare")
+def demo_prepare():
+    """Before each run of a C0-vs-C3 demo: same starting point for both.
+    Simulated cluster: every tool back to zero pods. Knative: restore the shared airline database from its seed copy
+    (as the runners do); the tools go cold by themselves (idle window), the page waits until no tool pod is left."""
+    if busy():
+        raise HTTPException(409, busy())
+    global sim
+    if cluster.mode == "sim":
+        sim = SimCluster(backend.TOOL_NAMES, min_scale=sim.min_scale)
+        return {"pods": 0, "db": "fresh copy per episode"}
+    code, out = backend._run(["kubectl", "get", "deploy", "redis", "-o", "name"], 10)
+    db = "no shared database"
+    if code == 0:
+        for t in ("reservations", "users"):
+            c, o = backend._run(["kubectl", "exec", "deploy/redis", "--", "redis-cli", "COPY", f"seed:{t}", t, "REPLACE"], 20)
+            if c != 0:
+                raise HTTPException(500, f"could not reset the database: {o[:200]}")
+        db = "reset from seed"
+    return {"pods": sum(p["ready"] + p["starting"] for p in cluster.pods), "db": db}
 
 
 @app.get("/api/tasks")

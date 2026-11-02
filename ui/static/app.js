@@ -71,9 +71,22 @@ $("#detectBtn").onclick = async () => {
 const predModel = $("#predModel");
 predModel.innerHTML = Object.entries(PREDICTORS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
 $("#theta").oninput = () => ($("#thetaVal").textContent = Number($("#theta").value).toFixed(2));
+const policySeg = seg("policySeg", () => policyForm());
+$("#lookChk").onchange = () => policyForm();
+function policyForm() {
+  $$(".pol-theta").forEach((e) => e.classList.toggle("hidden", policySeg.get() !== "theta"));
+  $$(".pol-topk").forEach((e) => e.classList.toggle("hidden", policySeg.get() !== "topk"));
+  $$(".pol-look").forEach((e) => e.classList.toggle("hidden", !$("#lookChk").checked));
+}
+// what the Predictor card asks for (predictor/service.py: PREWARM_POLICY, TOP_K, P_MIN, LOOKAHEAD, THETA_NEXT)
+const cardPredictor = () => ({
+  model: predModel.value, theta: Number($("#theta").value),
+  policy: { policy: policySeg.get(), top_k: Number($("#topK").value), p_min: Number($("#pMin").value),
+            lookahead: $("#lookChk").checked, theta_next: Number($("#thetaNext").value) },
+});
 $("#predStart").onclick = async () => {
   try {
-    await api("/api/predictor/start", { model: predModel.value, theta: Number($("#theta").value) });
+    await api("/api/predictor/start", cardPredictor());
     toast("Starting the predictor…");
   } catch (e) { toast(e.message, 6000); }
 };
@@ -124,28 +137,75 @@ function taskChanged() {
 $("#taskSel").onchange = taskChanged;
 $("#userDelay").oninput = () => ($("#delayVal").textContent = $("#userDelay").value + " s");
 
+const demoCfg = (predictorOn) => ({
+  kind: kindSeg.get(), user: userSeg.get(), task_id: $("#taskSel").value,
+  agent_model: $("#agentModel").value, user_model: $("#userModel").value, user_delay: Number($("#userDelay").value),
+  trial: Number($("#trialSel").value || 0), speed: Number($("#speedSel").value), fanout: $("#fanoutChk").checked,
+  predictor: predictorOn, seed: 252,
+});
+async function startEpisode(cfg) {
+  if (cfg.kind === "live" && cfg.user === "ai" && !cfg.task_id) throw new Error("The AI customer needs a task");
+  if (cfg.predictor && !(state.services?.predictor?.running)) {
+    await api("/api/predictor/start", cardPredictor());
+    toast("Starting the predictor first (a few seconds)…");
+  }
+  await api("/api/session/start", cfg);
+}
 $("#startBtn").onclick = async () => {
-  const cfg = {
-    kind: kindSeg.get(), user: userSeg.get(), task_id: $("#taskSel").value,
-    agent_model: $("#agentModel").value, user_model: $("#userModel").value, user_delay: Number($("#userDelay").value),
-    trial: Number($("#trialSel").value || 0), speed: Number($("#speedSel").value), fanout: $("#fanoutChk").checked,
-    predictor: predSeg.get() === "on",
-  };
-  if (cfg.kind === "live" && cfg.user === "ai" && !cfg.task_id) return toast("The AI customer needs a task");
+  $("#startBtn").disabled = true;
+  try { await startEpisode(demoCfg(predSeg.get() === "on")); } catch (e) { toast(e.message, 6000); }
+  finally { $("#startBtn").disabled = false; }
+};
+$("#stopBtn").onclick = () => { race.abort = true; api("/api/session/stop", {}); };
+
+// ------------------------------------------------------------------ C0 then C3, same episode, both from cold
+const race = { running: false, abort: false };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function waitEpisodeEnd(prevId) {
+  for (;;) {                                         // a new episode started, then it ended
+    await sleep(500);
+    if (race.abort) throw new Error("stopped");
+    const s = state.session;
+    if (s && s.id !== prevId && ["done", "failed", "stopped"].includes(s.state)) return s;
+  }
+}
+async function prepareCold(label) {
+  const r = await api("/api/demo/prepare", {});
+  if (state.cluster?.mode !== "knative") return;
+  const t0 = Date.now();                               // real cluster: wait until every tool has scaled to zero
+  for (;;) {
+    const left = (state.pods || []).reduce((n, p) => n + p.ready + p.starting, 0);
+    if (left === 0) return;
+    if (Date.now() - t0 > 6 * 60 * 1000) throw new Error("tools did not scale to zero within 6 min");
+    $("#raceStatus").textContent = `${label}: waiting for every tool to go cold (${left} pod${left > 1 ? "s" : ""} left, ` +
+      `${Math.round((Date.now() - t0) / 1000)} s; idle window 60 s + scale-down-delay) · database ${r.db}`;
+    if (race.abort) throw new Error("stopped");
+    await sleep(1000);
+  }
+}
+$("#raceBtn").onclick = async () => {
+  if (race.running) return;
+  if (kindSeg.get() === "live" && userSeg.get() === "human") return toast("Use the AI customer (or a replay) for C0 vs C3");
+  race.running = true; race.abort = false;
+  $("#raceBtn").disabled = true;
   try {
-    if (cfg.predictor && !(state.services?.predictor?.running)) {
-      await api("/api/predictor/start", { model: predModel.value, theta: Number($("#theta").value) });
-      toast("Starting the predictor first (a few seconds)…");
+    for (const [on, label] of [[false, "C0 (no prewarming)"], [true, "C3 (predictor)"]]) {
+      $("#raceStatus").textContent = `${label}: preparing a cold start…`;
+      await prepareCold(label);
+      $("#raceStatus").textContent = `${label}: running…`;
+      const prev = state.session?.id;
+      await startEpisode(demoCfg(on));
+      const s = await waitEpisodeEnd(prev);
+      if (s.state !== "done") throw new Error(`${label} ended: ${s.state}`);
     }
-    $("#startBtn").disabled = true;
-    await api("/api/session/start", cfg);
+    $("#raceStatus").textContent = "Done: both runs below, and in Episodes so far.";
   } catch (e) {
-    toast(e.message, 6000);
+    $("#raceStatus").textContent = "C0 vs C3: " + e.message;
   } finally {
-    $("#startBtn").disabled = false;
+    race.running = false;
+    $("#raceBtn").disabled = false;
   }
 };
-$("#stopBtn").onclick = () => api("/api/session/stop", {});
 $("#replyForm").onsubmit = async (e) => {
   e.preventDefault();
   const text = $("#replyText").value;
@@ -277,8 +337,14 @@ function expForm() {
   const live = xMode.get() === "live";
   $$(".replay-x").forEach((e) => e.classList.toggle("hidden", live));
   $$(".live-x").forEach((e) => e.classList.toggle("hidden", !live));
-  $$(".c3-only").forEach((e) => e.classList.toggle("hidden", xConfig.get() !== "C3"));
+  const c3 = xConfig.get() === "C3";
+  $$(".c3-only").forEach((e) => e.classList.toggle("hidden", !c3));
+  $$(".x-theta").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xPolicy").value !== "theta"));
+  $$(".x-topk").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xPolicy").value !== "topk"));
+  $$(".x-look").forEach((e) => e.classList.toggle("hidden", !c3 || !$("#xLook").checked));
 }
+$("#xPolicy").onchange = () => expForm();
+$("#xLook").onchange = () => expForm();
 function expTasks() {
   const v = $("#xTasksPreset").value;
   if (v === "heldout") return HELDOUT;
@@ -297,6 +363,8 @@ $("#xStart").onclick = async () => {
     user_turn_median: live ? null : $("#xUserTurn").value, fanout: $("#xFanout").checked,
     agent_model: $("#xAgent").value, repeats: live ? $("#xRepeats").value : null,
     user_delay_median: live ? $("#xUserDelay").value : null,
+    policy: { policy: $("#xPolicy").value, top_k: Number($("#xTopK").value), p_min: Number($("#xPMin").value),
+              lookahead: $("#xLook").checked, theta_next: Number($("#xThetaNext").value) },
   };
   if (live && !spec.tasks.length) return toast("Pick tasks for a live run");
   try {
@@ -441,17 +509,73 @@ function renderServices(sv) {
   else {
     pill.textContent = "ready"; pill.className = "pill ok";
     const h = p.health || {};
-    $("#predInfo").innerHTML = `${esc(PREDICTORS[p.model] || p.model)} · θ ${p.theta} · CRDs ${esc(p.crd)}` +
+    const asked = p.policy || {};
+    // a predictor without the latency patch answers /healthz without "policy" and keeps prewarming by θ
+    const ignored = p.policy_supported === false && (asked.policy === "topk" || asked.lookahead);
+    $("#policyNote").classList.toggle("hidden", !ignored);
+    $("#predInfo").innerHTML = `${esc(PREDICTORS[p.model] || p.model)} · ${esc(ignored ? "θ " + p.theta : p.policy_label)} · CRDs ${esc(p.crd)}` +
       (sv.controller ? ` · controller ${sv.controller.deployment ? "(deploy/" + esc(sv.controller.deployment) + ") " : ""}${sv.controller.running ? "running" : "not running"}` : "") +
       (h.crd && h.crd.written != null ? ` · ${h.crd.written} written` : "");
   }
 }
+const secs = (v) => (v == null ? "–" : `${Number(v).toFixed(1)} s`);
+const prewarmLabel = (s) => (s.predictor === "none" ? "none (C0)" : `${s.predictor}${s.policy ? " · " + s.policy : ""}`);
 function renderHistory(h) {
   $("#historyTbl tbody").innerHTML = h.map((s) => `<tr><td>${esc(s.kind)}${s.user && s.kind === "live" ? " · " + esc(s.user) : ""}</td>
-    <td>${esc(s.task ?? "free")}</td><td>${s.predictor === "none" ? "none (C0)" : esc(s.predictor)}</td><td>${esc(s.cluster)}</td>
+    <td>${esc(s.task || "free")}${s.kind === "replay" && s.trial != null ? " #" + (s.trial + 1) : ""}</td><td>${esc(prewarmLabel(s))}</td><td>${esc(s.cluster)}</td>
+    <td><b>${secs(s.e2e_s)}</b></td><td>${secs(s.tool_wait_s)}</td>
     <td>${s.calls}</td><td>${s.cold}</td><td>${s.prewarmed_hits}</td><td>${fmt(s.mean_ms)} ms</td><td>${fmt(s.cold_wait_s, 1)} s</td>
     <td>${fmt(s.pod_seconds)}</td><td>${s.hint_rtt_p50_ms != null ? fmt(s.hint_rtt_p50_ms, 1) + " ms" : "–"}</td></tr>`).join("") ||
-    `<tr><td colspan="11" class="muted">None yet.</td></tr>`;
+    `<tr><td colspan="13" class="muted">None yet.</td></tr>`;
+}
+
+// ------------------------------------------------------------------ end-to-end clock + C0 vs C3 card
+const elapsed = (s) => (s && s.t_start ? (s.t_end || state.now) - s.t_start : null);
+function renderClock(s) {
+  const run = s && !s.t_end && ["running", "waiting", "starting"].includes(s.state);
+  $("#clock").classList.toggle("running", !!run);
+  $("#clockVal").textContent = secs(elapsed(s) ?? 0);
+  $("#toolWaitVal").textContent = secs(s ? s.tool_wait_s : 0);
+}
+// two episodes are the "same" if they replay the same recording (or, live, the same task with the same agent)
+const raceKey = (x) => [x.kind, x.task, x.kind === "replay" ? `${x.trial}|${x.speed}` : x.user].join("/");
+function renderRace(history, s) {
+  const cur = s && s.cfg ? { kind: s.cfg.kind, task: String(s.cfg.task_id || ""), trial: s.cfg.trial, speed: s.cfg.speed,
+                              user: s.cfg.kind === "live" ? s.cfg.user : null, predictor: s.cfg.predictor ? "x" : "none" } : null;
+  const running = s && ["running", "waiting", "starting"].includes(s.state);
+  const ref = running ? cur : history[0];
+  const done = history.filter((h) => h.state === "done" && h.e2e_s != null && ref && raceKey(h) === raceKey({ ...ref, task: String(ref.task ?? "") }));
+  const c0 = done.find((h) => h.predictor === "none"), c3 = done.find((h) => h.predictor !== "none");
+  const lane = (id, sub, h, live) => {
+    $(`#lane${id}`).classList.toggle("running", !!live);
+    if (live) {
+      $(`#e2e${id}`).textContent = secs(elapsed(s));
+      $(`#sub${id}`).textContent = `running · tool wait ${secs(s.tool_wait_s)}`;
+    } else if (h) {
+      $(`#e2e${id}`).textContent = secs(h.e2e_s);
+      $(`#sub${id}`).textContent = `tool wait ${secs(h.tool_wait_s)} · ${h.cold} cold of ${h.calls} calls`;
+    } else {
+      $(`#e2e${id}`).textContent = "–";
+      $(`#sub${id}`).textContent = sub;
+    }
+  };
+  const liveC0 = running && cur.predictor === "none", liveC3 = running && cur.predictor !== "none";
+  lane("C0", "end-to-end", liveC0 ? null : c0, liveC0);
+  lane("C3", "end-to-end", liveC3 ? null : c3, liveC3);
+  $("#headC3").textContent = "C3 · " + (c3 && !liveC3 ? prewarmLabel(c3) : "predictor");
+  const box = $("#raceSaving");
+  if (c0 && c3 && !running) {
+    const d = c0.e2e_s - c3.e2e_s, dw = c0.tool_wait_s - c3.tool_wait_s;
+    box.classList.remove("hidden");
+    box.classList.toggle("worse", d < 0);
+    box.textContent = d >= 0
+      ? `With prewarming the episode finished ${d.toFixed(1)} s faster (−${(100 * d / c0.e2e_s).toFixed(0)}%): ` +
+        `waiting on tools ${c0.tool_wait_s.toFixed(1)} s → ${c3.tool_wait_s.toFixed(1)} s, cold calls ${c0.cold} → ${c3.cold}.`
+      : `C3 took ${(-d).toFixed(1)} s longer end-to-end (tool wait ${dw >= 0 ? "−" : "+"}${Math.abs(dw).toFixed(1)} s).`;
+  } else box.classList.add("hidden");
+  $("#raceNote").textContent = ref && ref.kind === "live"
+    ? "Live episodes differ in LLM speed and customer replies, so end-to-end times vary by seconds between runs: compare the tool wait, or use Replay recorded (same seed = identical gaps) for a like-for-like race."
+    : "Replay: both runs have identical think and customer-reply gaps (seed 252), so the end-to-end difference is exactly the waiting on tools.";
 }
 
 // ------------------------------------------------------------------ the poll loop
@@ -493,6 +617,8 @@ async function poll() {
     }
     renderRun(s.run);
     renderHistory(s.history);
+    renderClock(s.session);
+    renderRace(s.history, s.session);
   } catch (e) {
     $("#sessionState").textContent = "UI server not reachable";
   }
@@ -503,5 +629,6 @@ async function poll() {
   try { TASKS = await api("/api/tasks"); } catch (e) { toast("Could not load tasks: " + e.message); }
   demoForm();
   expForm();
+  policyForm();
   poll();
 })();

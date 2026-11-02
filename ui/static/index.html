@@ -91,14 +91,36 @@
         <div class="goal hidden" id="taskGoal"></div>
         <div class="actions">
           <button class="primary" id="startBtn">▶ Start episode</button>
+          <button id="raceBtn" title="Runs this episode twice from a cold start: first without prewarming (C0), then with the predictor (C3)">⏱ Run C0 then C3 (same episode)</button>
           <button class="danger hidden" id="stopBtn">■ Stop</button>
           <span class="muted" id="sessionState"></span>
         </div>
       </div>
 
+      <div class="card race-card" id="raceCard">
+        <div class="card-head">
+          <h3>End-to-end time: without vs with prewarming</h3>
+          <span class="muted small" id="raceStatus">Run the same episode with None (C0) and with the predictor (C3), or use ⏱.</span>
+        </div>
+        <div class="race">
+          <div class="lane c0" id="laneC0">
+            <div class="lane-head">C0 · no prewarming</div>
+            <div class="big" id="e2eC0">–</div>
+            <div class="lane-sub" id="subC0">end-to-end</div>
+          </div>
+          <div class="lane c3" id="laneC3">
+            <div class="lane-head" id="headC3">C3 · predictor</div>
+            <div class="big" id="e2eC3">–</div>
+            <div class="lane-sub" id="subC3">end-to-end</div>
+          </div>
+        </div>
+        <div class="saving hidden" id="raceSaving"></div>
+        <div class="muted small" id="raceNote"></div>
+      </div>
+
       <div class="card timeline-card">
         <div class="card-head">
-          <h3>Episode</h3>
+          <h3>Episode <span class="clock" id="clock" title="End-to-end time of this episode (from the first message)">⏱ <b id="clockVal">0.0 s</b> <span class="muted">· tool wait <span id="toolWaitVal">0.0 s</span></span></span></h3>
           <div class="legend">
             <span class="badge warm">warm</span><span class="badge cold">cold</span><span class="badge hit">prewarmed ✓</span>
           </div>
@@ -113,7 +135,7 @@
       <div class="card">
         <div class="card-head"><h3>Episodes so far</h3><span class="muted">Run the same task with and without the predictor to compare</span></div>
         <div class="tbl-wrap"><table class="tbl" id="historyTbl"><thead><tr>
-          <th>Type</th><th>Task</th><th>Prewarming</th><th>Cluster</th><th>Calls</th><th>Cold</th><th>Prewarmed</th>
+          <th>Type</th><th>Task</th><th>Prewarming</th><th>Cluster</th><th>E2E</th><th>Tool wait</th><th>Calls</th><th>Cold</th><th>Prewarmed</th>
           <th>Mean</th><th>Cold wait</th><th>Pod-s</th><th>Hint RTT</th></tr></thead><tbody></tbody></table></div>
       </div>
     </section>
@@ -134,9 +156,19 @@
           <label class="c3-only">Predictor
             <select id="xPred"></select>
           </label>
-          <label class="c3-only">θ <span class="muted" id="xThetaVal">0.30</span>
+          <label class="c3-only">Prewarm policy
+            <select id="xPolicy">
+              <option value="theta">θ threshold</option>
+              <option value="topk">Top-k (k tools per step, each P ≥ floor)</option>
+            </select>
+          </label>
+          <label class="c3-only x-theta">θ <span class="muted" id="xThetaVal">0.30</span>
             <input type="range" id="xTheta" min="0.05" max="0.9" step="0.05" value="0.3">
           </label>
+          <label class="c3-only x-topk hidden">k <input type="number" id="xTopK" min="1" max="5" value="2"></label>
+          <label class="c3-only x-topk hidden">floor (P ≥) <input type="number" id="xPMin" min="0" max="0.9" step="0.05" value="0.1"></label>
+          <label class="c3-only check"><input type="checkbox" id="xLook"> Lookahead</label>
+          <label class="c3-only x-look hidden">θ_next <input type="number" id="xThetaNext" min="0.05" max="0.9" step="0.05" value="0.3"></label>
           <label>Runner
             <div class="seg" id="xWhere"><button data-v="laptop" class="on" id="xWhereHere">Laptop</button><button data-v="cluster" id="xWherePod">Run pod (run_cloud.sh)</button></div>
           </label>
@@ -237,9 +269,19 @@
     <div class="card">
       <div class="card-head"><h3>Predictor</h3><span class="pill" id="predPill">stopped</span></div>
       <label>Model <select id="predModel"></select></label>
-      <label>θ (prewarm if P ≥ θ) <span class="muted" id="thetaVal">0.30</span>
+      <label>Prewarm policy
+        <div class="seg small" id="policySeg"><button data-v="theta" class="on">θ threshold</button><button data-v="topk">Top-k</button></div>
+      </label>
+      <label class="pol-theta">θ (prewarm if P ≥ θ) <span class="muted" id="thetaVal">0.30</span>
         <input type="range" id="theta" min="0.05" max="0.9" step="0.05" value="0.3">
       </label>
+      <div class="pol-topk hidden two">
+        <label>k (tools per step) <input type="number" id="topK" min="1" max="5" value="2"></label>
+        <label>floor (P ≥) <input type="number" id="pMin" min="0" max="0.9" step="0.05" value="0.1"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="lookChk"> Lookahead (prewarm during the customer's turn)</label>
+      <label class="pol-look hidden">lookahead θ_next <input type="number" id="thetaNext" min="0.05" max="0.9" step="0.05" value="0.3"></label>
+      <div class="note small hidden" id="policyNote">This predictor ignores top-k / lookahead (it runs θ). Apply latency_ideas.patch and retrain first (LATENCY_IDEAS_RUN.md).</div>
       <div class="actions">
         <button class="primary small" id="predStart">Start</button>
         <button class="small" id="predStop">Stop</button>

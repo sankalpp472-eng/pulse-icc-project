@@ -123,13 +123,47 @@ bash EKS_deployment/cloud/ui_cloud.sh up             # 4. the UI pod, then a tun
 
 | Card | What it shows / does |
 |---|---|
-| **Predictor** | **Model**: LightGBM (main), Logistic regression, n-gram baseline, Trajectory ensemble (older), LLM speculator (Groq). **θ** slider. **Start** / **Stop**. Status pill: *stopped*, *loading…*, *ready*, *exited*. The info line shows model, θ, whether PrewarmRequests are written (`CRDs k8s`) or not (`off`, simulated), and the controller state |
+| **Predictor** | **Model**: LightGBM (main), Logistic regression, n-gram baseline, Trajectory ensemble (older), LLM speculator (Groq). **Prewarm policy**: *θ threshold* (every tool with P ≥ θ) or *Top-k* (the k most likely tools, each with P ≥ the floor). **Lookahead**: also prewarm, during the customer's turn, the tool the agent will call after the reply. **Start** / **Stop**. Status pill: *stopped*, *loading…*, *ready*, *exited*. The info line shows model, policy, whether PrewarmRequests are written (`CRDs k8s`) or not (`off`, simulated), and the controller state. Top-k and lookahead need the latency patch (LATENCY_IDEAS_RUN.md). An older predictor ignores them, and the card then shows a yellow note |
 | **Tool pods** | One row per tool with a dot per pod: 🟢 ready, 🟡 starting (cold start in progress), 🔵 serving a call, grey = zero pods. A row flashes blue when a prewarm hits it. Simulated cluster only: **Scale to zero / Always warm (C1)**, **Reset** (all tools back to zero), and the pod-seconds used so far |
 | **Prewarm activity** | Every prewarm (*was cold → starting* or *already warm, window reset*, with k and probability), every scale-down after 60 s idle, and min-scale changes |
 
 ---
 
 ## 5. Recipes: what to run
+
+### Recipe 0: the end-to-end demo: one click, C0 then C3 (~2 min)
+
+The **"End-to-end time: without vs with prewarming"** card shows how long the whole episode took, start to finish, without and with Pulse. It also shows how much of that time the agent spent waiting on tools.
+
+1. **Live demo** tab:
+   - **Episode:** Replay recorded
+   - **Speed of gaps:** real time
+   - **Fan-out:** on
+   - **Task and recorded run**, chosen for the demo (below)
+2. Predictor card:
+   - **LightGBM**
+   - **Prewarm policy: Top-k**, k 2, floor 0.1 (or θ 0.3, the original policy)
+   - **Start**, then wait for **ready**
+3. Click **⏱ Run C0 then C3 (same episode)**. The UI then:
+   - **resets to a cold start:** simulated cluster → every tool to zero pods. Knative → restores the database and waits until every tool pod is gone; that takes 60 s idle plus any scale-down-delay
+   - runs the episode **without** prewarming (C0), with the timeline's **⏱ clock** running
+   - resets to a cold start again
+   - runs the **same** episode **with** the predictor (C3)
+4. The card shows both end-to-end times side by side, then a line like:
+   > *With prewarming the episode finished 5.9 s faster (−11%): waiting on tools 9.7 s → 3.8 s, cold calls 6 → 2.*
+
+**Which episode to demo.** Pick short episodes with several *different* tools and only 1–2 customer turns, so cold starts are a large share of the total. Measured on the simulated cluster with LightGBM top-2:
+
+| Task / recorded run | C0 → C3 end-to-end | Tool wait | Cold calls |
+|---|---|---|---|
+| **Task 6, run #9** (held-out) | 52.6 s → 46.6 s (**−5.9 s, −11%**) | 9.7 s → 3.8 s | 6 → 2 |
+| Task 30, run #1 (fan-out, many customer turns) | 60.0 s → 57.8 s (−2.2 s, −4%) | 5.7 s → 3.4 s | 9 → 3 |
+
+Other good candidates, by the share of C0 time spent on cold starts: task 31 run #5, task 22 run #11, task 5 run #5/#6/#11.
+
+**Why replay, not live, for this demo.** A replay with the same seed has *identical* think and customer-reply gaps in both runs, so the end-to-end difference is exactly the tool waiting saved. With the live agent, the LLM's speed and the AI customer's replies differ by seconds between runs, enough to hide a 2–6 s saving. If you do race live episodes, compare **Tool wait**, not E2E (the card says so too).
+
+You can also do it by hand: run the episode with **None (C0)**, press **Reset** (simulated), run it with **Predictor (C3)**. The card pairs the latest C0 and C3 runs of the same episode.
 
 ### Recipe 1: the 5-minute demo: C0 vs C3 on the same episode
 
@@ -198,6 +232,7 @@ This is the same runner the report numbers come from. It needs **Knative** (Setu
    | All W1 tasks | every task (replay) |
    | Custom | ids you type |
 
+   **C3 prewarm policy:** *θ threshold*, or *Top-k* with k and a floor, plus an optional **Lookahead**. Top-k and lookahead need the latency patch. The run's folder name gets `-top2` / `-look` added.
 5. **Replay options:**
 
    | Option | Default | Meaning |
@@ -277,9 +312,11 @@ One row per finished demo episode, newest first:
 | Column | Meaning |
 |---|---|
 | Type | live (ai / human) or replay |
-| Task | Task id |
-| Prewarming | none (C0) or the predictor |
+| Task | Task id (replays: and the recorded run #) |
+| Prewarming | none (C0), or the predictor and its policy (e.g. `gbt · top-2 (P ≥ 0.1)`) |
 | Cluster | simulated or the cluster name |
+| **E2E** | End-to-end time: from the conversation's first message to the end of the episode (setup excluded) |
+| **Tool wait** | The part of E2E the agent spent blocked on tool calls. A parallel step counts once, as its slowest call. Prewarming can only shorten this part |
 | Calls / Cold / Prewarmed | Tool calls, cold calls, calls the predictor had prewarmed |
 | Mean | Mean call latency |
 | Cold wait | Total seconds the agent spent waiting on cold starts |
@@ -392,6 +429,7 @@ bash EKS_deployment/eks_down.sh                          # fetches, then deletes
 
 | I want to… | Go to |
 |---|---|
+| Show the end-to-end saving in one click | Live demo → Replay recorded → task 6, run #9 → **⏱ Run C0 then C3** (Recipe 0) |
 | Show prewarming in 5 minutes | Live demo → Replay recorded → task 30 → C0, Reset, C3 (Recipe 1) |
 | Talk to the agent | Live demo → Live agent → I'll type (Recipe 3) |
 | Try another predictor / θ | Predictor card → Model, θ → Start (Recipe 4) |

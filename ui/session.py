@@ -104,6 +104,9 @@ class Session(threading.Thread):
         self.calls: list[dict] = []
         self.hints = {"sent": 0, "answered": 0, "rtt_ms": []}
         self.episode_id = f"ui-{int(self.t0 * 1000)}"
+        # end-to-end clock: from the first message of the conversation to the end of the episode (setup excluded)
+        self.t_start = self.t_end = None
+        self.tool_wait = 0.0                         # time the agent was blocked on tools (a parallel step = its slowest call)
         self.rng = random.Random(int(cfg.get("seed", 252)))
         self.pod_s0 = sim.live_pod_seconds() if sim else None
 
@@ -115,7 +118,13 @@ class Session(threading.Thread):
     def view(self, after: int = 0) -> dict:
         with self.lock:
             return {"id": self.episode_id, "state": self.state, "cfg": self.cfg, "events": self.events[after:],
-                    "n": len(self.events)}
+                    "n": len(self.events), "t_start": self.t_start, "t_end": self.t_end,
+                    "tool_wait_s": round(self.tool_wait, 3)}
+
+    def begin(self):
+        """Start the end-to-end clock (the conversation starts now)."""
+        self.t_start = time.time()
+        self.emit("clock", state="start")
 
     def stop(self):
         self.stop_flag = True
@@ -193,6 +202,9 @@ class Session(threading.Thread):
                 self.check()
                 one(i, n, a)
         outs = []
+        lats = [r["latency_s"] for r in results if r]
+        if lats:                                   # the agent waits for the whole step: parallel = slowest, else the sum
+            self.tool_wait += max(lats) if parallel and len(calls) > 1 else sum(lats)
         warm = self.prewarmed.get(step, {})
         for (name, args), r in zip(calls, results):
             rec = {"step": step, "tool": name, "args": args, "latency_ms": round(r["latency_s"] * 1000, 1),
@@ -220,6 +232,8 @@ class Session(threading.Thread):
             self.state = "failed"
             self.emit("error", text=f"{type(e).__name__}: {e}"[:600])
         finally:
+            if self.t_start and not self.t_end:
+                self.t_end = time.time()
             self.emit("end", summary=self.summary())
 
     def tools(self):
@@ -241,7 +255,11 @@ class Session(threading.Thread):
                 "hint_rtt_p50_ms": rtt[len(rtt) // 2] if rtt else None,
                 "pod_seconds": round(self.sim.live_pod_seconds() - self.pod_s0, 1) if self.sim else None,
                 "duration_s": round(time.time() - self.t0, 1),
+                "e2e_s": round(self.t_end - self.t_start, 2) if self.t_start and self.t_end else None,
+                "tool_wait_s": round(self.tool_wait, 2), "state": self.state,
+                "seed": self.cfg.get("seed", 252), "trial": self.cfg.get("trial"), "speed": self.cfg.get("speed"),
                 "kind": self.cfg["kind"], "user": self.cfg.get("user") if self.cfg["kind"] == "live" else None, "predictor": self.cfg.get("predictor") or "none",
+                "policy": self.cfg.get("policy_label") if self.cfg.get("predictor") else None,
                 "cluster": "simulated" if self.sim else self.cluster.context, "task": self.cfg.get("task_id")}
 
     # ------------------------------------------------------------------ live: agent + customer
@@ -291,6 +309,7 @@ class Session(threading.Thread):
                     raise Stopped()
                 return text
 
+        self.begin()
         first = say(None)
         self.emit("customer", text=first)
         messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}, {"role": "user", "content": first}]
@@ -359,6 +378,7 @@ class Session(threading.Thread):
                                f"customer ~{user_m}s{f' · gaps x{speed}' if speed != 1 else ''}")
         trajectory: list[str] = []
         step = 0
+        self.begin()
         for g in groups:
             c = tr["calls"][g[0]]
             n = c["user_turns_before"]

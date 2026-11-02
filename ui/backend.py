@@ -228,6 +228,28 @@ class Cluster:
 
 
 # ====================================================================== services
+def norm_policy(p: dict | None) -> dict:
+    """The prewarm policy as the predictor reads it (predictor/service.py, LATENCY_IDEAS_RUN.md):
+    theta = every tool with P >= theta (the original); topk = the top_k most likely tools, each with P >= p_min;
+    lookahead = on a likely reply step, also prewarm the tool the agent calls after the customer answers."""
+    p = p or {}
+    return {"policy": "topk" if p.get("policy") == "topk" else "theta",
+            "top_k": max(1, min(5, int(p.get("top_k") or 2))), "p_min": float(p.get("p_min", 0.1)),
+            "lookahead": bool(p.get("lookahead")), "theta_next": float(p.get("theta_next", 0.3))}
+
+
+def policy_env(p: dict) -> dict:
+    """Environment for predictor/service.py. A predictor without the latency patch ignores these and stays on theta."""
+    return {"PREWARM_POLICY": p["policy"], "TOP_K": str(p["top_k"]), "P_MIN": str(p["p_min"]),
+            "LOOKAHEAD": "1" if p["lookahead"] else "0", "THETA_NEXT": str(p["theta_next"])}
+
+
+def policy_label(p: dict | None, theta: float | None = None) -> str:
+    p = norm_policy(p)
+    s = f"top-{p['top_k']} (P ≥ {p['p_min']:g})" if p["policy"] == "topk" else f"θ {theta if theta is not None else ''}".strip()
+    return s + (f" + lookahead {p['theta_next']:g}" if p["lookahead"] else "")
+
+
 class Proc:
     def __init__(self, name: str, cmd: list[str], env: dict, info: dict):
         self.name, self.cmd, self.info = name, cmd, info
@@ -290,12 +312,14 @@ class Services:
         self.health: dict | None = None
         threading.Thread(target=self._health_loop, daemon=True).start()
 
-    def start_predictor(self, model: str, theta: float, crd: bool) -> dict:
+    def start_predictor(self, model: str, theta: float, crd: bool, policy: dict | None = None) -> dict:
         if model not in self.MODELS:
             raise ValueError(f"unknown predictor {model}")
         self.stop("predictor")
+        policy = norm_policy(policy)
         env = {"THETA": str(theta), "TTL_S": "60", "CRD_MODE": "k8s" if crd else "off",
-               "PREDICTOR_DIR": str(ROOT / "predictor"), "CRD_DRYRUN_FILE": str(STATE / "prewarm_requests.jsonl")}
+               "PREDICTOR_DIR": str(ROOT / "predictor"), "CRD_DRYRUN_FILE": str(STATE / "prewarm_requests.jsonl"),
+               **policy_env(policy)}
         if crd and not IN_CLUSTER:          # in the cluster crd_writer.py uses the pod's service account
             env["KUBE_CONTEXT"] = self.cluster.context or ""
         if model == "speculator":
@@ -304,7 +328,7 @@ class Services:
             app_dir, env["PREDICTOR_MODEL"] = "predictor", model
         cmd = [PY, "-m", "uvicorn", "service:app", "--app-dir", app_dir, "--host", "127.0.0.1",
                "--port", str(PREDICTOR_PORT), "--log-level", "warning"]
-        self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta,
+        self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
                                                                 "crd": "k8s" if crd else "off"})
         self.health = None
         return self.status()
@@ -369,6 +393,9 @@ class Services:
         if "predictor" in out:
             out["predictor"]["ready"] = self.predictor_ready()
             out["predictor"]["health"] = self.health
+            out["predictor"]["policy_label"] = policy_label(out["predictor"].get("policy"), out["predictor"].get("theta"))
+            # does this predictor understand the policy settings? (/healthz reports "policy" after the latency patch)
+            out["predictor"]["policy_supported"] = bool(self.health and "policy" in self.health) if self.health else None
         if IN_CLUSTER:
             out["controller"] = {"running": self.controller_running(), "deployment": CONTROLLER_DEPLOY}
         return out
@@ -484,6 +511,10 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
             raise ValueError("Git Bash not found (needed for run_cloud.sh)")
         if pred not in ("gbt", "speculator") and config == "C3":
             raise ValueError("in-cluster runs support the gbt and speculator predictors (cloud_up.sh deploys those)")
+        pol = norm_policy(spec.get("policy"))
+        if config == "C3" and (pol["policy"] != "theta" or pol["lookahead"]):
+            raise ValueError("run_cloud.sh uses the cluster's pulse-predictor, so set its policy there: kubectl set env "
+                             "deploy/pulse-predictor PREWARM_POLICY=topk TOP_K=2 P_MIN=0.1 LOOKAHEAD=0 (then pick θ here)")
         label = spec.get("label") or "ui"
         cenv = {**env, "MODE": mode, "CONFIG": config, "PREDICTOR": pred, "WORKLOAD": "none", "LABEL": label,
                 "PYTHON": PY}
@@ -500,18 +531,20 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
         env = {**env, "PULSE_RESULTS_DIR": str(WRITE_DIR), "PULSE_RUNNER": "pulse-ui pod"}
     label = spec.get("label") or ("ui-eks" if IN_CLUSTER else "ui")
     if config == "C3":
-        if not (services.procs.get("predictor") and services.procs["predictor"].alive()
-                and services.procs["predictor"].info.get("model") == pred
-                and services.procs["predictor"].info.get("crd") == "k8s"
-                and abs(services.procs["predictor"].info.get("theta", -1) - float(spec.get("theta", 0.3))) < 1e-9):
-            services.start_predictor(pred, float(spec.get("theta", 0.3)), crd=True)
+        policy = norm_policy(spec.get("policy"))
+        cur = services.procs.get("predictor")
+        if not (cur and cur.alive() and cur.info.get("model") == pred and cur.info.get("crd") == "k8s"
+                and abs(cur.info.get("theta", -1) - float(spec.get("theta", 0.3))) < 1e-9
+                and cur.info.get("policy") == policy):
+            services.start_predictor(pred, float(spec.get("theta", 0.3)), crd=True, policy=policy)
         if not services.controller_running():
             services.start_controller()
         steps.append(("__predictor__", [], {}))
         args += ["--predictor-url", PREDICTOR_URL]
         if pred == "speculator" and mode == "replay":
             args += ["--hint-context", "--hint-timeout", "10"]
-        label = f"{label}-{pred}"
+        tag = ("-top%d" % policy["top_k"] if policy["policy"] == "topk" else "") + ("-look" if policy["lookahead"] else "")
+        label = f"{label}-{pred}{tag}"
     script = "test/test_knative/w1_replay.py" if mode == "replay" else "test/test_knative/w1_live.py"
     steps.append((f"{mode} {config}{' (' + pred + ')' if config == 'C3' else ''} "
                   f"{'in the pulse-ui pod' if IN_CLUSTER else 'from the laptop'}",

@@ -81,9 +81,26 @@ aside label { margin-bottom: 10px; }
 .pill.ok { background: var(--accent-soft); color: var(--accent); }
 .pill.wait { background: var(--warn-soft); color: var(--warn); }
 .pill.bad { background: var(--bad-soft); color: var(--bad); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.note { background: var(--warn-soft); color: var(--ink); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
 .callout { background: var(--blue-soft); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
 .goal { margin-top: 12px; background: var(--surface2); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
 .goal b { color: var(--ink); }
+
+/* ---- end-to-end race */
+.race { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lane { border-radius: 10px; padding: 12px 14px; background: var(--surface2); border-top: 4px solid var(--border); }
+.lane.c0 { border-top-color: #eb6834; }
+.lane.c3 { border-top-color: var(--accent); }
+.lane.running { box-shadow: 0 0 0 2px var(--warn) inset; }
+.lane-head { font-size: 12px; font-weight: 650; color: var(--ink2); }
+.lane .big { font-size: 34px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.2; margin: 4px 0; }
+.lane-sub { font-size: 12px; color: var(--ink2); }
+.saving { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); font-weight: 600; }
+.saving.worse { background: var(--bad-soft); }
+.clock { font-weight: 400; font-size: 13px; margin-left: 10px; font-variant-numeric: tabular-nums; }
+.clock b { font-size: 15px; }
+.clock.running b { color: var(--warn); }
 
 /* ---- timeline */
 .timeline-card { padding-bottom: 10px; }
