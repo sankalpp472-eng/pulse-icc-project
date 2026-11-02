@@ -30,6 +30,16 @@ from session import Session  # noqa: E402
 from sim_cluster import SimCluster  # noqa: E402
 
 app = FastAPI(title="Pulse demo UI")
+
+
+@app.middleware("http")
+async def no_stale_page(request, call_next):
+    """The page's own files are small: make browsers check for a new version on every load, so an updated UI
+    (new app.js next to a new index.html) never runs with a cached old script."""
+    resp = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
 cluster = backend.Cluster()
 services = backend.Services(cluster)
 sim = SimCluster(backend.TOOL_NAMES)
@@ -202,23 +212,33 @@ def recordings():
     return out
 
 
+_TASKS: list | None = None
+
+
 @app.get("/api/tasks")
 def tasks():
-    sys.path.insert(0, str(ROOT / "agent"))
-    from tau_airline import load_tasks
-    import json
-    traces = [json.loads(l) for l in open(ROOT / "test/test_knative/data/w1_tau_traces.jsonl", encoding="utf-8")]
-    recorded: dict[int, int] = {}
-    fan: set[int] = set()
-    for t in traces:
-        if t["calls"]:
-            recorded[t["task_id"]] = recorded.get(t["task_id"], 0) + 1
-            if any(a["tool"] == b["tool"] and b["user_turns_before"] == 0
-                   for a, b in zip(t["calls"], t["calls"][1:])):
-                fan.add(t["task_id"])
-    return [{"id": t["id"], "instruction": t["instruction"], "gold": [a["name"] for a in t["actions"]],
-             "recorded": recorded.get(t["id"], 0), "fanout": t["id"] in fan,
-             "heldout": t["id"] in (6, 20, 22, 26, 30)} for t in load_tasks()]
+    """The 50 airline tasks, with every recorded tau-bench run of each: calls, tool steps, customer turns and its
+    fan-out (the widest group of calls the replay fires at once, w1_replay.fanout_groups). Computed once."""
+    global _TASKS
+    if _TASKS is None:
+        sys.path.insert(0, str(ROOT / "agent"))
+        sys.path.insert(0, str(ROOT / "test" / "test_knative"))
+        from tau_airline import load_tasks
+        import w1_replay
+        runs: dict[int, list] = {}
+        for t in w1_replay.load_traces(None):            # same order as the replay's "recorded run #"
+            if t["calls"]:
+                groups = w1_replay.fanout_groups(t)
+                runs.setdefault(t["task_id"], []).append({
+                    "calls": len(t["calls"]), "tool_steps": len(groups),
+                    "turns": sum(c["user_turns_before"] for c in t["calls"]),
+                    "fanout": max(len(g) for g in groups), "model": t.get("source_model")})
+        _TASKS = [{"id": t["id"], "instruction": t["instruction"], "gold": [a["name"] for a in t["actions"]],
+                   "recorded": len(runs.get(t["id"], [])), "runs": runs.get(t["id"], []),
+                   "fanout": any(r["fanout"] > 1 for r in runs.get(t["id"], [])),
+                   "plain_runs": sum(r["fanout"] == 1 for r in runs.get(t["id"], [])),
+                   "heldout": t["id"] in (6, 20, 22, 26, 30)} for t in load_tasks()]
+    return _TASKS
 
 
 # ---------------------------------------------------------------- experiment runs
@@ -283,7 +303,13 @@ def files(path: str):
 
 @app.get("/")
 def index():
-    return FileResponse(HERE / "static" / "index.html")
+    """The page, with its script and stylesheet addresses stamped with their file time: a changed file gets a new
+    address, so no browser can keep running an old cached copy next to a new page."""
+    from fastapi.responses import HTMLResponse
+    html = (HERE / "static" / "index.html").read_text(encoding="utf-8")
+    for f in ("app.js", "style.css"):
+        html = html.replace(f"/static/{f}\"", f"/static/{f}?v={int((HERE / 'static' / f).stat().st_mtime)}\"")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")

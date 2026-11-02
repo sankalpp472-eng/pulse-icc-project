@@ -90,6 +90,34 @@ $("#predStart").onclick = async () => {
     toast("Starting the predictor…");
   } catch (e) { toast(e.message, 6000); }
 };
+// Does the running predictor already use what the card shows? (a change only takes effect after a restart)
+function predictorMatchesCard() {
+  const p = state.services?.predictor, c = cardPredictor();
+  if (!p || !p.running) return false;
+  const a = p.policy || {}, b = c.policy;
+  if (p.model !== c.model || (a.policy || "theta") !== b.policy || !!a.lookahead !== b.lookahead) return false;
+  if (b.policy === "topk" && (a.top_k !== b.top_k || Math.abs(a.p_min - b.p_min) > 1e-9)) return false;
+  if (b.policy === "theta" && Math.abs(p.theta - c.theta) > 1e-9) return false;
+  if (b.lookahead && Math.abs(a.theta_next - b.theta_next) > 1e-9) return false;
+  return true;
+}
+const busyNow = () => ["running", "waiting", "starting"].includes(state.session?.state) || state.run?.state === "running";
+let applyTimer = null, applyPending = false;
+async function applyCard() {
+  applyPending = false;
+  if (predictorMatchesCard()) return;
+  if (busyNow()) { applyPending = true; return; }         // applied when the episode / run ends (poll loop)
+  try {
+    await api("/api/predictor/start", cardPredictor());
+    toast("Applying the new predictor settings: the predictor restarts (about a minute)");
+  } catch (e) { toast(e.message, 6000); }
+}
+function scheduleApply() { clearTimeout(applyTimer); applyTimer = setTimeout(applyCard, 900); }
+predModel.addEventListener("change", scheduleApply);
+$("#theta").addEventListener("change", scheduleApply);
+["#topK", "#pMin", "#thetaNext"].forEach((id) => $(id).addEventListener("change", scheduleApply));
+$("#lookChk").addEventListener("change", scheduleApply);
+$("#policySeg").addEventListener("click", (e) => { if (e.target.closest("button")) scheduleApply(); });
 $("#predStop").onclick = async () => { await api("/api/predictor/stop", {}); };
 
 // ------------------------------------------------------------------ simulated cluster controls
@@ -127,14 +155,20 @@ async function loadRecordings(select) {
     : `<option value="">No live runs recorded yet: run a Live agent episode first</option>`;
   if (RECS.some((r) => r.id === cur)) $("#recSel").value = cur;
 }
+// replay: which recorded runs the "Show tasks" filter allows (fan-out = the widest group of calls fired at once)
+const runAllowed = (r) => {
+  const f = $("#taskFilter").value;
+  return f === "fanout" ? r.fanout > 1 : f === "plain" || f === "heldout-plain" ? r.fanout === 1 : true;
+};
 function fillTasks() {
-  const replay = kindSeg.get() === "replay";
+  const replay = kindSeg.get() === "replay", f = $("#taskFilter").value;
   const cur = $("#taskSel").value;
-  const list = TASKS.filter((t) => !replay || t.recorded);
+  const list = TASKS.filter((t) => !replay || (t.recorded && (!f.startsWith("heldout") || t.heldout) && t.runs.some(runAllowed)));
   const human = !replay && userSeg.get() === "human";
+  const tag = (t) => (t.heldout ? " · held-out" : "") +
+    (replay && t.recorded ? ` · fan-out in ${t.recorded - t.plain_runs} of ${t.recorded} runs` : "");
   $("#taskSel").innerHTML = (human ? `<option value="">No task: free conversation</option>` : "") +
-    list.map((t) => `<option value="${t.id}">Task ${t.id}${t.fanout ? " · fan-out" : ""}${t.heldout ? " · held-out" : ""} — ` +
-      `${esc(t.instruction.slice(0, 70))}…</option>`).join("");
+    list.map((t) => `<option value="${t.id}">Task ${t.id}${tag(t)} — ${esc(t.instruction.slice(0, 60))}…</option>`).join("");
   if ([...$("#taskSel").options].some((o) => o.value === cur)) $("#taskSel").value = cur;
   else if (list.some((t) => t.id === 30)) $("#taskSel").value = "30";
   taskChanged();
@@ -146,9 +180,15 @@ function taskChanged() {
   const who = kindSeg.get() === "live" && userSeg.get() === "human" ? "Your goal as the customer" : "Customer's goal";
   g.innerHTML = `<b>${who}:</b> ${esc(t.instruction)}<br><span class="muted small">Expected actions: ${esc(t.gold.join(" → ") || "none")}</span>`;
   g.classList.remove("hidden");
-  $("#trialSel").innerHTML = Array.from({ length: Math.max(1, t.recorded) }, (_, i) => `<option value="${i}">recorded run #${i + 1}</option>`).join("");
+  // value = the run's index among the task's recordings (the replay's "recorded run #"), even when filtered
+  const runs = (t.runs || []).map((r, i) => ({ ...r, i })).filter(runAllowed);
+  $("#trialSel").innerHTML = runs.map((r) => `<option value="${r.i}">run #${r.i + 1} · ` +
+      `${r.fanout > 1 ? "fan-out ×" + r.fanout : "no fan-out"} · ${r.calls} calls, ${r.tool_steps} tool steps, ` +
+      `${r.turns} customer turns · ${esc(r.model || "")}</option>`).join("") ||
+    `<option value="0">recorded run #1</option>`;
 }
 $("#taskSel").onchange = taskChanged;
+$("#taskFilter").onchange = fillTasks;
 $("#userDelay").oninput = () => ($("#delayVal").textContent = $("#userDelay").value + " s");
 
 const demoCfg = (predictorOn) => kindSeg.get() === "recorded" ? {
@@ -163,9 +203,9 @@ const demoCfg = (predictorOn) => kindSeg.get() === "recorded" ? {
 async function startEpisode(cfg) {
   if (cfg.kind === "live" && cfg.user === "ai" && !cfg.task_id) throw new Error("The AI customer needs a task");
   if (cfg.kind === "recorded" && !cfg.recording) throw new Error("Record a live run first (Live agent → Start episode)");
-  if (cfg.predictor && !(state.services?.predictor?.running)) {
+  if (cfg.predictor && !predictorMatchesCard()) {        // C3 always runs what the Predictor card shows
     await api("/api/predictor/start", cardPredictor());
-    toast("Starting the predictor first (a few seconds)…");
+    toast("Starting the predictor with the card's settings first (about a minute)…");
   }
   await api("/api/session/start", cfg);
 }
@@ -368,7 +408,12 @@ const xConfig = seg("xConfig", () => expForm());
 const xWhere = seg("xWhere");
 $("#xPred").innerHTML = Object.entries(PREDICTORS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
 $("#xTheta").oninput = () => ($("#xThetaVal").textContent = Number($("#xTheta").value).toFixed(2));
-$("#xTasksPreset").onchange = () => $("#xTasksCustomWrap").classList.toggle("hidden", $("#xTasksPreset").value !== "custom");
+$("#xTasksPreset").onchange = () => {
+  const v = $("#xTasksPreset").value;
+  $("#xTasksCustomWrap").classList.toggle("hidden", v !== "custom");
+  if (v === "heldout-seq") $("#xFanout").checked = false;      // the replay fires every call on its own
+  else if (v === "heldout" || v === "fanout") $("#xFanout").checked = true;
+};
 function expForm() {
   const live = xMode.get() === "live";
   $$(".replay-x").forEach((e) => e.classList.toggle("hidden", live));
@@ -383,7 +428,7 @@ $("#xPolicy").onchange = () => expForm();
 $("#xLook").onchange = () => expForm();
 function expTasks() {
   const v = $("#xTasksPreset").value;
-  if (v === "heldout") return HELDOUT;
+  if (v === "heldout" || v === "heldout-seq") return HELDOUT;
   if (v === "fanout") return [2, 3, 28, 30, 31, 33, 34];
   if (v === "30") return [30];
   if (v === "all") return [];
@@ -549,7 +594,10 @@ function renderServices(sv) {
     // a predictor without the latency patch answers /healthz without "policy" and keeps prewarming by θ
     const ignored = p.policy_supported === false && (asked.policy === "topk" || asked.lookahead);
     $("#policyNote").classList.toggle("hidden", !ignored);
-    $("#predInfo").innerHTML = `${esc(PREDICTORS[p.model] || p.model)} · ${esc(ignored ? "θ " + p.theta : p.policy_label)} · CRDs ${esc(p.crd)}` +
+    const changed = !predictorMatchesCard();
+    $("#predInfo").innerHTML = (changed ? `<b class="warn-text">Running: ${esc(p.policy_label)}. The card's new settings are ` +
+        `${applyPending || busyNow() ? "applied when the current episode ends" : "being applied…"}</b><br>` : "") +
+      `${esc(PREDICTORS[p.model] || p.model)} · ${esc(ignored ? "θ " + p.theta : p.policy_label)} · CRDs ${esc(p.crd)}` +
       (sv.controller ? ` · controller ${sv.controller.deployment ? "(deploy/" + esc(sv.controller.deployment) + ") " : ""}${sv.controller.running ? "running" : "not running"}` : "") +
       (h.crd && h.crd.written != null ? ` · ${h.crd.written} written` : "");
   }
@@ -661,6 +709,7 @@ async function poll() {
     renderHistory(s.history);
     renderClock(s.session);
     renderRace(s.history, s.session);
+    if (applyPending && !busyNow()) applyCard();            // a card change made during an episode
   } catch (e) {
     $("#sessionState").textContent = "UI server not reachable";
   }

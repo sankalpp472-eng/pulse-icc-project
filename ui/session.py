@@ -403,7 +403,8 @@ class Session(threading.Thread):
         traces = [t for t in w1_replay.load_traces(None) if t["task_id"] == task_id and t["calls"]]
         if not traces:
             raise ValueError(f"no recorded tau-bench run with tool calls for task {task_id}")
-        tr = traces[int(self.cfg.get("trial", 0)) % len(traces)]
+        run_no = int(self.cfg.get("trial", 0)) % len(traces)          # the UI's "recorded run #" (0-based)
+        tr = traces[run_no]
         if self.predictor_url:
             w1_replay.attach_signals([tr])
         groups = w1_replay.fanout_groups(tr) if self.cfg.get("fanout", True) else [[i] for i in range(len(tr["calls"]))]
@@ -411,7 +412,7 @@ class Session(threading.Thread):
         speed = float(self.cfg.get("speed", 1.0))
         draw = lambda med, lo, hi: min(hi, max(lo, self.rng.lognormvariate(math.log(med), 0.5)))
         tools = self.tools()
-        self.emit("info", text=f"Replaying {tr['source_model']} on task {task_id} (trial {tr.get('trial', 0)}): "
+        self.emit("info", text=f"Replaying recorded run #{run_no + 1} of task {task_id} ({tr['source_model']}): "
                                f"{len(tr['calls'])} tool calls in {len(groups)} tool steps · think ~{think_m}s · "
                                f"customer ~{user_m}s{f' · gaps x{speed}' if speed != 1 else ''}")
         trajectory: list[str] = []

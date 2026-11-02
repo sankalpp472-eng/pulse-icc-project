@@ -123,7 +123,7 @@ bash EKS_deployment/cloud/ui_cloud.sh up             # 4. the UI pod, then a tun
 
 | Card | What it shows / does |
 |---|---|
-| **Predictor** | **Model**: LightGBM (main), Logistic regression, n-gram baseline, Trajectory ensemble (older), LLM speculator (Groq). **Prewarm policy**: *θ threshold* (every tool with P ≥ θ) or *Top-k* (the k most likely tools, each with P ≥ the floor). **Lookahead**: also prewarm, during the customer's turn, the tool the agent will call after the reply. **Start** / **Stop**. Status pill: *stopped*, *loading…*, *ready*, *exited*. The info line shows model, policy, whether PrewarmRequests are written (`CRDs k8s`) or not (`off`, simulated), and the controller state. Top-k and lookahead need the latency patch (LATENCY_IDEAS_RUN.md). An older predictor ignores them, and the card then shows a yellow note |
+| **Predictor** | **Model**: LightGBM (main), Logistic regression, n-gram baseline, Trajectory ensemble (older), LLM speculator (Groq). **Prewarm policy**: *θ threshold* (every tool with P ≥ θ) or *Top-k* (the k most likely tools, each with P ≥ the floor). **Lookahead**: also prewarm, during the customer's turn, the tool the agent will call after the reply. **Start** / **Stop**. Status pill: *stopped*, *loading…*, *ready*, *exited*. The info line shows model, policy, whether PrewarmRequests are written (`CRDs k8s`) or not (`off`, simulated), and the controller state. Top-k and lookahead need the latency patch (LATENCY_IDEAS_RUN.md). An older predictor ignores them, and the card then shows a yellow note. **Changes apply by themselves:** about a second after you change model, policy, k, floor, θ or lookahead, the predictor restarts with the new settings (~1 min to load; the card shows what's running until then). During an episode the change waits until it ends, and a C3 episode always starts with the card's settings |
 | **Tool pods** | One row per tool with a dot per pod: 🟢 ready, 🟡 starting (cold start in progress), 🔵 serving a call, grey = zero pods. A row flashes blue when a prewarm hits it. Simulated cluster only: **Scale to zero / Always warm (C1)**, **Reset** (all tools back to zero), and the pod-seconds used so far |
 | **Prewarm activity** | Every prewarm (*was cold → starting* or *already warm, window reset*, with k and probability), every scale-down after 60 s idle, and min-scale changes |
 
@@ -160,6 +160,13 @@ The **"End-to-end time: without vs with prewarming"** card shows how long the wh
 | Task 30, run #1 (fan-out, many customer turns) | 60.0 s → 57.8 s (−2.2 s, −4%) | 5.7 s → 3.4 s | 9 → 3 |
 
 Other good candidates, by the share of C0 time spent on cold starts: task 31 run #5, task 22 run #11, task 5 run #5/#6/#11.
+
+**Choosing runs with or without fan-out.** In *Replay recorded*, the **Show tasks** filter picks:
+- *All*, *Held-out*, or **Held-out, runs without fan-out**: tasks 6 (runs #1–#3), 20 (#1–#7, #12) and 22 (#1, #3, #4, #7, #11, #12). Tasks 26 and 30 have fan-out in every recorded run.
+- *Runs with* / *without fan-out* across all tasks.
+
+Each recorded run is listed with its fan-out width (or "no fan-out"), calls, tool steps, customer turns and the model that produced it. You can also untick **Fan-out** to fire every call of any run one at a time.
+In the **Experiments** tab, the preset **Held-out, no fan-out** runs the held-out tasks with every call on its own (fan-out off).
 
 **Why replay, not live, for this demo.** A replay with the same seed has *identical* think and customer-reply gaps in both runs, so the end-to-end difference is exactly the tool waiting saved. With the live agent, the LLM's speed and the AI customer's replies differ by seconds between runs, enough to hide a 2–6 s saving. If you do race live episodes, compare **Tool wait**, not E2E (the card says so too).
 

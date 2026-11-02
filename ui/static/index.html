@@ -55,6 +55,15 @@
               <button data-v="human">I'll type</button>
             </div>
           </label>
+          <label class="replay-only hidden">Show tasks
+            <select id="taskFilter">
+              <option value="all">All tasks with recordings</option>
+              <option value="heldout">Held-out (6 20 22 26 30)</option>
+              <option value="heldout-plain">Held-out, runs without fan-out</option>
+              <option value="fanout">Runs with fan-out (parallel lookups)</option>
+              <option value="plain">Runs without fan-out</option>
+            </select>
+          </label>
           <label class="not-recorded">Task (tau-bench airline)
             <select id="taskSel"></select>
           </label>
@@ -179,6 +188,7 @@
           <label>Tasks
             <select id="xTasksPreset">
               <option value="heldout">Held-out: 6 20 22 26 30</option>
+              <option value="heldout-seq">Held-out, no fan-out (calls one at a time)</option>
               <option value="fanout">Fan-out tasks: 2 3 28 30 31 33 34</option>
               <option value="30">Task 30 only</option>
               <option value="all">All W1 tasks (replay)</option>

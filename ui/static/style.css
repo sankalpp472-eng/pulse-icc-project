@@ -83,6 +83,7 @@ aside label { margin-bottom: 10px; }
 .pill.bad { background: var(--bad-soft); color: var(--bad); }
 .form-grid .wide { grid-column: span 2; }
 @media (max-width: 600px) { .form-grid .wide { grid-column: auto; } }
+.warn-text { color: var(--warn); font-weight: 600; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .note { background: var(--warn-soft); color: var(--ink); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
 .callout { background: var(--blue-soft); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
