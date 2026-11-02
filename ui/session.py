@@ -91,9 +91,11 @@ class KnativeTools:
 
 # ====================================================================== the session
 class Session(threading.Thread):
-    def __init__(self, cfg: dict, cluster, sim, predictor_url: str | None):
+    def __init__(self, cfg: dict, cluster, sim, predictor_url: str | None, record_dir: Path | None = None):
         super().__init__(daemon=True)
         self.cfg, self.cluster, self.sim, self.predictor_url = cfg, cluster, sim, predictor_url
+        self.record_dir = record_dir
+        self.rec: dict | None = None              # live episodes: the trajectory with its timing, saved at the end
         self.events: list[dict] = []
         self.lock = threading.Lock()
         self.state = "starting"
@@ -222,6 +224,8 @@ class Session(threading.Thread):
             self.state = "running"
             if self.cfg["kind"] == "replay":
                 self.run_replay()
+            elif self.cfg["kind"] == "recorded":
+                self.run_recorded()
             else:
                 self.run_live()
             self.state = "done"
@@ -234,7 +238,26 @@ class Session(threading.Thread):
         finally:
             if self.t_start and not self.t_end:
                 self.t_end = time.time()
+            self.save_recording()
             self.emit("end", summary=self.summary())
+
+    def save_recording(self):
+        """A live episode with at least one tool call -> record_dir/<id>.json, replayable with kind=recorded."""
+        r = self.rec
+        if not (r and self.record_dir and any(s["kind"] == "tool" for s in r["steps"])):
+            return
+        r.update(state=self.state, live_e2e_s=round(self.t_end - self.t_start, 2) if self.t_start and self.t_end else None,
+                 live_tool_wait_s=round(self.tool_wait, 2),
+                 live_cold=sum(c["cold"] for c in self.calls), live_calls=len(self.calls),
+                 config="C3" if self.cfg.get("predictor") else "C0", policy=self.cfg.get("policy_label"),
+                 cluster="simulated" if self.sim else self.cluster.context)
+        try:
+            self.record_dir.mkdir(parents=True, exist_ok=True)
+            (self.record_dir / f"{r['id']}.json").write_text(json.dumps(r, indent=1), encoding="utf-8")
+            self.recording_id = r["id"]
+            self.emit("recorded", recording=r["id"])
+        except OSError as e:
+            self.emit("error", text=f"could not save the recording: {e}")
 
     def tools(self):
         if self.sim:
@@ -260,7 +283,8 @@ class Session(threading.Thread):
                 "seed": self.cfg.get("seed", 252), "trial": self.cfg.get("trial"), "speed": self.cfg.get("speed"),
                 "kind": self.cfg["kind"], "user": self.cfg.get("user") if self.cfg["kind"] == "live" else None, "predictor": self.cfg.get("predictor") or "none",
                 "policy": self.cfg.get("policy_label") if self.cfg.get("predictor") else None,
-                "cluster": "simulated" if self.sim else self.cluster.context, "task": self.cfg.get("task_id")}
+                "cluster": "simulated" if self.sim else self.cluster.context, "task": self.cfg.get("task_id"),
+                "recording": self.cfg.get("recording") or getattr(self, "recording_id", None)}
 
     # ------------------------------------------------------------------ live: agent + customer
     def run_live(self):
@@ -309,8 +333,14 @@ class Session(threading.Thread):
                     raise Stopped()
                 return text
 
+        # the recording: everything a replay needs to reproduce this conversation's timeline exactly
+        self.rec = {"id": f"live-{time.strftime('%Y%m%d-%H%M%S')}", "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "task_id": task["id"] if task else None, "goal": goal, "agent_model": llm.DEFAULT_MODEL,
+                    "user": self.cfg["user"], "user_model": self.cfg.get("user_model") if self.cfg["user"] == "ai" else None,
+                    "user_delay": self.cfg.get("user_delay"), "steps": []}
         self.begin()
         first = say(None)
+        self.rec.update(first_user_s=round(time.time() - self.t_start, 3), first_text=first)
         self.emit("customer", text=first)
         messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}, {"role": "user", "content": first}]
         trajectory: list[str] = []
@@ -320,10 +350,13 @@ class Session(threading.Thread):
                 sig = compute_signals(events_from_messages(messages, trajectory))
             except Exception:
                 sig = None
-            self.hint(step, "step", trajectory, sig, compact(messages))
+            hist = compact(messages)
+            self.hint(step, "step", trajectory, sig, hist)
             self.emit("thinking", step=step)
             r, _ = _chat_within_limit(messages, tools.schemas)
             m = r.message
+            st = {"step": step, "think_s": round(r.latency_s, 3), "signals": sig, "history": hist}
+            self.rec["steps"].append(st)
             messages.append(_assistant_msg(m))
             self.check()
             if m.tool_calls:
@@ -335,6 +368,8 @@ class Session(threading.Thread):
                         parsed.append((tc, None))
                 ok = [(tc.function.name, a) for tc, a in parsed if a is not None]
                 par = len(ok) > 1 and all(n in READ_ONLY_TOOLS for n, _ in ok)
+                st.update(kind="tool", calls=[{"tool": n, "args": a} for n, a in ok], parallel=par,
+                          text=(m.content or "")[:300])
                 self.emit("agent_calls", step=step, think_s=round(r.latency_s, 2), tools=[n for n, _ in ok],
                           text=(m.content or "")[:300])
                 outs = iter(self.run_calls(step, ok, tools, par))
@@ -348,7 +383,10 @@ class Session(threading.Thread):
             else:
                 text = m.content or ""
                 self.emit("agent", step=step, text=text, think_s=round(r.latency_s, 2))
+                st.update(kind="respond", text=text)
+                t_say = time.time()
                 reply = say(text)
+                st.update(reply=reply, user_s=round(time.time() - t_say, 3))
                 if reply.strip() != STOP:
                     reply = reply.replace(STOP, "").strip()
                 if reply.strip() == STOP or not reply:
@@ -402,3 +440,48 @@ class Session(threading.Thread):
             self.run_calls(step, calls, tools, parallel=len(g) > 1)
             trajectory += [n for n, _ in calls]
         self.emit("info", text="Recorded episode finished.")
+
+    # ------------------------------------------------------------------ replay of one of OUR live runs
+    def run_recorded(self):
+        """The exact trajectory of a live episode recorded by this UI: the same customer messages and reply times,
+        the same agent think times and messages, the same tool calls (parallel where the agent ran them at once)
+        and the same hints. Only the tools' latencies differ, so C0 vs C3 compares prewarming and nothing else."""
+        path = self.record_dir / f"{self.cfg['recording']}.json" if self.record_dir else None
+        if not path or not path.exists():
+            raise ValueError(f"recording {self.cfg.get('recording')} not found")
+        rec = json.loads(path.read_text(encoding="utf-8"))
+        tools = self.tools()
+        self.emit("info", text=f"Replaying live run {rec['id']} (task {rec.get('task_id')}, agent {rec.get('agent_model')}, "
+                               f"customer {rec.get('user')}; recorded as {rec.get('config')}: "
+                               f"{rec.get('live_e2e_s')} s end-to-end): same messages, timing and tool calls")
+        if rec.get("goal"):
+            self.emit("goal", text=rec["goal"], task_id=rec.get("task_id"))
+        trajectory: list[str] = []
+        self.begin()
+        self.emit("typing", who="customer")
+        self.sleep(rec.get("first_user_s", 0))
+        self.emit("customer", text=rec.get("first_text", ""))
+        for st in rec["steps"]:
+            self.check()
+            step = st["step"]
+            self.hint(step, "step", trajectory, st.get("signals"), st.get("history"))
+            self.emit("thinking", step=step, think_s=st.get("think_s"))
+            self.sleep(st.get("think_s", 0))
+            if st.get("kind") == "tool":
+                calls = [(c["tool"], c["args"]) for c in st["calls"]]
+                self.emit("agent_calls", step=step, think_s=st.get("think_s"), tools=[n for n, _ in calls],
+                          text=st.get("text", ""))
+                self.run_calls(step, calls, tools, parallel=bool(st.get("parallel")))
+                trajectory += [n for n, _ in calls]
+            elif st.get("kind") == "respond":
+                self.emit("agent", step=step, text=st.get("text", ""), think_s=st.get("think_s"))
+                if st.get("reply") is None:
+                    break
+                self.emit("typing", who="customer")
+                self.sleep(st.get("user_s", 0))
+                reply = st["reply"].strip()
+                if reply == "###STOP###" or not reply.replace("###STOP###", "").strip():
+                    self.emit("info", text="The customer ended the conversation.")
+                    break
+                self.emit("customer", text=reply.replace("###STOP###", "").strip())
+        self.emit("info", text="End of the recorded live run.")

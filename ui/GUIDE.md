@@ -165,6 +165,25 @@ Other good candidates, by the share of C0 time spent on cold starts: task 31 run
 
 You can also do it by hand: run the episode with **None (C0)**, press **Reset** (simulated), run it with **Predictor (C3)**. The card pairs the latest C0 and C3 runs of the same episode.
 
+### Recipe 0b: record a live run, then race its exact replay (C0 vs C3)
+
+The most convincing demo: a **real** agent conversation, compared **fairly**.
+
+1. **Record it.** Live demo → **Live agent** → AI customer (or **I'll type**, and chat yourself) → pick a task → **▶ Start episode**. Run it with or without prewarming; it doesn't matter. When it ends, the UI saves the episode's trajectory:
+   - every customer message and how long the customer took to reply
+   - every agent message and its think time
+   - every tool call with its arguments, and which calls ran in parallel
+   - the hint each step sent the predictor
+
+   Every live episode with at least one tool call is recorded, including stopped or failed ones (up to where they ended).
+2. **Race it.** Click **↻ Replay this exact run: C0 vs C3** at the end of the episode. Or, any time later: **Episode: Replay a live run** → pick it in **Your recorded live run** → **⏱ Run C0 then C3**.
+3. **What you see.** Both replays show the original conversation (the real messages) with the original timing, and make the same tool calls. Only the prewarming differs, so the gap between the two end-to-end times is exactly the cold-start time Pulse saved. The card also shows how long the original live run took.
+
+**Notes:**
+- The original live run's own time can be longer than its replays. Recordings keep the model's think time but not Groq rate-limit waits or retries, which are not part of the agent's real behaviour.
+- **Where recordings are kept:** `ui/.state/recordings/` (laptop), or `/home/app/ui-state/recordings/` in the EKS UI pod. `ui_cloud.sh fetch` copies the pod's recordings to the laptop.
+- **Groq's per-minute token limit:** if a live episode fails with *"413 Request too large … tokens per minute"*, the conversation outgrew that limit for the agent model. Use **gpt-oss-20b** as the agent, or set a smaller `LLM_CONTEXT_BUDGET` (e.g. 4000) in `agent/.env`. The partial run is still recorded and replayable.
+
 ### Recipe 1: the 5-minute demo: C0 vs C3 on the same episode
 
 The same recorded conversation runs twice: once without prewarming, once with Pulse.
@@ -430,6 +449,7 @@ bash EKS_deployment/eks_down.sh                          # fetches, then deletes
 | I want to… | Go to |
 |---|---|
 | Show the end-to-end saving in one click | Live demo → Replay recorded → task 6, run #9 → **⏱ Run C0 then C3** (Recipe 0) |
+| Race a real conversation fairly | Live agent episode → **↻ Replay this exact run: C0 vs C3** (Recipe 0b) |
 | Show prewarming in 5 minutes | Live demo → Replay recorded → task 30 → C0, Reset, C3 (Recipe 1) |
 | Talk to the agent | Live demo → Live agent → I'll type (Recipe 3) |
 | Try another predictor / θ | Predictor card → Model, θ → Start (Recipe 4) |

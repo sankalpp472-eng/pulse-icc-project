@@ -81,6 +81,8 @@ aside label { margin-bottom: 10px; }
 .pill.ok { background: var(--accent-soft); color: var(--accent); }
 .pill.wait { background: var(--warn-soft); color: var(--warn); }
 .pill.bad { background: var(--bad-soft); color: var(--bad); }
+.form-grid .wide { grid-column: span 2; }
+@media (max-width: 600px) { .form-grid .wide { grid-column: auto; } }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .note { background: var(--warn-soft); color: var(--ink); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
 .callout { background: var(--blue-soft); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
@@ -188,3 +190,4 @@ aside label { margin-bottom: 10px; }
 .prose p, .prose ol { margin: 0 0 10px; }
 .prose li { margin-bottom: 4px; }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 8px; font-size: 13px; z-index: 10; max-width: 90vw; }
+.replay-offer { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 0; }

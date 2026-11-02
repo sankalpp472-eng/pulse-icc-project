@@ -34,6 +34,7 @@ cluster = backend.Cluster()
 services = backend.Services(cluster)
 sim = SimCluster(backend.TOOL_NAMES)
 S: dict = {"session": None, "run": None, "history": []}
+RECORDINGS = backend.STATE / "recordings"      # live episodes recorded by the UI, replayable exactly (kind=recorded)
 
 
 def busy() -> str | None:
@@ -115,8 +116,10 @@ def predictor_stop():
 def session_start(cfg: dict):
     if busy():
         raise HTTPException(409, busy())
-    if cfg.get("kind") not in ("live", "replay"):
-        raise HTTPException(400, "kind must be live or replay")
+    if cfg.get("kind") not in ("live", "replay", "recorded"):
+        raise HTTPException(400, "kind must be live, replay or recorded")
+    if cfg["kind"] == "recorded" and not (RECORDINGS / f"{cfg.get('recording')}.json").exists():
+        raise HTTPException(400, "pick a recorded live run (record one first: Live agent, then Start episode)")
     pred = None
     if cfg.get("predictor"):
         if not services.wait_predictor(timeout=1 if services.predictor_ready() else 90):
@@ -127,7 +130,7 @@ def session_start(cfg: dict):
         cfg["policy_label"] = backend.policy_label(info.get("policy"), info["theta"])
     if cluster.mode == "sim" and cfg.get("fresh", True):
         sim.set_min_scale(sim.min_scale)
-    s = Session(cfg, cluster, sim if cluster.mode == "sim" else None, pred)
+    s = Session(cfg, cluster, sim if cluster.mode == "sim" else None, pred, record_dir=RECORDINGS)
     S["session"] = s
     s.start()
     return {"ok": True}
@@ -180,6 +183,23 @@ def demo_prepare():
                 raise HTTPException(500, f"could not reset the database: {o[:200]}")
         db = "reset from seed"
     return {"pods": sum(p["ready"] + p["starting"] for p in cluster.pods), "db": db}
+
+
+@app.get("/api/recordings")
+def recordings():
+    """The recorded live runs, newest first (without their steps)."""
+    import json
+    out = []
+    for f in sorted(RECORDINGS.glob("live-*.json"), reverse=True):
+        try:
+            r = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        steps = r.get("steps", [])
+        out.append({k: r.get(k) for k in ("id", "created", "task_id", "agent_model", "user", "config", "policy",
+                                          "cluster", "live_e2e_s", "live_tool_wait_s", "live_cold", "live_calls", "state")}
+                   | {"tool_steps": sum(s.get("kind") == "tool" for s in steps), "steps": len(steps)})
+    return out
 
 
 @app.get("/api/tasks")

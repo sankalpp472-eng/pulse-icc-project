@@ -107,11 +107,25 @@ const kindSeg = seg("kindSeg", () => demoForm());
 const userSeg = seg("userSeg", () => demoForm());
 const predSeg = seg("predSeg");
 function demoForm() {
-  const replay = kindSeg.get() === "replay";
-  $$(".live-only").forEach((e) => e.classList.toggle("hidden", replay));
+  const kind = kindSeg.get(), replay = kind === "replay", recorded = kind === "recorded";
+  $$(".live-only").forEach((e) => e.classList.toggle("hidden", kind !== "live"));
   $$(".replay-only").forEach((e) => e.classList.toggle("hidden", !replay));
-  $$(".ai-only").forEach((e) => e.classList.toggle("hidden", replay || userSeg.get() !== "ai"));
-  fillTasks();
+  $$(".ai-only").forEach((e) => e.classList.toggle("hidden", kind !== "live" || userSeg.get() !== "ai"));
+  $$(".recorded-only").forEach((e) => e.classList.toggle("hidden", !recorded));
+  $$(".not-recorded").forEach((e) => e.classList.toggle("hidden", recorded));
+  if (recorded) { loadRecordings(); $("#taskGoal").classList.add("hidden"); } else fillTasks();
+}
+// ---- recorded live runs (ui/.state/recordings): replayed with their exact messages, timing and tool calls
+let RECS = [];
+async function loadRecordings(select) {
+  try { RECS = await api("/api/recordings"); } catch (e) { return toast(e.message); }
+  const cur = select || $("#recSel").value;
+  $("#recSel").innerHTML = RECS.length
+    ? RECS.map((r) => `<option value="${esc(r.id)}">${esc(r.created.slice(5, 16))} · task ${esc(r.task_id ?? "free")} · ` +
+        `${esc((r.agent_model || "").replace(/^.*\//, ""))} · customer ${esc(r.user)} · recorded as ${esc(r.config)} · ` +
+        `${r.tool_steps} tool steps, ${r.live_calls} calls · ${secs(r.live_e2e_s)}${r.state !== "done" ? " (" + esc(r.state) + ")" : ""}</option>`).join("")
+    : `<option value="">No live runs recorded yet: run a Live agent episode first</option>`;
+  if (RECS.some((r) => r.id === cur)) $("#recSel").value = cur;
 }
 function fillTasks() {
   const replay = kindSeg.get() === "replay";
@@ -137,7 +151,10 @@ function taskChanged() {
 $("#taskSel").onchange = taskChanged;
 $("#userDelay").oninput = () => ($("#delayVal").textContent = $("#userDelay").value + " s");
 
-const demoCfg = (predictorOn) => ({
+const demoCfg = (predictorOn) => kindSeg.get() === "recorded" ? {
+  kind: "recorded", recording: $("#recSel").value, predictor: predictorOn,
+  task_id: String((RECS.find((r) => r.id === $("#recSel").value) || {}).task_id ?? ""),
+} : ({
   kind: kindSeg.get(), user: userSeg.get(), task_id: $("#taskSel").value,
   agent_model: $("#agentModel").value, user_model: $("#userModel").value, user_delay: Number($("#userDelay").value),
   trial: Number($("#trialSel").value || 0), speed: Number($("#speedSel").value), fanout: $("#fanoutChk").checked,
@@ -145,6 +162,7 @@ const demoCfg = (predictorOn) => ({
 });
 async function startEpisode(cfg) {
   if (cfg.kind === "live" && cfg.user === "ai" && !cfg.task_id) throw new Error("The AI customer needs a task");
+  if (cfg.kind === "recorded" && !cfg.recording) throw new Error("Record a live run first (Live agent → Start episode)");
   if (cfg.predictor && !(state.services?.predictor?.running)) {
     await api("/api/predictor/start", cardPredictor());
     toast("Starting the predictor first (a few seconds)…");
@@ -160,6 +178,15 @@ $("#stopBtn").onclick = () => { race.abort = true; api("/api/session/stop", {});
 
 // ------------------------------------------------------------------ C0 then C3, same episode, both from cold
 const race = { running: false, abort: false };
+let lastRecording = null;
+async function raceRecording(id) {
+  kindSeg.set("recorded");
+  demoForm();
+  await loadRecordings(id);
+  $("#recSel").value = id;
+  $("#raceCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#raceBtn").click();
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function waitEpisodeEnd(prevId) {
   for (;;) {                                         // a new episode started, then it ended
@@ -185,7 +212,8 @@ async function prepareCold(label) {
 }
 $("#raceBtn").onclick = async () => {
   if (race.running) return;
-  if (kindSeg.get() === "live" && userSeg.get() === "human") return toast("Use the AI customer (or a replay) for C0 vs C3");
+  if (kindSeg.get() === "live")
+    return toast("For a fair C0 vs C3, race a replay: record this live run first, then 'Replay a live run' (or use the button at the end of the episode)", 7000);
   race.running = true; race.abort = false;
   $("#raceBtn").disabled = true;
   try {
@@ -313,10 +341,18 @@ function renderEvent(ev) {
       $("#replyForm").classList.remove("hidden");
       $("#replyText").focus();
       break;
+    case "recorded":
+      lastRecording = ev.recording;
+      break;
     case "end": {
       clearThinking();
       $("#replyForm").classList.add("hidden");
       const s = ev.summary;
+      if (s.kind === "live" && s.recording) {         // offer the fair comparison of exactly this conversation
+        const b = add(`<button class="primary">↻ Replay this exact run: C0 vs C3</button>
+          <span class="muted small">same customer messages, think and reply times and tool calls; only prewarming differs</span>`, "replay-offer");
+        b.querySelector("button").onclick = () => raceRecording(s.recording);
+      }
       add(`<div class="stats">${stat(s.calls, "tool calls")}${stat(s.cold, "cold calls")}${stat(s.prewarmed_hits, "prewarmed")}` +
         `${stat(fmt(s.mean_ms), "mean latency ms")}${stat(fmt(s.cold_wait_s, 1), "s lost to cold starts")}` +
         `${s.pod_seconds != null ? stat(fmt(s.pod_seconds), "pod-seconds") : ""}${stat(s.hints_answered + "/" + s.hints_sent, "hints answered")}</div>`, "step");
@@ -521,7 +557,7 @@ function renderServices(sv) {
 const secs = (v) => (v == null ? "–" : `${Number(v).toFixed(1)} s`);
 const prewarmLabel = (s) => (s.predictor === "none" ? "none (C0)" : `${s.predictor}${s.policy ? " · " + s.policy : ""}`);
 function renderHistory(h) {
-  $("#historyTbl tbody").innerHTML = h.map((s) => `<tr><td>${esc(s.kind)}${s.user && s.kind === "live" ? " · " + esc(s.user) : ""}</td>
+  $("#historyTbl tbody").innerHTML = h.map((s) => `<tr><td>${s.kind === "recorded" ? "replay of live run" : esc(s.kind)}${s.user && s.kind === "live" ? " · " + esc(s.user) : ""}</td>
     <td>${esc(s.task || "free")}${s.kind === "replay" && s.trial != null ? " #" + (s.trial + 1) : ""}</td><td>${esc(prewarmLabel(s))}</td><td>${esc(s.cluster)}</td>
     <td><b>${secs(s.e2e_s)}</b></td><td>${secs(s.tool_wait_s)}</td>
     <td>${s.calls}</td><td>${s.cold}</td><td>${s.prewarmed_hits}</td><td>${fmt(s.mean_ms)} ms</td><td>${fmt(s.cold_wait_s, 1)} s</td>
@@ -538,10 +574,12 @@ function renderClock(s) {
   $("#toolWaitVal").textContent = secs(s ? s.tool_wait_s : 0);
 }
 // two episodes are the "same" if they replay the same recording (or, live, the same task with the same agent)
-const raceKey = (x) => [x.kind, x.task, x.kind === "replay" ? `${x.trial}|${x.speed}` : x.user].join("/");
+const raceKey = (x) => x.kind === "recorded" ? `recorded/${x.recording}`
+  : [x.kind, x.task, x.kind === "replay" ? `${x.trial}|${x.speed}` : x.user].join("/");
 function renderRace(history, s) {
   const cur = s && s.cfg ? { kind: s.cfg.kind, task: String(s.cfg.task_id || ""), trial: s.cfg.trial, speed: s.cfg.speed,
-                              user: s.cfg.kind === "live" ? s.cfg.user : null, predictor: s.cfg.predictor ? "x" : "none" } : null;
+                              recording: s.cfg.recording, user: s.cfg.kind === "live" ? s.cfg.user : null,
+                              predictor: s.cfg.predictor ? "x" : "none" } : null;
   const running = s && ["running", "waiting", "starting"].includes(s.state);
   const ref = running ? cur : history[0];
   const done = history.filter((h) => h.state === "done" && h.e2e_s != null && ref && raceKey(h) === raceKey({ ...ref, task: String(ref.task ?? "") }));
@@ -573,9 +611,13 @@ function renderRace(history, s) {
         `waiting on tools ${c0.tool_wait_s.toFixed(1)} s → ${c3.tool_wait_s.toFixed(1)} s, cold calls ${c0.cold} → ${c3.cold}.`
       : `C3 took ${(-d).toFixed(1)} s longer end-to-end (tool wait ${dw >= 0 ? "−" : "+"}${Math.abs(dw).toFixed(1)} s).`;
   } else box.classList.add("hidden");
+const rec = ref && ref.kind === "recorded" ? RECS.find((r) => r.id === ref.recording) : null;
   $("#raceNote").textContent = ref && ref.kind === "live"
-    ? "Live episodes differ in LLM speed and customer replies, so end-to-end times vary by seconds between runs: compare the tool wait, or use Replay recorded (same seed = identical gaps) for a like-for-like race."
-    : "Replay: both runs have identical think and customer-reply gaps (seed 252), so the end-to-end difference is exactly the waiting on tools.";
+    ? "Live episodes differ in LLM speed and customer replies, so end-to-end times vary by seconds between runs: compare the tool wait, or race the recording of this run (button at the end of the episode)."
+    : rec
+      ? `Replays of your live run ${rec.id} (${rec.created.slice(11, 16)}, task ${rec.task_id ?? "free"}): identical messages, think and reply times and tool calls, so the difference is only the waiting on tools. ` +
+        `The original live run took ${secs(rec.live_e2e_s)} as ${rec.config} (tool wait ${secs(rec.live_tool_wait_s)}).`
+      : "Replay: both runs have identical think and customer-reply gaps (seed 252), so the end-to-end difference is exactly the waiting on tools.";
 }
 
 // ------------------------------------------------------------------ the poll loop

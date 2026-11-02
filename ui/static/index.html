@@ -43,7 +43,11 @@
             <div class="seg" id="kindSeg">
               <button data-v="live" class="on">Live agent</button>
               <button data-v="replay">Replay recorded</button>
+              <button data-v="recorded" title="Replay one of your own live runs: same messages, timing and tool calls">Replay a live run</button>
             </div>
+          </label>
+          <label class="recorded-only hidden wide">Your recorded live run
+            <select id="recSel"><option value="">No live runs recorded yet: run a Live agent episode first</option></select>
           </label>
           <label class="live-only">Customer
             <div class="seg" id="userSeg">
@@ -51,7 +55,7 @@
               <button data-v="human">I'll type</button>
             </div>
           </label>
-          <label>Task (tau-bench airline)
+          <label class="not-recorded">Task (tau-bench airline)
             <select id="taskSel"></select>
           </label>
           <label class="live-only">Agent model

@@ -58,7 +58,13 @@ case "$CMD" in
       if [ -e "results/cloud_runs/$name" ]; then echo "  kept (already here): $name"; else mv "$d" "results/cloud_runs/$name"; n=$((n + 1)); echo "  + $name"; fi
     done
     rm -rf "results/cloud_runs/$INCOMING"
-    echo "$n new folder(s) in results/cloud_runs/" ;;
+    echo "$n new folder(s) in results/cloud_runs/"
+    # recorded live runs (Live demo -> Replay a live run): to the laptop UI's recordings, so they can be replayed there too
+    if kubectl exec "$POD" -- test -d /home/app/ui-state/recordings; then
+      mkdir -p ui/.state
+      ( cd ui/.state && kubectl cp "default/$POD:/home/app/ui-state/recordings" recordings >/dev/null )
+      echo "recordings -> ui/.state/recordings/ ($(ls ui/.state/recordings | wc -l) files)"
+    fi ;;
   down)
     kubectl delete deploy/pulse-ui svc/pulse-ui --ignore-not-found ;;
   *)
