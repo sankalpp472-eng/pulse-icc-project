@@ -716,7 +716,25 @@ async function poll() {
   setTimeout(poll, 500);
 }
 
+// Is the server running the same UI code as this page? An old server process (started before an update) serves the
+// new page from disk but ignores new settings such as the Top-k policy. Then say so, loudly.
+async function checkVersion() {
+  let stale = null;
+  try {
+    const v = await api("/api/version");
+    if (v.restart_needed) stale = "The UI server is running older code than the files on disk.";
+  } catch (e) {
+    stale = "The UI server is older than this page (it has no /api/version).";
+  }
+  const b = $("#staleBanner");
+  b.classList.toggle("hidden", !stale);
+  if (stale) b.innerHTML = `⚠ ${stale} New features (e.g. the Top-k policy) won't work until you restart it: ` +
+    `press Ctrl+C in its terminal, then run <code>.\\agent\\.venv\\Scripts\\python.exe ui\\server.py</code> and reload this page.`;
+}
+setInterval(checkVersion, 30000);
+
 (async function init() {
+  checkVersion();
   try { TASKS = await api("/api/tasks"); } catch (e) { toast("Could not load tasks: " + e.message); }
   demoForm();
   expForm();

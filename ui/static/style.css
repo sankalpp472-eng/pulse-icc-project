@@ -83,6 +83,8 @@ aside label { margin-bottom: 10px; }
 .pill.bad { background: var(--bad-soft); color: var(--bad); }
 .form-grid .wide { grid-column: span 2; }
 @media (max-width: 600px) { .form-grid .wide { grid-column: auto; } }
+.stale { background: var(--bad); color: #fff; padding: 10px 20px; font-weight: 600; }
+.stale code { background: rgba(255, 255, 255, .2); padding: 1px 6px; border-radius: 4px; }
 .warn-text { color: var(--warn); font-weight: 600; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .note { background: var(--warn-soft); color: var(--ink); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }

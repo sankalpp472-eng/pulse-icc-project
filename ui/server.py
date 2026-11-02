@@ -30,6 +30,17 @@ from session import Session  # noqa: E402
 from sim_cluster import SimCluster  # noqa: E402
 
 app = FastAPI(title="Pulse demo UI")
+# which UI code this process runs: the newest modification time of the server's own files when it started
+_CODE_FILES = [HERE / f for f in ("server.py", "backend.py", "session.py", "sim_cluster.py")]
+LOADED_CODE = max(int(f.stat().st_mtime) for f in _CODE_FILES)
+
+
+@app.get("/api/version")
+def version():
+    """The page checks this: a server older than the code on disk (started before an update) ignores new settings,
+    e.g. the Top-k policy, so the page asks for a restart."""
+    on_disk = max(int(f.stat().st_mtime) for f in _CODE_FILES if f.exists())
+    return {"loaded": LOADED_CODE, "on_disk": on_disk, "restart_needed": on_disk > LOADED_CODE}
 
 
 @app.middleware("http")
