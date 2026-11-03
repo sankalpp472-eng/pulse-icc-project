@@ -17,6 +17,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -59,6 +60,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -101,6 +103,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -143,6 +146,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -185,6 +189,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -227,6 +232,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -269,6 +275,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -311,6 +318,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -353,6 +361,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -395,6 +404,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -437,6 +447,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -479,6 +490,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -521,6 +533,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:
@@ -563,6 +576,7 @@ spec:
         autoscaling.knative.dev/window: "60s"
         autoscaling.knative.dev/max-scale: "10"
         autoscaling.knative.dev/target-utilization-percentage: "100"
+        autoscaling.knative.dev/scale-down-delay: "30s"
     spec:
       containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
       containers:

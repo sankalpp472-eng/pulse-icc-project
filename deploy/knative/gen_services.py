@@ -83,6 +83,9 @@ def main():
                          "/1 for retail); '' = each pod keeps its own in-memory copy")
     ap.add_argument("--min-scale", type=int, default=0, help="0 = C0 (scale to zero), 1 = C1 (always warm)")
     ap.add_argument("--window", default="60s", help="idle time before scale-down: 60s = Knative default (min 6s)")
+    ap.add_argument("--scale-down-delay", default="0s",
+                    help="extra time Knative keeps pods after it decides to scale down (0s = off; e.g. 30s). "
+                         "Applies to every config, so run C0 and C3 with the same value")
     ap.add_argument("--concurrency", type=int, default=1,
                     help="requests one pod serves at once (containerConcurrency); 1 = a burst of N calls needs N pods, "
                          "0 = no limit (one pod takes all)")
@@ -106,7 +109,8 @@ def main():
     # target-utilization 100: scale at 1 in-flight request per pod, not at 70% of it (Knative default)
     scaling = "".join(f'\n        autoscaling.knative.dev/{k}: "{v}"' for k, v in
                       ([("max-scale", a.max_scale)] if a.max_scale else []) +
-                      ([("target-utilization-percentage", 100)] if a.concurrency else []))
+                      ([("target-utilization-percentage", 100)] if a.concurrency else []) +
+                      ([("scale-down-delay", a.scale_down_delay)] if a.scale_down_delay not in ("0", "0s", "") else []))
     docs = [TEMPLATE.format(svc=prefix + t.replace("_", "-"), tool=t, role=role, image=a.image,
                             min_scale=a.min_scale, window=a.window, domain_env=domain_env,
                             redis_env=redis_env, scaling=scaling, concurrency=a.concurrency)

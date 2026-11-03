@@ -12,6 +12,8 @@
 # IMAGE=<repo:tag> overrides the image (e.g. your own Docker Hub account).
 # NO_REDIS=1 skips the shared database (each tool pod keeps its own in-memory copy).
 # WINDOW=<time> idle time before a tool scales down (default 60s = Knative default; e.g. WINDOW=6s)
+# SCALE_DOWN_DELAY=<time> keep pods this much longer after Knative decides to scale down (default 0s = off;
+#               it applies to every config, so run C0 and C3 with the same value)
 # CONCURRENCY=<n> requests one tool pod serves at once (default 1: N parallel calls -> the autoscaler starts
 #               N pods; 0 = no limit, one pod takes every call, the setup of the runs before fan-out)
 # MAX_SCALE=<n>  most pods per tool (default 10; 0 = no limit)
@@ -62,7 +64,7 @@ else
 fi
 
 # 3. Services
-"$PY" gen_services.py --domain "$DOMAIN" --image "$IMAGE" --min-scale "$MIN_SCALE" --window "${WINDOW:-60s}" \
+"$PY" gen_services.py --domain "$DOMAIN" --image "$IMAGE" --min-scale "$MIN_SCALE" --window "${WINDOW:-60s}" --scale-down-delay "${SCALE_DOWN_DELAY:-0s}" \
   --concurrency "${CONCURRENCY:-1}" --max-scale "${MAX_SCALE:-10}" --redis-url "$REDIS_URL" -o "$OUT"
 kubectl apply -f "$OUT"
 kubectl wait ksvc -l pulse/role=$ROLE --for=condition=Ready --timeout=600s
