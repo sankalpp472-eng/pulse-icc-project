@@ -16,7 +16,7 @@ Run with the agent's Python, from the project root:
   agent/.venv/Scripts/python test/test_knative/w1_live.py --tasks 1 6     # specific tasks
   ... --agent-model openai/gpt-oss-120b --user-model openai/gpt-oss-20b    # choose the Groq models
 
-Output: test/test_knative/results/<date>_<time>_<config>_W1-live_<tasks>_<model>/  (e.g. 2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b)
+Output: results/local_runs/ (kind) or results/cloud_runs/ (EKS), <date>_<time>_<config>_W1-live_<tasks>_<model>/  (e.g. 2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b)
   run_config.json models, Knative settings (read from the cluster), image, database, git commit ...
   calls.csv       one row per tool call (cold/warm, latency, idle gap, think time ...)
   episodes.jsonl  one agent episode per line (full trace: steps, tool sequence, timings)
@@ -31,6 +31,7 @@ import os
 import statistics
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -59,6 +60,14 @@ def parse_args():
     ap.add_argument("--user-model", default="openai/gpt-oss-20b", help="model for the simulated customer")
     ap.add_argument("-v", "--verbose", action="store_true", help="print the conversation")
     ap.add_argument("--label", default="", help="extra text at the end of the result folder name (e.g. eks)")
+    ap.add_argument("--predictor-url", help="C3: the agent sends hints to this predictor (e.g. http://127.0.0.1:8000); "
+                                            "the prewarm controller must be running")
+    ap.add_argument("--workflow-id", default="W1", help="workflow id sent in hints")
+    ap.add_argument("--user-delay-median", type=float, default=8.0,
+                    help="median seconds the simulated customer takes to read and answer (lognormal, as a "
+                         "customer turn in w1_replay.py); 0 = answer as fast as the LLM (~0.75 s)")
+    ap.add_argument("--user-delay-sigma", type=float, default=0.5)
+    ap.add_argument("--user-delay-seed", type=int, default=252)
     return ap.parse_args()
 
 
@@ -68,15 +77,24 @@ if ARGS.backend:
     os.environ["LLM_BACKEND"] = ARGS.backend      # set before llm.py loads .env (which won't override it)
 os.environ["GROQ_MODEL"] = os.environ["OPENROUTER_MODEL"] = ARGS.agent_model
 os.environ["USER_MODEL"] = ARGS.user_model
+# user.py reads these at import: the simulated customer's reading + typing time
+os.environ["USER_DELAY_MEDIAN_S"] = str(ARGS.user_delay_median)
+os.environ["USER_DELAY_SIGMA"] = str(ARGS.user_delay_sigma)
+os.environ["USER_DELAY_SEED"] = str(ARGS.user_delay_seed)
 os.environ.setdefault("TOOL_BACKEND", "mcp")
 os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:8081/mcp")
 os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
+# hints.py reads these at import: without --predictor-url no hints are sent (C0)
+os.environ["PREDICTOR_URL"] = ARGS.predictor_url or ""
+os.environ["WORKFLOW_ID"] = ARGS.workflow_id
 
+import hints  # noqa: E402
 import llm  # noqa: E402
 from agent import run_episode  # noqa: E402
 from tau_airline import load_tasks  # noqa: E402
 from tools import CALL_LOG  # noqa: E402
-from c0_common import (COLD_LATENCY_S, PodWatcher, reset_db, run_config, run_dir,  # noqa: E402
+from c0_common import (COLD_LATENCY_S, PodWatcher, peak_pods, reset_db, run_config, run_dir,  # noqa: E402
+                       save_predictor_health,
                        shared_db, tasks_tag, wait_all_zero)
 
 CALL_FIELDS = ["episode", "task_id", "task_set", "call_idx", "tool", "t_start", "latency_ms", "cold",
@@ -99,7 +117,8 @@ def main():
     ids = (a.tasks or SETS[a.set]) * a.repeats
     set_of = {i: name for name in ("safe", "multi") for i in SETS[name]}
     n_trimmed = 0
-    print(f"W1 live C0 | tasks {ids} | agent {llm.DEFAULT_MODEL}, user sim {os.environ['USER_MODEL']} "
+    par_widths: list[int] = []          # calls per reply that ran at once (parallel fan-out)
+    print(f"W1 live {'C3' if a.predictor_url else 'C0'} | tasks {ids} | agent {llm.DEFAULT_MODEL}, user sim {os.environ['USER_MODEL']} "
           f"| {llm.BACKEND}, {len(llm.KEYS)} key(s)")
 
     db = "redis (shared, reset per episode)" if shared_db() else "in-memory per pod (no shared DB!)"
@@ -111,15 +130,35 @@ def main():
                       "context_trimming": "sent copy only, oldest first, newest 4 messages kept: old tool results "
                                           "compacted, then replaced by a neutral note, then old long messages cut "
                                           "to 300 chars; saved traces are complete",
-                      "fixed_prompt_tokens_estimate": llm.FIXED_TOKENS})
+                      "fixed_prompt_tokens_estimate": llm.FIXED_TOKENS,
+                      "customer_reply_delay": {"median_s": a.user_delay_median, "sigma": a.user_delay_sigma,
+                                               "seed": a.user_delay_seed, "clip_s": [1, 60],
+                                               "rule": "each simulated reply takes max(LLM time, delay)"}})
+    if a.predictor_url:   # scale-to-zero tools + predictor + prewarm controller = C3 (same as w1_replay.py)
+        cfg["config"] = "C3" if cfg["config"] == "C0" else f"{cfg['config']}+prewarm"
+        try:
+            with urllib.request.urlopen(a.predictor_url + "/healthz", timeout=5) as r:
+                health = json.loads(r.read())
+        except Exception as e:
+            raise SystemExit(f"Predictor not reachable at {a.predictor_url}: {e}")
+        if health.get("crd", {}).get("mode") != "k8s":
+            print("WARNING: predictor is not in CRD_MODE=k8s -> no PrewarmRequests, nothing gets prewarmed")
+        cfg["prewarm"] = {"predictor_url": a.predictor_url, "workflow_id": a.workflow_id,
+                          "predictor": {k: health.get(k) for k in ("model", "action_models", "theta", "ttl_s")},
+                          "crd_mode": health.get("crd", {}).get("mode"), "hint_signals": hints.USE_SIGNALS,
+                          "mechanism": "Option A: controller sends an MCP ping per PrewarmRequest; "
+                                       "TTL = Knative idle window",
+                          "hints": "sent by the agent before every LLM step (agent/hints.py)"}
     detail = (tasks_tag(ids) if a.tasks else a.set) + (f"-x{a.repeats}" if a.repeats > 1 else "")
     out_dir = run_dir(cfg["config"], "live", f"{detail}_{llm.DEFAULT_MODEL.split('/')[-1]}", a.label)
     print(f"-> {out_dir}")
     (out_dir / "run_config.json").write_text(json.dumps(cfg, indent=2))
+    hints.HINT_LOG = str(out_dir / "hints.jsonl")   # every hint + the predictor's answer, kept with the run
     print(f"config: {cfg['config']} | window {cfg['knative']['tool_window']} | images {cfg['tool_images']} | db: {db}")
     watcher = PodWatcher()
     watcher.start()
     wait_all_zero(watcher)
+    watcher.forget()                    # pods from before the run (e.g. an old revision) are not part of it
     print("all 14 tools at zero; starting\n")
 
     calls_f = open(out_dir / "calls.csv", "w", newline="", encoding="utf-8")
@@ -144,9 +183,12 @@ def main():
 
         tt = think_times(ep)
         n_trimmed += sum(s.get("context_trimmed", 0) for s in (ep or {}).get("steps", []))
+        par_widths += [len(s["calls"]) for s in (ep or {}).get("steps", []) if s.get("parallel")]
         for i, c in enumerate(CALL_LOG):
             t_end = c["t_start"] + c["latency_s"]
-            pod = watcher.new_pod_during(c["tool"], c["t_start"], t_end)
+            # a new pod counts only if the tool had none before; else it may be extra capacity for parallel calls
+            pod = not watcher.had_pod_before(c["tool"], c["t_start"]) and \
+                watcher.new_pod_during(c["tool"], c["t_start"], t_end)
             by_lat = c["latency_s"] > COLD_LATENCY_S
             prev = last_end.get(c["tool"])
             row = {"episode": episode, "task_id": tid, "task_set": set_of.get(tid, "?"), "call_idx": i,
@@ -173,7 +215,7 @@ def main():
     watcher.stop_flag = True
     calls_f.close()
     with open(out_dir / "pods.csv", "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=["pod", "tool", "created", "first_seen", "last_seen"])
+        w = csv.DictWriter(f, fieldnames=["pod", "tool", "created", "first_seen", "last_seen", "deleting_seen"])
         w.writeheader()
         w.writerows(watcher.pods.values())
 
@@ -197,8 +239,11 @@ def main():
         "config": cfg["config"], "tool_window": cfg["knative"]["tool_window"], "tool_images": cfg["tool_images"],
         "api_keys_available": len(llm.KEYS), "key_switches": llm.KEY_LOG,
         "tool_results_trimmed_from_context": n_trimmed,
+        "parallel_steps": {"replies": len(par_widths), "calls": sum(par_widths), "widths": par_widths,
+                           "peak_pods_per_tool": peak_pods(watcher.pod_rows())},
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
+    save_predictor_health(a.predictor_url, out_dir)
     print("\n" + json.dumps({k: v for k, v in summary.items() if k != "per_tool"}, indent=2))
     print(f"saved to {out_dir}")
 

@@ -4,7 +4,7 @@
 #   bash EKS_deployment/run_c1.sh                       # task-9 trace x3 (see common.sh for WORKLOAD)
 #   WORKLOAD=taubench bash EKS_deployment/run_c1.sh
 #
-# Result: test/test_knative/results/<date>_<time>_C1_W1-replay_<workload>_eks/
+# Result: results/cloud_runs/<date>_<time>_C1_W1-replay_<workload>_eks/
 source "$(dirname "$0")/common.sh"
 
 back_to_c0() { echo "Switching the tools back to scale-to-zero ..."; ensure_min_scale 0; }

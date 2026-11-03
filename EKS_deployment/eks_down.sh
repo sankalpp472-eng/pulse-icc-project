@@ -9,6 +9,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 CTX=$(kubectl config get-contexts -o name | grep -m1 pulse-eks || true)
+# Runs made in the demo UI live only in its pod: copy them home before the cluster goes
+if [ -n "$CTX" ] && kubectl --context "$CTX" get deploy pulse-ui >/dev/null 2>&1; then
+  echo "Copying the demo UI's runs to results/cloud_runs/ first ..."
+  kubectl config use-context "$CTX" >/dev/null
+  bash EKS_deployment/cloud/ui_cloud.sh fetch || echo "(could not fetch the UI's runs; continuing)"
+fi
 [ -n "$CTX" ] && kubectl --context "$CTX" delete pwr --all --ignore-not-found || true
 eksctl delete cluster -f EKS_deployment/cluster.yaml --wait
 kubectl config use-context kind-pulse-kn >/dev/null 2>&1 || true

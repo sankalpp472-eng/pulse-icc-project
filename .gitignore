@@ -5,3 +5,11 @@ venv/
 __pycache__/
 *.pyc
 EKS_deployment/logs/
+baselines/*/data/
+
+# cloud runner image (EKS_deployment/cloud/build_image.sh)
+EKS_deployment/cloud/.build/
+EKS_deployment/cloud/.image-*
+
+# demo UI: logs of the processes it starts
+ui/.state/

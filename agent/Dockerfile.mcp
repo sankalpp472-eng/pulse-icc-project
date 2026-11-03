@@ -1,6 +1,6 @@
-# One image for all 14 MCP tool servers. Each Knative service runs it with
-# TOOLS=<one tool name>, so every tool is its own serverless function.
-#   docker build -f Dockerfile.mcp -t sankalps2003/pulse-mcp-tools:0.2 .
+# One image for all MCP tool servers (14 airline + 16 retail). Each Knative service runs it with
+# TOOLS=<one tool name> (and DOMAIN=retail for retail), so every tool is its own serverless function.
+#   docker build -f Dockerfile.mcp -t sankalps2003/pulse-mcp-tools:0.3 .   (0.2 = airline only)
 FROM python:3.11-slim
 
 RUN pip install --no-cache-dir "mcp>=2.3" "uvicorn>=0.30" "redis>=5"
@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir "mcp>=2.3" "uvicorn>=0.30" "redis>=5"
 RUN useradd -m app
 WORKDIR /home/app
 COPY tau_airline/ tau_airline/
+COPY tau_retail/ tau_retail/
 COPY mcp_server.py .
 USER app
 

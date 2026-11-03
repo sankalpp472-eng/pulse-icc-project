@@ -1,0 +1,3 @@
+Recovered on 2026-11-02 from the run pod's log: the pod finished (exit 0) but the laptop lost its connection
+(http2 GOAWAY) before copying the folder, so calls.csv / pods.csv / hints.jsonl / run_config.json are missing.
+summary.json = the summary the runner printed; controller.jsonl and predictor_health.json read from the cluster afterwards.

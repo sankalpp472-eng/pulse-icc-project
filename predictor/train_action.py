@@ -9,9 +9,12 @@ Action model, step 2: train and evaluate the next-action predictor.
     python predictor/train_action.py                  # from the repo root: train on the 40 training tasks,
                                                       # score on the 10 held-out tasks, save the model
     python predictor/train_action.py --cv 5           # also 5-fold cross-validation over all 50 tasks
+    python predictor/train_action.py --domain retail  # retail (16 tools + RESPOND): 92 training tasks,
+                                                      # the speculator's 23 held-out tasks
 
-Reads  predictor/data/action_rows.csv (build_action_data.py)
-Writes predictor/data/action_model.pkl, predictor/results/action_eval_<time>.json
+Reads  predictor/data/action_rows.csv (build_action_data.py; retail: retail_action_rows.csv)
+Writes predictor/data/action_model.pkl (retail: action_model_retail.pkl),
+       predictor/results/action_eval_<time>.json (retail: action_eval_retail_<time>.json)
 """
 
 import argparse
@@ -61,6 +64,18 @@ def fit_all(train, seed=252):
               "ngram": NGramModel().fit(train)}
     importance = dict(zip(enc.columns, (booster.feature_importance("gain")).round(1).tolist()))
     return ActionPredictor(enc, models, FanoutRule.fit(train), importance)
+
+
+def with_next_tool(df):
+    """Lookahead rows: the RESPOND steps only, with target = the tool the agent calls next, after the customer
+    replies (the next non-RESPOND action of the same conversation; END if it never calls one).
+    Rows of one conversation are in step order (build_action_data.py writes them that way)."""
+    out = []
+    for _, g in df.groupby("trace", sort=False):
+        t = g.target.tolist()
+        nxt = [next((x for x in t[i + 1:] if x != RESPOND), "END") for i in range(len(t))]
+        out.append(g.assign(target=nxt)[g.target.to_numpy() == RESPOND])
+    return pd.concat(out, ignore_index=True)
 
 
 # ----------------------------------------------------------------- evaluation
@@ -177,11 +192,27 @@ def main():
     ap.add_argument("--thetas", type=float, nargs="+", default=[0.2, 0.3, 0.5])
     ap.add_argument("--cv", type=int, default=0, help="also run K-fold cross-validation by task over all tasks")
     ap.add_argument("--seed", type=int, default=252)
+    ap.add_argument("--domain", choices=["airline", "retail"], default="airline")
+    ap.add_argument("--split", choices=["steps_csv", "speculator"], default="steps_csv",
+                    help="airline only: speculator = the LLM speculator's held-out tasks "
+                         "(build_action_data.py --split speculator), saved as *_airline_specsplit")
     a = ap.parse_args()
+    if a.domain == "retail":
+        tag, rows_file = "_retail", "retail_action_rows.csv"
+    elif a.split == "speculator":
+        tag, rows_file = "_airline_specsplit", "airline_specsplit_action_rows.csv"
+    else:                                                     # airline keeps the original file names
+        tag, rows_file = "", "action_rows.csv"
 
-    rows = pd.read_csv(DATA / "action_rows.csv")
+    rows = pd.read_csv(DATA / rows_file)
     train, test = rows[rows.split == "train"], rows[rows.split == "test"]
     pred = fit_all(train, a.seed)
+    # lookahead model (service.py LOOKAHEAD=1): on a reply step, which tool comes after the customer's reply.
+    # Saved inside the same pickle; old pickles simply have no .lookahead.
+    nxt_train, nxt_test = with_next_tool(train), with_next_tool(test)
+    pred.lookahead = fit_all(nxt_train, a.seed)
+    nxt_tools = nxt_test[nxt_test.target != "END"]          # reply steps that are followed by a tool call
+    look = score(pred.lookahead, "gbt", nxt_tools, a.thetas)[0]
     res = {m: score(pred, m, test, a.thetas)[0] for m in MODEL_ORDER}
     speeds = {m: speed(pred, m, test) for m in MODEL_ORDER}
     fan = score_fanout(pred, test)
@@ -197,7 +228,11 @@ def main():
                f"{fan['missing_replicas_per_tool_step']:.2f} too few per tool step",
                "", "GBT feature importance (gain, top 10): " + ", ".join(
                    f"{k}" for k, _ in sorted(pred.feature_importance.items(), key=lambda kv: -kv[1])[:10]),
-               "LR: what pushes towards RESPOND: " + ", ".join(f"{n} {w:+}" for n, w in pred.models['lr'].top_weights(pred.encoder, RESPOND, 5))]
+               "LR: what pushes towards RESPOND: " + ", ".join(f"{n} {w:+}" for n, w in pred.models['lr'].top_weights(pred.encoder, RESPOND, 5)),
+               "", f"Lookahead (gbt, trained on {len(nxt_train)} reply steps): on the {len(nxt_tools)} held-out reply steps "
+                   f"that are followed by a tool call, the next tool is top-1 {look['top1']:.3f} / top-3 {look['top3']:.3f}; "
+                   "prewarmed at " + ", ".join(f"θ={t}: {look[f'hit@{t}']:.2f} (wasted {look[f'wasted@{t}']:.2f}/step)"
+                                                for t in a.thetas)]
 
     cv_out = None
     if a.cv:
@@ -223,13 +258,15 @@ def main():
                     f"{st.mean(x['k1_mae'] for x in fans):.2f}"]
 
     print("\n".join(out_txt))
-    with open(DATA / "action_model.pkl", "wb") as f:
+    model_path = DATA / f"action_model{tag}.pkl"
+    with open(model_path, "wb") as f:
         pickle.dump(pred, f)
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"action_eval_{time.strftime('%Y%m%d-%H%M%S')}.json"
-    out.write_text(json.dumps({"heldout": res, "speed": speeds, "fanout": fan, "cv": cv_out,
+    out = RESULTS / f"action_eval{tag}_{time.strftime('%Y%m%d-%H%M%S')}.json"
+    out.write_text(json.dumps({"domain": a.domain, "test_tasks": sorted(test.task_id.unique()),
+                               "heldout": res, "lookahead": look, "speed": speeds, "fanout": fan, "cv": cv_out,
                                "thetas": a.thetas, "importance": pred.feature_importance}, indent=2))
-    print(f"\n-> {DATA / 'action_model.pkl'}\n-> {out}")
+    print(f"\n-> {model_path}\n-> {out}")
 
 
 if __name__ == "__main__":

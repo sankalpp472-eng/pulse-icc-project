@@ -1,0 +1,129 @@
+{
+  "episodes": 46,
+  "tool_calls": 293,
+  "transport_failures": 1,
+  "cold_calls": 87,
+  "cold_share": 0.298,
+  "latency_ms": {
+    "all": {
+      "p50": 49.4,
+      "p95": 1825.8,
+      "p99": 2029.4,
+      "mean": 515.2
+    },
+    "cold": {
+      "p50": 1509.4,
+      "p95": 1936.3,
+      "max": 2586.5
+    },
+    "warm": {
+      "p50": 38.4,
+      "p95": 108.5,
+      "max": 156.8
+    }
+  },
+  "cold_start_time_added_s": 136.6,
+  "signals_agree": 290,
+  "pods_started": 74,
+  "pod_seconds_seen": 9080.0,
+  "peak_pods_per_tool": {
+    "get_reservation_details": 5,
+    "search_direct_flight": 2,
+    "cancel_reservation": 2,
+    "transfer_to_human_agents": 1,
+    "think": 1,
+    "update_reservation_flights": 1,
+    "calculate": 1,
+    "get_user_details": 1,
+    "search_onestop_flight": 1
+  },
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 132,
+      "cold": 25,
+      "cold_share": 0.19
+    },
+    "get_user_details": {
+      "calls": 38,
+      "cold": 9,
+      "cold_share": 0.24
+    },
+    "update_reservation_flights": {
+      "calls": 31,
+      "cold": 8,
+      "cold_share": 0.26
+    },
+    "search_direct_flight": {
+      "calls": 29,
+      "cold": 13,
+      "cold_share": 0.45
+    },
+    "cancel_reservation": {
+      "calls": 26,
+      "cold": 7,
+      "cold_share": 0.27
+    },
+    "search_onestop_flight": {
+      "calls": 13,
+      "cold": 9,
+      "cold_share": 0.69
+    },
+    "transfer_to_human_agents": {
+      "calls": 13,
+      "cold": 8,
+      "cold_share": 0.62
+    },
+    "think": {
+      "calls": 7,
+      "cold": 5,
+      "cold_share": 0.71
+    },
+    "calculate": {
+      "calls": 3,
+      "cold": 3,
+      "cold_share": 1.0
+    }
+  },
+  "config": "C0",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": 46,
+    "traces": null,
+    "tasks": [
+      6,
+      20,
+      22,
+      26,
+      30
+    ],
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": false,
+    "predictor_url": null,
+    "fanout": true,
+    "workflow_id": "W1",
+    "hint_timing": "fair",
+    "hint_context": false,
+    "hint_timeout": 1.0,
+    "no_signals": false,
+    "label": "cloud",
+    "signals_matched": null
+  },
+  "fanout": {
+    "enabled": true,
+    "groups": 32,
+    "calls_in_groups": 118,
+    "max_width": 7,
+    "cold_calls_in_groups": 32
+  },
+  "hints": null
+}

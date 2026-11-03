@@ -29,3 +29,19 @@ managedNodeGroups:
     volumeSize: 50            # GB, gp3
     labels:
       pulse/role: worker
+
+  # Client tier in the cloud (EKS_deployment/cloud/run_cloud.sh): the run pods (replay / live agent) go here,
+  # so their threads and pod polling never compete with the tools' cold starts on the worker nodes.
+  # The taint keeps the tools, Knative and Pulse's own services off it; run pods tolerate it.
+  - name: client
+    instanceType: m7i-flex.large
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 1
+    volumeSize: 30
+    labels:
+      pulse/role: client
+    taints:
+      - key: pulse/role
+        value: client
+        effect: NoSchedule

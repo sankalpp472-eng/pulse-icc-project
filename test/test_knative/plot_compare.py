@@ -37,6 +37,7 @@ def load(run: Path) -> dict:
     real_cold = sum(r.get("cold_by_pod") == "True" for r in rows)
     slow_warm = sum(r.get("cold_by_pod") != "True" and float(r["latency_ms"]) > 1000 for r in rows)
     return {"run": run.name, "config": cfg.get("config", "?"), "seed": cfg.get("replay", {}).get("seed"),
+            "predictor": ((cfg.get("prewarm") or {}).get("predictor") or {}).get("model"),
             "window": ", ".join(cfg.get("knative", {}).get("tool_window", [])), "lat": lat,
             "calls": len(rows), "real_cold_starts": real_cold, "slow_warm_calls_over_1s": slow_warm,
             "pods_started": len(pods),
@@ -51,9 +52,11 @@ def main():
     runs = [load(r) for r in a.runs]
     a.out.mkdir(parents=True, exist_ok=True)
     color = {}
-    for r in runs:
-        color[r["run"]] = CONFIG_COLOR.get(r["config"]) or EXTRA[len(color) % len(EXTRA)]
-    label = lambda r: f"{r['config']}"
+    for r in runs:      # a second run of the same config (e.g. C3 with another predictor) gets its own colour
+        c = CONFIG_COLOR.get(r["config"])
+        color[r["run"]] = c if c and c not in color.values() else EXTRA[len(color) % len(EXTRA)]
+    short = lambda p: "LLM speculator" if p.startswith("llm-speculator") else p
+    label = lambda r: f"{r['config']} ({short(r['predictor'])})" if r["predictor"] else r["config"]
     seeds = {r["seed"] for r in runs}
     sub = (f"W1 replay · same request sequence (seed {', '.join(map(str, seeds))}) · idle window "
            f"{runs[0]['window']} · {runs[0]['calls']} tool calls each")

@@ -3,9 +3,16 @@ The customer side of the conversation.
 
 SimulatedUser -- an LLM plays the customer from the task instruction (tau-bench style).
 HumanUser     -- you type the customer's messages yourself (for debugging).
+
+A person needs seconds to read the agent's message and type an answer; the LLM answers in ~0.75 s.
+USER_DELAY_MEDIAN_S > 0 makes every simulated reply take at least a delay drawn from a lognormal
+(median USER_DELAY_MEDIAN_S, sigma USER_DELAY_SIGMA, clipped to 1-60 s, seeded by USER_DELAY_SEED),
+the same shape as a customer turn in test/test_knative/w1_replay.py. Default 0: no delay.
 """
 
+import math
 import os
+import random
 import re
 import time
 
@@ -15,6 +22,17 @@ from llm import chat
 from prompts import USER_SIM_PROMPT
 
 STOP = "###STOP###"
+
+DELAY_MEDIAN_S = float(os.getenv("USER_DELAY_MEDIAN_S", "0"))
+DELAY_SIGMA = float(os.getenv("USER_DELAY_SIGMA", "0.5"))
+_DELAY_RNG = random.Random(int(os.getenv("USER_DELAY_SEED", "252")))
+
+
+def reply_delay() -> float:
+    """How long a person takes to read and answer (0 when USER_DELAY_MEDIAN_S is not set)."""
+    if DELAY_MEDIAN_S <= 0:
+        return 0.0
+    return min(60.0, max(1.0, _DELAY_RNG.lognormvariate(math.log(DELAY_MEDIAN_S), DELAY_SIGMA)))
 
 
 def _failed_text(e: APIStatusError) -> str | None:
@@ -62,7 +80,14 @@ class SimulatedUser:
 
     def reply(self, agent_text: str) -> str:
         self.messages.append({"role": "user", "content": agent_text})
-        return self._next()
+        t0 = time.perf_counter()
+        text = self._next()
+        llm_s = self.last_latency_s
+        # a person's reading + typing time; the LLM call counts towards it (total = the longer of the two)
+        self.last_delay_s = 0.0 if text.strip() == STOP else reply_delay()
+        time.sleep(max(0.0, self.last_delay_s - (time.perf_counter() - t0)))
+        self.last_latency_s = max(llm_s, self.last_delay_s)
+        return text
 
 
 class HumanUser:

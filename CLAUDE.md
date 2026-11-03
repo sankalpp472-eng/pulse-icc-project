@@ -40,7 +40,7 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 | Controller | Python (`kubernetes` client); a Go/controller-runtime port is possible later |
 | Load generation | Trace replay (`test/test_knative/w1_replay.py`) and the live agent (`w1_live.py`) |
 | Metrics | Prometheus (`/metrics` on the predictor and the runners) |
-| Trace store | CSV / JSONL files per run (`test/test_knative/results/`) |
+| Trace store | CSV / JSONL files per run (`results/local_runs/` on kind, `results/cloud_runs/` on EKS; runs before 25 Oct 2026 in `test/test_knative/results/`) |
 
 ## Repository Layout
 
@@ -55,6 +55,7 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 | `test/test_cold_start/` | The OpenFaaS CE tests that led to the move to Knative |
 | `EKS_deployment/` | EKS cluster, Knative setup, `run_c0/c1/c3/all.sh` |
 | `workloads/` | Workload spreadsheet (prompts, graphs, real traces) |
+| `ui/` | Demo UI (`agent/.venv/Scripts/python ui/server.py` → http://127.0.0.1:8765): live / replay episodes on a simulated or real cluster, predictor choice, experiment runs, results |
 | `docs/` | PRD and the Knative decision document |
 
 Result folders are named `<date>_<time>_<config>_W1-<replay|live>_<details>[_label]`, e.g. `2026-10-22_1336_C3_W1-replay_task9-x3`.

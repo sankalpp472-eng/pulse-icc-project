@@ -1,0 +1,17 @@
+{
+ "model": "openai/gpt-oss-20b",
+ "sample": "C:\\Users\\Sankalp\\OneDrive\\Documents\\iisc_ICC\\Pulse-project1\\baselines\\llm_speculator\\data\\airline_sample_300_seed252.json",
+ "domain": "airline",
+ "last_n": 10,
+ "max_tokens": 1024,
+ "json_mode": true,
+ "steps": 20,
+ "sessions": [
+  {
+   "finished": "2026-10-25 17:05:03",
+   "steps_ok": 20,
+   "wall_s": 11.9,
+   "key_log": []
+  }
+ ]
+}

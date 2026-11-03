@@ -1,0 +1,148 @@
+{
+ "domain": "airline",
+ "steps": 20,
+ "lead_s": 1.0,
+ "cold_s": 1.8,
+ "keys": [
+  "airline/gpt-4o/task13/trial0#13",
+  "airline/gpt-4o/task13/trial0#17",
+  "airline/gpt-4o/task13/trial0#18",
+  "airline/gpt-4o/task13/trial0#24",
+  "airline/gpt-4o/task13/trial0#3",
+  "airline/gpt-4o/task13/trial0#6",
+  "airline/gpt-4o/task13/trial0#9",
+  "airline/gpt-4o/task13/trial1#10",
+  "airline/gpt-4o/task13/trial1#7",
+  "airline/gpt-4o/task13/trial2#6",
+  "airline/gpt-4o/task13/trial3#13",
+  "airline/gpt-4o/task13/trial3#6",
+  "airline/gpt-4o/task14/trial0#4",
+  "airline/gpt-4o/task14/trial1#13",
+  "airline/gpt-4o/task14/trial1#3",
+  "airline/gpt-4o/task14/trial1#6",
+  "airline/gpt-4o/task14/trial1#9",
+  "airline/gpt-4o/task14/trial2#1",
+  "airline/gpt-4o/task14/trial2#2",
+  "airline/gpt-4o/task14/trial2#3"
+ ],
+ "ngram_full_test": {
+  "steps": 1578,
+  "tool_steps": 863,
+  "all_top1": 0.47275031685678076,
+  "all_top3": 0.7858048162230672,
+  "tool_top1": 0.4206257242178447,
+  "tool_top3": 0.7242178447276941,
+  "log_loss": 1.7141145924419492
+ },
+ "methods": [
+  {
+   "method": "ngram",
+   "steps": 20,
+   "tool_steps": 11,
+   "all_top1": 0.35,
+   "all_top3": 0.65,
+   "tool_top1": 0.18181818181818182,
+   "tool_top3": 0.45454545454545453,
+   "log_loss": 2.4230315149443773,
+   "latency_p50_s": 1.6300007700920105e-05,
+   "latency_p95_s": 3.5200006095692515e-05,
+   "in_time_share": 1.0,
+   "timely_tool_top1": 0.18181818181818182,
+   "timely_tool_top3": 0.45454545454545453,
+   "cold_hidden_top3": 0.2525163636348243,
+   "theta_sweep": [
+    {
+     "theta": 0.1,
+     "hit_rate": 0.2727272727272727,
+     "hit_with_width": 0.2727272727272727,
+     "pods_per_step": 1.55,
+     "wasted_per_step": 1.4
+    },
+    {
+     "theta": 0.2,
+     "hit_rate": 0.09090909090909091,
+     "hit_with_width": 0.09090909090909091,
+     "pods_per_step": 0.85,
+     "wasted_per_step": 0.8
+    },
+    {
+     "theta": 0.3,
+     "hit_rate": 0.09090909090909091,
+     "hit_with_width": 0.09090909090909091,
+     "pods_per_step": 0.3,
+     "wasted_per_step": 0.25
+    },
+    {
+     "theta": 0.4,
+     "hit_rate": 0.09090909090909091,
+     "hit_with_width": 0.09090909090909091,
+     "pods_per_step": 0.1,
+     "wasted_per_step": 0.05
+    },
+    {
+     "theta": 0.5,
+     "hit_rate": 0.0,
+     "hit_with_width": 0.0,
+     "pods_per_step": 0.0,
+     "wasted_per_step": 0.0
+    }
+   ]
+  },
+  {
+   "method": "llm:openai/gpt-oss-20b",
+   "steps": 20,
+   "tool_steps": 11,
+   "all_top1": 0.45,
+   "all_top3": 0.75,
+   "tool_top1": 0.45454545454545453,
+   "tool_top3": 0.5454545454545454,
+   "log_loss": 3.558368765026011,
+   "latency_p50_s": 0.6077437000058126,
+   "latency_p95_s": 0.7212511999969138,
+   "in_time_share": 1.0,
+   "timely_tool_top1": 0.45454545454545453,
+   "timely_tool_top3": 0.5454545454545454,
+   "cold_hidden_top3": 0.14144308585864657,
+   "theta_sweep": [
+    {
+     "theta": 0.1,
+     "hit_rate": 0.5454545454545454,
+     "hit_with_width": 0.5454545454545454,
+     "pods_per_step": 1.7,
+     "wasted_per_step": 1.4
+    },
+    {
+     "theta": 0.2,
+     "hit_rate": 0.2727272727272727,
+     "hit_with_width": 0.2727272727272727,
+     "pods_per_step": 0.65,
+     "wasted_per_step": 0.5
+    },
+    {
+     "theta": 0.3,
+     "hit_rate": 0.2727272727272727,
+     "hit_with_width": 0.2727272727272727,
+     "pods_per_step": 0.45,
+     "wasted_per_step": 0.3
+    },
+    {
+     "theta": 0.4,
+     "hit_rate": 0.2727272727272727,
+     "hit_with_width": 0.2727272727272727,
+     "pods_per_step": 0.45,
+     "wasted_per_step": 0.3
+    },
+    {
+     "theta": 0.5,
+     "hit_rate": 0.2727272727272727,
+     "hit_with_width": 0.2727272727272727,
+     "pods_per_step": 0.45,
+     "wasted_per_step": 0.3
+    }
+   ],
+   "run": "smoke_gpt-oss-20b",
+   "parse_fail": 0.0,
+   "prompt_tokens_mean": 1008.5
+  }
+ ]
+}

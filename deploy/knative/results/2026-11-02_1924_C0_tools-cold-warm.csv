@@ -1,0 +1,15 @@
+tool,cold_ms,warm_ms,ok,result
+book_reservation,2249.8,208.1,True,Error: TypeError: BookReservation.invoke() missing 10 required positional argume
+calculate,1876.1,287.9,True,4.0
+cancel_reservation,1952.8,406.1,True,"{""reservation_id"": ""Z7GOZK"", ""user_id"": ""olivia_gonzalez_2305"", ""origin"": ""EWR"","
+get_reservation_details,1531.5,407.4,True,"{""reservation_id"": ""Z7GOZK"", ""user_id"": ""olivia_gonzalez_2305"", ""origin"": ""EWR"","
+get_user_details,1979.0,369.9,True,"{""name"": {""first_name"": ""Mia"", ""last_name"": ""Li""}, ""address"": {""address1"": ""975 "
+list_all_airports,1560.8,404.4,True,"{""SFO"": ""San Francisco"", ""JFK"": ""New York"", ""LAX"": ""Los Angeles"", ""ORD"": ""Chicag"
+search_direct_flight,1749.5,325.1,True,"[{""flight_number"": ""HAT083"", ""origin"": ""JFK"", ""destination"": ""SEA"", ""scheduled_d"
+search_onestop_flight,1799.4,287.3,True,"[[{""flight_number"": ""HAT057"", ""origin"": ""JFK"", ""destination"": ""ATL"", ""scheduled_"
+send_certificate,2090.8,367.4,True,Certificate certificate_3221322 added to user mia_li_3668 with amount 50.
+think,2165.9,321.3,True,
+transfer_to_human_agents,1582.8,200.9,True,Transfer successful
+update_reservation_baggages,1682.3,336.7,True,Error: payment method not found
+update_reservation_flights,1932.6,342.3,True,Error: payment method not found
+update_reservation_passengers,1676.5,352.8,True,Error: number of passengers does not match

@@ -7,6 +7,8 @@ so the agent loop does not change:
                       locally or as a serverless function on Knative
 
 Pick with TOOL_BACKEND=local|mcp (run_tasks.py --tools does this for you).
+DOMAIN=airline|retail picks the tau-bench domain (default airline). For the retail tools on Knative
+use MCP_HOST_TEMPLATE=retail-{svc}.default.example.com (deploy/knative/gen_services.py --domain retail).
 """
 
 import asyncio
@@ -15,10 +17,21 @@ import json
 import os
 import time
 
-from tau_airline import ALL_TOOLS, load_data
+DOMAIN = os.getenv("DOMAIN", "airline")
+if DOMAIN == "retail":
+    from tau_retail import ALL_TOOLS, load_data
+else:
+    from tau_airline import ALL_TOOLS, load_data
 
 # Tools that end the conversation when called (same as tau-bench)
 TERMINATE_TOOLS = {"transfer_to_human_agents"}
+# Tools that only read the database: several calls of these can run at once
+READ_ONLY_TOOLS = {
+    "airline": {"get_user_details", "get_reservation_details", "search_direct_flight", "search_onestop_flight",
+                "list_all_airports", "calculate"},
+    "retail": {"find_user_id_by_email", "find_user_id_by_name_zip", "get_user_details", "get_order_details",
+               "get_product_details", "list_all_product_types", "calculate"},
+}[DOMAIN if DOMAIN == "retail" else "airline"]
 
 # Every MCP call, appended by MCPToolBackend: experiment runners read this to time calls
 # (absolute start time, latency) even when an episode stops midway. Clear it between episodes.
@@ -82,18 +95,24 @@ class MCPToolBackend:
 
     def call(self, name: str, args: dict) -> tuple[str, float]:
         """Run a tool on its MCP server. Returns (observation, latency_seconds)."""
-        if name not in self._names:
-            return f"Error: unknown tool {name}", 0.0
+        out, latency, _ = asyncio.run(self.acall(name, args))
+        return out, latency
+
+    async def acall(self, name: str, args: dict) -> tuple[str, float, float]:
+        """Async version of call, so several calls can run at once (asyncio.gather).
+        Returns (observation, latency_seconds, wall-clock start)."""
         t_wall, t0 = time.time(), time.perf_counter()
+        if name not in self._names:
+            return f"Error: unknown tool {name}", 0.0, t_wall
         transport_ok = True
         try:
-            out = asyncio.run(self._call(name, args))
+            out = await self._call(name, args)
         except Exception as e:  # server down, timeout ... -> the agent sees an error, run continues
             out, transport_ok = f"Error: MCP call to {name} failed: {type(e).__name__}: {e}", False
         latency = time.perf_counter() - t0
         CALL_LOG.append({"tool": name, "t_start": t_wall, "latency_s": latency, "transport_ok": transport_ok,
                          "tool_error": out.startswith("Error"), "result_head": out[:80]})
-        return out, latency
+        return out, latency, t_wall
 
     async def _call(self, name: str, args: dict) -> str:
         names = {"tool": name, "svc": name.replace("_", "-")}

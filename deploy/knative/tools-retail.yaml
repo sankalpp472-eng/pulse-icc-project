@@ -1,0 +1,703 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-calculate
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: calculate
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: calculate
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: calculate
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-cancel-pending-order
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: cancel_pending_order
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: cancel_pending_order
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: cancel_pending_order
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-exchange-delivered-order-items
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: exchange_delivered_order_items
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: exchange_delivered_order_items
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: exchange_delivered_order_items
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-find-user-id-by-email
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: find_user_id_by_email
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: find_user_id_by_email
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: find_user_id_by_email
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-find-user-id-by-name-zip
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: find_user_id_by_name_zip
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: find_user_id_by_name_zip
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: find_user_id_by_name_zip
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-get-order-details
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: get_order_details
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: get_order_details
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: get_order_details
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-get-product-details
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: get_product_details
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: get_product_details
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: get_product_details
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-get-user-details
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: get_user_details
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: get_user_details
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: get_user_details
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-list-all-product-types
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: list_all_product_types
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: list_all_product_types
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: list_all_product_types
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-modify-pending-order-address
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: modify_pending_order_address
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: modify_pending_order_address
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: modify_pending_order_address
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-modify-pending-order-items
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: modify_pending_order_items
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: modify_pending_order_items
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: modify_pending_order_items
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-modify-pending-order-payment
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: modify_pending_order_payment
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: modify_pending_order_payment
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: modify_pending_order_payment
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-modify-user-address
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: modify_user_address
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: modify_user_address
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: modify_user_address
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-return-delivered-order-items
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: return_delivered_order_items
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: return_delivered_order_items
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: return_delivered_order_items
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-think
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: think
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: think
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: think
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: retail-transfer-to-human-agents
+  namespace: default
+  labels:
+    pulse/role: mcp-tool-retail
+    pulse/tool: transfer_to_human_agents
+spec:
+  template:
+    metadata:
+      labels:            # on the template so every POD carries them (service labels are not copied to pods)
+        pulse/role: mcp-tool-retail
+        pulse/tool: transfer_to_human_agents
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/window: "60s"
+        autoscaling.knative.dev/max-scale: "10"
+        autoscaling.knative.dev/target-utilization-percentage: "100"
+    spec:
+      containerConcurrency: 1   # requests one pod serves at once (0 = no limit)
+      containers:
+        - image: docker.io/sankalps2003/pulse-mcp-tools:0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TOOLS
+              value: transfer_to_human_agents
+            - name: DOMAIN
+              value: retail
+            - name: REDIS_URL
+              value: redis://redis.default.svc.cluster.local:6379/1
+          # /healthz answers only once the MCP server is up (data loaded, routes mounted).
+          # No periodSeconds -> Knative probes aggressively while the pod starts.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi

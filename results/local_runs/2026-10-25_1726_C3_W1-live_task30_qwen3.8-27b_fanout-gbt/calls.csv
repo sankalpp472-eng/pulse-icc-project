@@ -1,0 +1,9 @@
+episode,task_id,task_set,call_idx,tool,t_start,latency_ms,cold,cold_by_pod,cold_by_latency,pod,idle_gap_s,think_s,rate_wait_s,transport_ok,tool_error
+w1-task30-1792929365,30,safe,0,get_user_details,1792929421.902,446.0,False,False,False,,,0.947,31.0,True,False
+w1-task30-1792929365,30,safe,1,get_reservation_details,1792929461.708,230.3,False,False,False,,,1.241,38.0,True,False
+w1-task30-1792929365,30,safe,2,get_reservation_details,1792929461.708,236.2,False,False,False,,-0.2,0.0,0.0,True,False
+w1-task30-1792929365,30,safe,3,get_reservation_details,1792929461.7,246.2,False,False,False,,-0.2,0.0,0.0,True,False
+w1-task30-1792929365,30,safe,4,get_reservation_details,1792929461.711,241.8,False,False,False,,-0.2,0.0,0.0,True,False
+w1-task30-1792929365,30,safe,5,get_reservation_details,1792929461.709,254.4,False,False,False,,-0.2,0.0,0.0,True,False
+w1-task30-1792929365,30,safe,6,get_reservation_details,1792929461.711,257.8,False,False,False,,-0.3,0.0,0.0,True,False
+w1-task30-1792929365,30,safe,7,get_reservation_details,1792929461.71,262.0,False,False,False,,-0.3,0.0,0.0,True,False

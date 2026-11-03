@@ -12,8 +12,10 @@
 #   * Nothing is evicted by the controller: Knative scales the pod back to zero once it has seen
 #     no request for the service's idle window (autoscaling.knative.dev/window, 60s by default here).
 #     So the effective TTL = that window, counted from the LAST request (ping or real call).
-#   * spec.ttlSeconds and spec.desiredReplicas are kept for compatibility but NOT used to warm or
-#     evict; status.effectiveTtlSeconds shows the window actually in force.
+#   * spec.ttlSeconds is kept for compatibility but NOT used to warm or evict;
+#     status.effectiveTtlSeconds shows the window actually in force.
+#   * spec.desiredReplicas = fan-out width k: a tool with fewer than k pods gets k pings at once
+#     (containerConcurrency 1 -> Knative starts k pods).
 #
 # One object per tool, named after its Knative service (search-direct-flight).
 # A new prediction for the same tool UPDATES the object (new requestedAt -> new ping -> TTL restarts).
@@ -60,7 +62,7 @@ spec:
                 probability:     {type: number, minimum: 0, maximum: 1, description: "predicted P(next tool)"}
                 threshold:       {type: number, minimum: 0, maximum: 1, description: "theta used for this decision"}
                 ttlSeconds:      {type: integer, minimum: 1, description: "predictor's intended TTL. Option A: informational only; the real TTL is the Knative idle window (status.effectiveTtlSeconds)"}
-                desiredReplicas: {type: integer, minimum: 0, maximum: 5, description: "fan-out width k from the next-action predictor (pending-ID rule); Option A controller does not act on it yet (one ping = one pod)"}
+                desiredReplicas: {type: integer, minimum: 0, maximum: 5, description: "fan-out width k from the next-action predictor (pending-ID rule); the controller sends k pings at once to a tool with fewer than k pods"}
                 requestedAt:     {type: string, format: date-time, description: "time of the latest prediction (RFC 3339); a newer value triggers a new warm-up ping"}
                 episodeId:       {type: string}
                 workflowId:      {type: string}

@@ -1,0 +1,116 @@
+{
+  "episodes": 4,
+  "tool_calls": 63,
+  "transport_failures": 0,
+  "cold_calls": 26,
+  "cold_share": 0.413,
+  "latency_ms": {
+    "all": {
+      "p50": 77.1,
+      "p95": 7717.3,
+      "p99": 7733.5,
+      "mean": 1803.8
+    },
+    "cold": {
+      "p50": 3623.1,
+      "p95": 7733.5,
+      "max": 7754.3
+    },
+    "warm": {
+      "p50": 31.3,
+      "p95": 91.0,
+      "max": 129.3
+    }
+  },
+  "cold_start_time_added_s": 111.1,
+  "signals_agree": 63,
+  "pods_started": 40,
+  "pod_seconds_seen": 3607.0,
+  "peak_pods_per_tool": {
+    "get_reservation_details": 5,
+    "search_direct_flight": 2,
+    "update_reservation_passengers": 1,
+    "book_reservation": 1,
+    "think": 1,
+    "calculate": 1,
+    "cancel_reservation": 1,
+    "list_all_airports": 1,
+    "transfer_to_human_agents": 1,
+    "get_user_details": 1,
+    "send_certificate": 1,
+    "update_reservation_flights": 1,
+    "search_onestop_flight": 1,
+    "update_reservation_baggages": 1
+  },
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 22,
+      "cold": 8,
+      "cold_share": 0.36
+    },
+    "update_reservation_flights": {
+      "calls": 14,
+      "cold": 4,
+      "cold_share": 0.29
+    },
+    "search_direct_flight": {
+      "calls": 12,
+      "cold": 4,
+      "cold_share": 0.33
+    },
+    "search_onestop_flight": {
+      "calls": 6,
+      "cold": 2,
+      "cold_share": 0.33
+    },
+    "get_user_details": {
+      "calls": 4,
+      "cold": 4,
+      "cold_share": 1.0
+    },
+    "think": {
+      "calls": 3,
+      "cold": 2,
+      "cold_share": 0.67
+    },
+    "cancel_reservation": {
+      "calls": 2,
+      "cold": 2,
+      "cold_share": 1.0
+    }
+  },
+  "config": "C0",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": 4,
+    "traces": null,
+    "tasks": [
+      2,
+      33
+    ],
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": true,
+    "predictor_url": null,
+    "fanout": true,
+    "workflow_id": "W1",
+    "label": "kind-fanout-check"
+  },
+  "fanout": {
+    "enabled": true,
+    "groups": 2,
+    "calls_in_groups": 7,
+    "max_width": 5,
+    "cold_calls_in_groups": 7
+  },
+  "hints": null
+}

@@ -198,5 +198,16 @@ def prewarm_set(ranked, theta):
     return [t for t, p in ranked if p >= theta and t not in NO_PREWARM]
 
 
+def prewarm_select(ranked, policy="theta", theta=0.3, top_k=2, p_min=0.0):
+    """Which tools to prewarm, from [(action, p), ...] highest first. END / RESPOND never.
+      theta  every tool with p >= theta (= prewarm_set)
+      topk   the top_k tools, each with p >= p_min (the floor keeps quiet on steps that are almost surely RESPOND)"""
+    if policy == "theta":
+        return prewarm_set(ranked, theta)
+    if policy == "topk":
+        return [t for t, p in [(t, p) for t, p in ranked if t not in NO_PREWARM][:top_k] if p >= p_min]
+    raise ValueError(f"unknown PREWARM_POLICY {policy!r}; use theta or topk")
+
+
 def log_loss(p_true):
     return -math.log(max(p_true, 1e-12))

@@ -1,0 +1,4 @@
+{"time": "2026-10-25T11:56:36.696Z", "event": "warmed", "tool": "get_user_details", "service": "get-user-details", "was_cold": true, "ping_ms": 6129, "http": 200, "probability": 0.6548, "episode": "task30-1792929366", "requested_at": "2026-10-25T11:56:29.697Z", "effective_ttl_s": 60}
+{"time": "2026-10-25T11:57:06.474Z", "event": "warmed", "tool": "get_reservation_details", "service": "get-reservation-details", "was_cold": true, "ping_ms": 3924, "http": 200, "probability": 0.7805, "episode": "task30-1792929366", "requested_at": "2026-10-25T11:57:02.453Z", "effective_ttl_s": 60}
+{"time": "2026-10-25T11:58:06.014Z", "event": "evicted", "tool": "get_user_details", "service": "get-user-details", "warm_for_s": 89.3, "effective_ttl_s": 60}
+{"time": "2026-10-25T11:58:46.329Z", "event": "evicted", "tool": "get_reservation_details", "service": "get-reservation-details", "warm_for_s": 99.8, "effective_ttl_s": 60}

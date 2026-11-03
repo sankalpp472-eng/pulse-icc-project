@@ -4,7 +4,11 @@ from tau_airline import WIKI
 AGENT_SYSTEM_PROMPT = WIKI + """
 
 # How you work
-- Work step by step: reason about what you know, call ONE tool, read its result, then decide the next step.
+- Work step by step: reason about what you know, call tools, read their results, then decide the next step.
+- When you need several lookups that do not depend on each other (e.g. the details of every reservation
+  in the user's profile, or flights on several dates or routes), request them ALL in the same reply as
+  parallel tool calls, not one per reply. Only batch calls whose arguments you already know.
+- Make changes (book, cancel, update, send) one at a time, each after the user confirms.
 - Never invent ids, flight numbers or prices -- look them up with tools.
 - When you need something from the user (or their confirmation), reply in plain text without a tool call.
 """

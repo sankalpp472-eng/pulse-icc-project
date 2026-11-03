@@ -1,0 +1,1 @@
+{"status":"ok","model":"llm-speculator:openai/gpt-oss-20b","theta":0.3,"ttl_s":60,"keys":4,"dead_keys":0,"stats":{"hints":207,"answered":207,"no_key_free":0,"errors":0,"unparsed":0},"crd":{"mode":"k8s","written":165,"created":7,"updated":158,"failed":0,"last_error":null}}

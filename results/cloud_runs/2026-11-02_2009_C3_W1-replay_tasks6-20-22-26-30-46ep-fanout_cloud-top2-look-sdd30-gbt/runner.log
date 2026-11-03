@@ -1,0 +1,117 @@
+hint signals: 60 of 60 traces matched to their tau-bench conversation
+W1 replay | 46 episodes, 293 tool calls, starts spread over 19.7 min (rate 2.0/min, seed 252)
+fan-out | 32 concurrent groups, 118 of 293 calls in them, widest 7
+-> /home/app/results/2026-11-02_2009_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_cloud-top2-look-sdd30-gbt
+config: C3 | window ['60s'] | images ['docker.io/sankalps2003/pulse-mcp-tools:0.2'] | db: redis (shared, reset once at start)
+  waiting for all tools to scale to zero (8 pods left)...  waiting for all tools to scale to zero (8 pods left)...  waiting for all tools to scale to zero (8 pods left)...  waiting for all tools to scale to zero (7 pods left)...  waiting for all tools to scale to zero (7 pods left)...  waiting for all tools to scale to zero (7 pods left)...  waiting for all tools to scale to zero (6 pods left)...  waiting for all tools to scale to zero (5 pods left)...  waiting for all tools to scale to zero (5 pods left)...  waiting for all tools to scale to zero (5 pods left)...  waiting for all tools to scale to zero (5 pods left)...  waiting for all tools to scale to zero (5 pods left)...  waiting for all tools to scale to zero (5 pods left)...  waiting for all tools to scale to zero (2 pods left)...  waiting for all tools to scale to zero (1 pods left)...  waiting for all tools to scale to zero (1 pods left)...                                                                      all 14 tools at zero, database reset; starting
+
+  ep001 done: task 26 (claude-3.5-sonnet), 7 calls, 30s
+  ep002 done: task 20 (claude-3.5-sonnet), 7 calls, 59s
+  ep003 done: task 22 (gpt-4o), 5 calls, 67s
+  ep004 done: task  6 (gpt-4o), 6 calls, 61s
+  ep005 done: task 30 (claude-3.5-sonnet), 11 calls, 58s
+  ep006 done: task 26 (claude-3.5-sonnet), 7 calls, 41s
+  ep007 done: task  6 (claude-3.5-sonnet), 6 calls, 36s
+  ep008 done: task 20 (claude-3.5-sonnet), 6 calls, 65s
+  ep009 done: task 22 (claude-3.5-sonnet), 3 calls, 14s
+  ep010 done: task 30 (gpt-4o), 9 calls, 34s
+  ep011 done: task 20 (gpt-4o), 7 calls, 100s
+  ep012 done: task 30 (claude-3.5-sonnet), 11 calls, 37s
+  ep013 done: task 26 (claude-3.5-sonnet), 6 calls, 54s
+  ep014 done: task 22 (claude-3.5-sonnet), 3 calls, 16s
+  ep015 done: task  6 (claude-3.5-sonnet), 6 calls, 33s
+  ep016 done: task 26 (gpt-4o), 10 calls, 87s
+  ep019 done: task 22 (claude-3.5-sonnet), 3 calls, 13s
+  ep018 done: task  6 (gpt-4o), 4 calls, 28s
+  ep017 done: task 20 (claude-3.5-sonnet), 5 calls, 74s
+  ep020 done: task 30 (claude-3.5-sonnet), 10 calls, 39s
+  ep021 done: task 26 (claude-3.5-sonnet), 5 calls, 15s
+  ep022 done: task 20 (claude-3.5-sonnet), 3 calls, 31s
+  ep023 done: task  6 (claude-3.5-sonnet), 8 calls, 52s
+  ep024 done: task 30 (gpt-4o), 10 calls, 58s
+  ep029 done: task 26 (claude-3.5-sonnet), 5 calls, 19s
+  ep030 done: task 22 (gpt-4o), 1 calls, 21s
+  ep025 done: task 22 (claude-3.5-sonnet), 7 calls, 59s
+  ep027 done: task  6 (gpt-4o), 6 calls, 48s
+  ep026 done: task 20 (gpt-4o), 3 calls, 70s
+  ep028 done: task 30 (claude-3.5-sonnet), 11 calls, 66s
+  ep032 done: task  6 (claude-3.5-sonnet), 6 calls, 31s
+  ep031 done: task 22 (claude-3.5-sonnet), 9 calls, 60s
+  ep033 done: task 30 (claude-3.5-sonnet), 11 calls, 52s
+  ep036 done: task 26 (claude-3.5-sonnet), 5 calls, 23s
+  ep037 done: task  6 (claude-3.5-sonnet), 6 calls, 21s
+  ep034 done: task 26 (claude-3.5-sonnet), 6 calls, 42s
+  ep035 done: task 20 (claude-3.5-sonnet), 3 calls, 43s
+  ep038 done: task 22 (claude-3.5-sonnet), 3 calls, 13s
+  ep040 done: task 30 (gpt-4o), 9 calls, 33s
+  ep039 done: task 20 (claude-3.5-sonnet), 5 calls, 80s
+  ep043 done: task 22 (claude-3.5-sonnet), 3 calls, 27s
+  ep044 done: task 30 (claude-3.5-sonnet), 11 calls, 31s
+  ep041 done: task 20 (claude-3.5-sonnet), 5 calls, 63s
+  ep045 done: task  6 (claude-3.5-sonnet), 6 calls, 47s
+  ep042 done: task 26 (gpt-4o), 8 calls, 71s
+  ep046 done: task  6 (claude-3.5-sonnet), 6 calls, 25s
+
+{
+  "episodes": 46,
+  "tool_calls": 293,
+  "transport_failures": 0,
+  "cold_calls": 15,
+  "cold_share": 0.051,
+  "latency_ms": {
+    "all": {
+      "p50": 35.2,
+      "p95": 451.1,
+      "p99": 1676.0,
+      "mean": 117.0
+    },
+    "cold": {
+      "p50": 1486.8,
+      "p95": 1951.3,
+      "max": 2208.7
+    },
+    "warm": {
+      "p50": 34.4,
+      "p95": 92.0,
+      "max": 581.0
+    }
+  },
+  "cold_start_time_added_s": 20.6,
+  "signals_agree": 289,
+  "pods_started": 35,
+  "pod_seconds_seen": 9305.0,
+  "peak_pods_per_tool": {
+    "transfer_to_human_agents": 2,
+    "search_onestop_flight": 2,
+    "think": 1,
+    "update_reservation_flights": 1,
+    "search_direct_flight": 1,
+    "calculate": 1,
+    "get_reservation_details": 1,
+    "get_user_details": 1,
+    "cancel_reservation": 1,
+    "update_reservation_baggages": 1
+  },
+  "config": "C3",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "fanout": {
+    "enabled": true,
+    "groups": 32,
+    "calls_in_groups": 118,
+    "max_width": 7,
+    "cold_calls_in_groups": 0
+  },
+  "hints": {
+    "sent": 396,
+    "answered": 396
+  }
+}
+
+per tool (calls / cold share): get_reservation_details 132/0.0, get_user_details 39/0.0, update_reservation_flights 31/0.13, search_direct_flight 29/0.0, cancel_reservation 26/0.0, search_onestop_flight 13/0.31, transfer_to_human_agents 13/0.23, think 7/0.43, calculate 3/0.33
+saved to /home/app/results/2026-11-02_2009_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_cloud-top2-look-sdd30-gbt
+PULSE_RUN_DONE exit=0
+http2: server sent GOAWAY and closed the connection; LastStreamID=3, ErrCode=NO_ERROR, debug=""
+error: http2: server sent GOAWAY and closed the connection; LastStreamID=3, ErrCode=NO_ERROR, debug=""

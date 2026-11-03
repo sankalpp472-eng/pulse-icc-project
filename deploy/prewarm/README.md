@@ -26,9 +26,10 @@ Files: `prewarmrequest-crd.yaml` (the CRD), `predictor/crd_writer.py` (writes `.
 
 `spec.ttlSeconds` is still written by the predictor but **not used**. `spec.desiredReplicas` now carries
 the predictor's **fan-out width k** (next-action models: k = number of pending reservation IDs for
-`get_reservation_details`, else 1; see `predictor/action_model.py`). **The Option A controller does not act on it
-yet**: one ping yields one pod. To honour k it would send k concurrent pings to a tool whose
-`containerConcurrency` is 1, or patch min-scale; measure first whether overlapping calls make extra pods pay off.
+`get_reservation_details`, else 1; see `predictor/action_model.py`). The controller honours it: if the tool
+has fewer than k pods it sends **k pings at once**; the tools run with `containerConcurrency: 1`, so Knative
+starts k pods for the coming burst of k parallel calls. A tool that already has k pods gets one ping.
+The controller log records `desired_replicas`, `pings`, `pods_before` and `pods_after`.
 `status.effectiveTtlSeconds` shows the window actually in force. To change the TTL (experiment E7),
 redeploy the tools with a different window: `WINDOW=30s SKIP_BUILD=1 bash deploy/knative/deploy.sh`
 (and run C0 at the same window, so C3 is compared like for like).

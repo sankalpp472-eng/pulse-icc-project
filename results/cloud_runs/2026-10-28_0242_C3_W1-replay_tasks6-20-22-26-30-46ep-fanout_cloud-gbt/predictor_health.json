@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "model": "gbt",
+  "workflows": [
+    "W1",
+    "W2",
+    "airline"
+  ],
+  "action_models": [
+    "gbt",
+    "lr",
+    "ngram"
+  ],
+  "theta": 0.3,
+  "ttl_s": 60,
+  "crd": {
+    "mode": "k8s",
+    "written": 181,
+    "created": 9,
+    "updated": 172,
+    "failed": 0,
+    "last_error": null
+  }
+}
