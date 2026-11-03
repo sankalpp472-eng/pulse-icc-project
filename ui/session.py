@@ -152,7 +152,7 @@ class Session(threading.Thread):
                 "current_tool": trajectory[-1] if trajectory else "START", "ts": time.time()}
         if signals is not None:
             hint["signals"] = signals
-        if history is not None and self.cfg.get("predictor") == "speculator":
+        if history is not None and self.cfg.get("predictor") in ("speculator", "pulse_v3"):
             hint["history"] = history
         self.hints["sent"] += 1
         self.emit("hint", step=step, kind=kind)

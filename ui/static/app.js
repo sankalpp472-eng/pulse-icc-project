@@ -9,6 +9,7 @@ const PREDICTORS = {
   ngram_action: "n-gram baseline",
   ensemble: "Trajectory ensemble (older)",
   speculator: "LLM speculator (Groq)",
+  pulse_v3: "pulse-v3 (text + tool graph)",
 };
 const HELDOUT = [6, 20, 22, 26, 30];
 const CONFIG_COLOR = { C0: "#eb6834", C1: "#2a78d6", C3: "#1baf7a" };

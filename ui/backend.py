@@ -304,7 +304,8 @@ class Services:
 
     MODELS = {"gbt": "LightGBM next-action (main)", "lr_action": "Logistic regression (next action)",
               "ngram_action": "n-gram baseline", "ensemble": "Trajectory-only ensemble (older)",
-              "speculator": "LLM speculator (Groq gpt-oss-20b)"}
+              "speculator": "LLM speculator (Groq gpt-oss-20b)",
+              "pulse_v3": "pulse-v3 text + tool graph (pulse_pred/)"}
 
     def __init__(self, cluster: Cluster):
         self.cluster = cluster
@@ -324,6 +325,8 @@ class Services:
             env["KUBE_CONTEXT"] = self.cluster.context or ""
         if model == "speculator":
             app_dir = "baselines/llm_speculator"
+        elif model == "pulse_v3":
+            app_dir = "pulse_pred"
         else:
             app_dir, env["PREDICTOR_MODEL"] = "predictor", model
         cmd = [PY, "-m", "uvicorn", "service:app", "--app-dir", app_dir, "--host", "127.0.0.1",
@@ -541,7 +544,7 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
             services.start_controller()
         steps.append(("__predictor__", [], {}))
         args += ["--predictor-url", PREDICTOR_URL]
-        if pred == "speculator" and mode == "replay":
+        if pred in ("speculator", "pulse_v3") and mode == "replay":
             args += ["--hint-context", "--hint-timeout", "10"]
         tag = ("-top%d" % policy["top_k"] if policy["policy"] == "topk" else "") + ("-look" if policy["lookahead"] else "")
         label = f"{label}-{pred}{tag}"

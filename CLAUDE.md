@@ -48,12 +48,14 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 |---|---|
 | `agent/` | ReAct agent, LLM client, simulated user, MCP tool servers, hints, `tau_airline/` (tools, data, tasks) |
 | `predictor/` | Steps 1–9: trace export, graphs, models, training, evaluation, API, load test, CRD writer |
+| `pulse_pred/` | pulse-v3 predictor (conversation text + tool graph + state flags, online adapter) behind the same `/predict` API; UI choice `pulse_v3` (see `pulse_pred/README.md`) |
 | `controller/` | Prewarm controller and its action logs |
 | `deploy/knative/` | Knative Services for the tools, Redis, `deploy.sh`, per-tool cold/warm check |
 | `deploy/prewarm/` | `PrewarmRequest` CRD and the predictor ↔ controller contract |
 | `test/test_knative/` | Local cluster setup, C0/C1/C3 runners, plots, `results/` |
 | `test/test_cold_start/` | The OpenFaaS CE tests that led to the move to Knative |
 | `EKS_deployment/` | EKS cluster, Knative setup, `run_c0/c1/c3/all.sh` |
+| `terraform/` | Infrastructure as code; so far the S3 model registry (versioned bucket + reader/publisher IAM policies) |
 | `workloads/` | Workload spreadsheet (prompts, graphs, real traces) |
 | `ui/` | Demo UI (`agent/.venv/Scripts/python ui/server.py` → http://127.0.0.1:8765): live / replay episodes on a simulated or real cluster, predictor choice, experiment runs, results |
 | `docs/` | PRD and the Knative decision document |
