@@ -12,10 +12,26 @@ variable "github_repo" {
   default     = "sankalpp472-eng/pulse-icc-project"
 }
 
+variable "github_repo_ids" {
+  description = <<-EOT
+    owner_id/repo_id of github_repo. GitHub's OIDC subject names the repository with its immutable ids
+    (repo:<owner>@<owner_id>/<name>@<repo_id>:...), which a renamed or re-created repository can't reuse.
+    Find them in a failed attempt in CloudTrail, or: curl -s https://api.github.com/repos/<owner>/<name> (owner.id, id)
+  EOT
+  type        = string
+  default     = "328253652/1404634644"
+}
+
 locals {
+  gh     = split("/", var.github_repo)
+  gh_ids = split("/", var.github_repo_ids)
+  subjects = var.github_repo == "" ? [] : compact([
+    "repo:${var.github_repo}", # older subject form
+    var.github_repo_ids == "" ? "" : "repo:${local.gh[0]}@${local.gh_ids[0]}/${local.gh[1]}@${local.gh_ids[1]}",
+  ])
   ci = var.github_repo == "" ? {} : {
-    pulse-ci-image = "repo:${var.github_repo}:ref:refs/heads/main"
-    pulse-ci-plan  = "repo:${var.github_repo}:*"
+    pulse-ci-image = [for s in local.subjects : "${s}:ref:refs/heads/main"]
+    pulse-ci-plan  = [for s in local.subjects : "${s}:*"]
   }
 }
 
@@ -41,7 +57,7 @@ data "aws_iam_policy_document" "ci_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [each.value]
+      values   = each.value
     }
   }
 }
