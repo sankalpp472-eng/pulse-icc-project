@@ -19,17 +19,15 @@ AGENT_DIR = ROOT / "agent"
 
 
 def predictor_dir() -> Path:
+    """PREDICTOR_DIR if set, else predictor/ (score.py alone still needs the uncommitted v2 tau_data.py)."""
     if os.getenv("PREDICTOR_DIR"):
         return Path(os.environ["PREDICTOR_DIR"]).resolve()
-    for d in (ROOT / "predictor", ROOT / "predictor_v2" / "pulse_predictor_v2_files" / "predictor"):
-        if (d / "tau_data.py").exists():
-            return d
-    raise FileNotFoundError("v2 predictor not found (no tau_data.py in predictor/ or predictor_v2/...); "
-                            "set PREDICTOR_DIR")
+    return ROOT / "predictor"
 
 
 PREDICTOR_DIR = predictor_dir()
-sys.path.insert(0, str(PREDICTOR_DIR))     # tau_data, features, models, evaluate
+sys.path.insert(0, str(PREDICTOR_DIR))
+
 
 RESPOND = "RESPOND"
 
