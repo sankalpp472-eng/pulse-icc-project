@@ -5,8 +5,9 @@
 # Safe to rerun, e.g. after your IP changes (it reapplies the IP restriction).
 #
 #   bash EKS_deployment/eks_up.sh          # ~25 min the first time, ~5 min when the cluster exists
+#   USE_TERRAFORM=1 bash EKS_deployment/eks_up.sh   # the cluster from terraform/eks/ instead of eksctl (same nodes)
 #
-# Needs: aws (logged in, `aws configure`), eksctl, kubectl, and the project's Python packages.
+# Needs: aws (logged in, `aws configure`), eksctl (or terraform), kubectl, and the project's Python packages.
 # The cluster costs money by the hour until you run EKS_deployment/eks_down.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,13 +15,20 @@ cd "$ROOT"
 PY=${PYTHON:-python}
 REGION=ap-south-1
 NAME=pulse-eks
+CLUSTER_TOOL=$([ "${USE_TERRAFORM:-0}" = 1 ] && echo terraform || echo eksctl)
 
-for t in aws eksctl kubectl curl; do
+for t in aws "$CLUSTER_TOOL" kubectl curl; do
   command -v "$t" >/dev/null || { echo "$t is not installed (see EKS_deployment/README.md, step 1)"; exit 1; }
 done
 aws sts get-caller-identity >/dev/null || { echo "Not logged in to AWS: run aws configure"; exit 1; }
 
-if eksctl get cluster --name "$NAME" --region "$REGION" >/dev/null 2>&1; then
+if [ "$CLUSTER_TOOL" = terraform ]; then        # infrastructure as code: terraform/eks/ (README there)
+  TF_STATE_BUCKET=${TF_STATE_BUCKET:-pulse-tfstate-$(aws sts get-caller-identity --query Account --output text)}
+  terraform -chdir=terraform/eks init -input=false -backend-config="bucket=$TF_STATE_BUCKET" >/dev/null
+  echo "Creating / updating cluster $NAME with Terraform (15-20 min the first time) ..."
+  terraform -chdir=terraform/eks apply -input=false -auto-approve
+  aws eks update-kubeconfig --region "$REGION" --name "$NAME" >/dev/null
+elif eksctl get cluster --name "$NAME" --region "$REGION" >/dev/null 2>&1; then
   echo "Cluster $NAME exists"
   aws eks update-kubeconfig --region "$REGION" --name "$NAME" >/dev/null
 else
@@ -44,6 +52,9 @@ for i in $(seq 1 60); do
   sleep 10
 done
 "$PY" deploy/knative/check_tools.py
+if [ "${USE_GITOPS:-0}" = 1 ]; then   # Argo CD then deploys Pulse's services and monitoring from Git (deploy/gitops/)
+  bash deploy/gitops/install.sh
+fi
 
 echo
 echo "EKS is ready. Run: bash EKS_deployment/run_all.sh   (or run_c0.sh / run_c3.sh / run_c1.sh)"

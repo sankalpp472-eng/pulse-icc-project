@@ -31,6 +31,7 @@ Settings (environment):
   MCP_HOST_TEMPLATE  Host header           (default {svc}.default.example.com; empty = no Host header)
   MAX_REQUEST_AGE_S  ignore requests older than this, e.g. left over from an earlier run (default 30)
   CONTROLLER_LOG     one JSON line per action (default controller/results/controller.jsonl)
+  CONTROLLER_METRICS_PORT  Prometheus /metrics on this port (default 9102; 0 = off), see deploy/monitoring/
 """
 
 import json
@@ -45,6 +46,7 @@ from pathlib import Path
 
 from kubernetes import client, config, watch
 from kubernetes.client.rest import ApiException
+from prometheus_client import Counter, Histogram, start_http_server
 
 GROUP, VERSION, PLURAL = "pulse.iisc.ac.in", "v1alpha1", "prewarmrequests"
 HERE = Path(__file__).resolve().parent
@@ -54,6 +56,17 @@ HOST_TPL = os.getenv("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 MAX_AGE_S = float(os.getenv("MAX_REQUEST_AGE_S", "30"))
 LOG = Path(os.getenv("CONTROLLER_LOG", HERE / "results" / "controller.jsonl"))
 PING = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}).encode()
+METRICS_PORT = int(os.getenv("CONTROLLER_METRICS_PORT", "9102"))
+
+# ---- Prometheus metrics (FR-11): what the controller did, as counters the dashboards can rate()
+WARMUPS = Counter("pulse_controller_warmups_total", "Warm-ups done (PrewarmRequests acted on)", ["tool", "cold"])
+PINGS = Counter("pulse_controller_pings_total", "Warm-up MCP pings sent", ["tool"])
+PING_SECONDS = Histogram("pulse_controller_ping_seconds", "Warm-up ping round trip (about a cold start if cold)",
+                         ["cold"], buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 12, 20, 60))
+FAILURES = Counter("pulse_controller_failures_total", "Warm-ups that failed", ["tool"])
+EVICTIONS = Counter("pulse_controller_evictions_total", "Tools seen back at zero pods after a warm-up", ["tool"])
+WARM_SECONDS = Histogram("pulse_controller_warm_seconds", "Time from a warm-up's readyAt to the tool's scale-down",
+                         buckets=(30, 60, 75, 90, 120, 180, 300, 600))
 
 
 def now_iso() -> str:
@@ -147,11 +160,15 @@ class Controller:
                 timespec="milliseconds").replace("+00:00", "Z") if ttl else None
             self.set_status(name, phase="Ready", readyAt=ready, pingLatencyMs=ms, expiresAt=expires,
                             evictedAt=None, message=f"{n} ping(s) answered (HTTP {codes[0]})")
+            WARMUPS.labels(spec["tool"], str(cold).lower()).inc()
+            PINGS.labels(spec["tool"]).inc(n)
+            PING_SECONDS.labels(str(cold).lower()).observe(ms / 1000)
             self.log(event="warmed", tool=spec["tool"], service=svc, was_cold=cold, ping_ms=ms, http=codes[0],
                      desired_replicas=k, pings=n, pods_before=before, pods_after=self.pods(svc),
                      probability=spec.get("probability"), episode=spec.get("episodeId"), requested_at=requested,
                      effective_ttl_s=ttl)
         except Exception as e:
+            FAILURES.labels(spec.get("tool", "")).inc()
             self.set_status(name, phase="Failed", message=f"{type(e).__name__}: {e}"[:300])
             self.log(event="failed", tool=spec.get("tool"), service=svc, error=f"{type(e).__name__}: {e}")
         finally:
@@ -186,6 +203,9 @@ class Controller:
                         self.set_status(obj["metadata"]["name"], phase="Evicted", evictedAt=at,
                                         message="Knative scaled the tool to zero (idle window passed)")
                         ready = parse_iso(st.get("readyAt"))
+                        EVICTIONS.labels(obj["spec"]["tool"]).inc()
+                        if ready:
+                            WARM_SECONDS.observe(parse_iso(at) - ready)
                         self.log(event="evicted", tool=obj["spec"]["tool"], service=obj["spec"]["service"],
                                  warm_for_s=round(parse_iso(at) - ready, 1) if ready else None,
                                  effective_ttl_s=st.get("effectiveTtlSeconds"))
@@ -196,6 +216,12 @@ class Controller:
         ctx = "in-cluster" if os.getenv("KUBERNETES_SERVICE_HOST") else config.list_kube_config_contexts()[1]["name"]
         print(f"prewarm controller (Option A) | context {ctx} | "
               f"namespace {NS} | ingress {URL_TPL} | log {LOG}")
+        if METRICS_PORT:
+            try:
+                start_http_server(METRICS_PORT)
+                print(f"metrics: http://0.0.0.0:{METRICS_PORT}/metrics")
+            except OSError as e:     # e.g. a second controller on the same laptop: run without metrics
+                print(f"metrics port {METRICS_PORT} not available ({e}); no /metrics")
         threading.Thread(target=self.sweep, daemon=True).start()
         while True:      # the watch times out every few minutes; just start it again
             try:

@@ -1,8 +1,8 @@
 """
-Prometheus metrics published by the experiment runners (w1_live.py, later the replay).
+Prometheus metrics published by the experiment runners (w1_replay.py --metrics-port / PULSE_METRICS_PORT).
 
-The runner serves them at http://<laptop>:<port>/metrics; Prometheus in the kind cluster
-scrapes host.docker.internal:9105 (see deploy/monitoring/values.yaml).
+The runner serves them at http://<host>:<port>/metrics. Prometheus (deploy/monitoring/) scrapes port 9105:
+the run pods and the UI pod in EKS, and host.docker.internal:9105 from the kind cluster.
 
 Every series carries run_id, so several runs can be told apart in Prometheus/Grafana.
 All tool x cold/warm series are created at start with value 0, so increase() over a
@@ -41,7 +41,12 @@ class RunMetrics:
         self.l = {"run_id": run_id, "workload": workload}
         if not self.on:
             return
-        start_http_server(port)
+        try:
+            start_http_server(port)
+        except OSError as e:       # port taken (another run): the run goes on without live metrics
+            print(f"metrics port {port} not available ({e}); no live metrics for this run")
+            self.on = False
+            return
         RUN_INFO.labels(**self.l, **info).set(1)
         CURRENT_TASK.labels(**self.l).set(-1)
         for tool in tools:

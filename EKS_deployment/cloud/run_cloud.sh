@@ -98,6 +98,8 @@ YAML
         - {name: PULSE_RESULTS_DIR, value: $RDIR}
         - {name: PULSE_RUNNER, value: "pod $POD"}
         - {name: HOLD_S, value: "3600"}
+        - {name: PULSE_METRICS_PORT, value: "9105"}
+      ports: [{name: metrics, containerPort: 9105}]   # live run metrics for Prometheus (deploy/monitoring)
       envFrom: [{secretRef: {name: pulse-llm-keys, optional: true}}]
       resources: {requests: {cpu: 500m, memory: 1Gi}, limits: {memory: 3Gi}}
 YAML

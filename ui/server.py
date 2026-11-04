@@ -14,11 +14,15 @@ import sys
 import time
 from pathlib import Path
 
+import urllib.error
+import urllib.request
+
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -53,6 +57,8 @@ async def no_stale_page(request, call_next):
     return resp
 cluster = backend.Cluster()
 services = backend.Services(cluster)
+monitoring = backend.Monitoring(cluster)
+deployment = backend.Deployment(cluster)
 sim = SimCluster(backend.TOOL_NAMES)
 S: dict = {"session": None, "run": None, "history": []}
 RECORDINGS = backend.STATE / "recordings"      # live episodes recorded by the UI, replayable exactly (kind=recorded)
@@ -74,6 +80,8 @@ def state(session_after: int = 0, run_after: int = 0, events_after: int = 0):
     if s and not s.is_alive() and s.events and s.events[-1]["type"] == "end" and not getattr(s, "_recorded", False):
         s._recorded = True
         S["history"].insert(0, s.events[-1]["summary"])
+    if "bgload" in services.procs and not (s and s.is_alive()):     # background load ends with its episode
+        services.stop("bgload")
     pods = sim.snapshot() if cluster.mode == "sim" else cluster.pods
     events = sim.events if cluster.mode == "sim" else cluster.events
     return {"cluster": cluster.info(), "services": services.status(),
@@ -82,7 +90,8 @@ def state(session_after: int = 0, run_after: int = 0, events_after: int = 0):
             "events": events[events_after:], "events_n": len(events),
             "session": s.view(session_after) if s else None,
             "run": r.view(run_after) if r else None,
-            "history": S["history"][:20], "now": time.time()}
+            "history": S["history"][:20], "monitoring": monitoring.info(), "deployment": deployment.info(),
+            "now": time.time()}
 
 
 @app.post("/api/cluster")
@@ -151,9 +160,14 @@ def session_start(cfg: dict):
         cfg["policy_label"] = backend.policy_label(info.get("policy"), info["theta"])
     if cluster.mode == "sim" and cfg.get("fresh", True):
         sim.set_min_scale(sim.min_scale)
+    agents = int(cfg.get("bg_agents") or 0)
+    if agents and cluster.mode != "knative":
+        raise HTTPException(400, "Background load needs the real cluster: switch to Knative (top bar), or set it to 0")
     s = Session(cfg, cluster, sim if cluster.mode == "sim" else None, pred, record_dir=RECORDINGS)
     S["session"] = s
     s.start()
+    if agents:                     # N more agents on the same tools while this episode runs (loadtest/)
+        services.start_bgload(agents, pred)
     return {"ok": True}
 
 
@@ -257,7 +271,8 @@ def tasks():
 def run_start(spec: dict):
     if busy():
         raise HTTPException(409, busy())
-    if cluster.mode != "knative":
+    predictor_load = spec.get("mode") == "load" and spec.get("target") == "predictor"   # needs no cluster
+    if cluster.mode != "knative" and not predictor_load:
         raise HTTPException(400, "Experiment runs need a real cluster: switch to Knative (top bar) first")
     try:
         steps = backend.build_run(spec, cluster, services)
@@ -272,6 +287,107 @@ def run_stop():
     if S["run"]:
         S["run"].stop()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- models (pulse-v3 registry on S3)
+@app.get("/api/models")
+def models():
+    return backend.models_list()
+
+
+@app.post("/api/models/use")
+def models_use(body: dict):
+    """Serve one registry version with pulse_v3 (keeps the card's θ / policy; CRDs if in Knative mode)."""
+    v = str(body.get("version") or "")
+    if not v:
+        raise HTTPException(400, "which version?")
+    cur = services.procs.get("predictor")
+    info = cur.info if cur else {}
+    return services.start_predictor("pulse_v3", float(info.get("theta", 0.3)), cluster.mode == "knative",
+                                    info.get("policy"), model_version=v)
+
+
+@app.post("/api/models/promote")
+def models_promote(body: dict):
+    try:
+        backend.models_promote(str(body.get("version") or ""))
+    except Exception as e:
+        raise HTTPException(400, f"{type(e).__name__}: {e}")
+    return backend.models_list()
+
+
+@app.post("/api/models/pin")
+def models_pin(body: dict):
+    """GitOps: write the version into pulse-config in this checkout (no commit; review it, then push / PR)."""
+    try:
+        return backend.models_pin_in_git(str(body.get("version") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/models/retrain")
+def models_retrain(spec: dict):
+    """pulse_pred/train.py here, or the training Job in the cluster; its log streams in the Experiments tab."""
+    if busy():
+        raise HTTPException(409, busy())
+    try:
+        steps = backend.build_retrain(spec)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    S["run"] = backend.BatchRun({"mode": "retrain", **spec}, steps, services)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- monitoring (Prometheus + Grafana)
+@app.post("/api/monitoring/install")
+def monitoring_install():
+    """Run deploy/monitoring/install.sh like an experiment run (its log streams in the Experiments tab)."""
+    if busy():
+        raise HTTPException(409, busy())
+    if cluster.mode != "knative":
+        raise HTTPException(400, "Monitoring is installed into the real cluster: switch to Knative (top bar) first")
+    if backend.IN_CLUSTER or not backend.bash():
+        raise HTTPException(400, "Install it from the laptop: bash deploy/monitoring/install.sh (needs helm)")
+    S["run"] = backend.BatchRun({"mode": "monitoring install"},
+                                [("install Prometheus + Grafana (deploy/monitoring/install.sh)",
+                                  [backend.bash(), "deploy/monitoring/install.sh"], {})], services)
+    return {"ok": True}
+
+
+@app.get("/api/monitoring/link")
+def monitoring_link(path: str, dashboard: str = "pulse-overview"):
+    """Grafana for exactly one result run: its start-to-end window (from calls.csv), a minute either side."""
+    try:
+        t0, t1 = backend.run_window(path)
+    except (ValueError, OSError) as e:
+        raise HTTPException(400, str(e))
+    return {"dashboard": dashboard, "from": int((t0 - 60) * 1000), "to": int((t1 + 60) * 1000)}
+
+
+_GRAFANA_HEADERS = ("content-type", "accept", "x-grafana-org-id", "x-dashboard-uid", "x-panel-id",
+                    "x-datasource-uid", "x-query-group-id", "x-grafana-device-id", "x-plugin-id")
+
+
+@app.api_route("/grafana/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def grafana(path: str, request: Request):
+    """Grafana through the UI (it builds its links under /grafana/, values.yaml): the page needs no second tunnel."""
+    if not monitoring.reachable:
+        raise HTTPException(503, f"Grafana not available: {monitoring.detail}")
+    url = f"{monitoring.base()}/{path}" + (f"?{request.url.query}" if request.url.query else "")
+    body = await request.body()
+    req = urllib.request.Request(url, data=body or None, method=request.method,
+                                 headers={k: v for k, v in request.headers.items() if k.lower() in _GRAFANA_HEADERS})
+
+    def fetch():
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.status, r.read(), r.headers
+        except urllib.error.HTTPError as e:
+            return e.code, e.read(), e.headers
+
+    status, data, headers = await run_in_threadpool(fetch)
+    keep = {k: v for k, v in headers.items() if k.lower() in ("content-type", "cache-control", "etag", "last-modified")}
+    return Response(data, status_code=status, headers=keep)
 
 
 # ---------------------------------------------------------------- results
@@ -343,6 +459,8 @@ def _shutdown():
     if S["run"]:
         S["run"].stop()
     services.stop()
+    monitoring._stop_pf()
+    deployment._stop_pf()
 
 
 if __name__ == "__main__":

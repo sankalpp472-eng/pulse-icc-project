@@ -1,0 +1,37 @@
+# What cloud_up.sh / ui_cloud.sh fill in by sed, for the GitOps build (kustomization.yaml): θ, the UI's place
+# on the client node, and the IAM role of Pulse's service account (IRSA, terraform/eks/irsa.tf: read models).
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pulse-predictor}
+spec:
+  template:
+    spec:
+      containers:
+        - name: predictor
+          env: [{name: THETA, value: "0.3"}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pulse-speculator}
+spec:
+  template:
+    spec:
+      containers:
+        - name: speculator
+          env: [{name: THETA, value: "0.3"}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pulse-ui}
+spec:
+  template:
+    spec:
+      nodeSelector: {pulse/role: client}
+      tolerations: [{key: pulse/role, operator: Equal, value: client, effect: NoSchedule}]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pulse
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/pulse-eks-pulse

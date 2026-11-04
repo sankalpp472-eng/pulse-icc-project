@@ -6,6 +6,10 @@ __pycache__/
 *.pyc
 EKS_deployment/logs/
 baselines/*/data/
+pulse_pred/data/
+terraform/**/.terraform/
+terraform/**/*.tfstate*
+terraform/**/tfplan
 
 # cloud runner image (EKS_deployment/cloud/build_image.sh)
 EKS_deployment/cloud/.build/

@@ -36,7 +36,11 @@ cp predictor/*.py "$STAGE/app/predictor/"
 cp predictor/data/*.pkl "$STAGE/app/predictor/data/"
 cp predictor/data/tau-bench/historical_trajectories/*airline.json "$STAGE/app/predictor/data/tau-bench/historical_trajectories/"
 cp controller/prewarm_controller.py "$STAGE/app/controller/"
-cp test/test_knative/{w1_replay,w1_live,c0_common,plot_compare,plot_c0,score_hints}.py "$STAGE/app/test/test_knative/"
+cp test/test_knative/{w1_replay,w1_live,c0_common,plot_compare,plot_c0,score_hints,pulse_metrics}.py "$STAGE/app/test/test_knative/"
+mkdir -p "$STAGE/app/loadtest"                                    # load tests (Locust / asyncio), run by the UI pod
+cp loadtest/*.py "$STAGE/app/loadtest/"
+# pulse-v3 (code only: its model comes from the S3 registry, its data/ stays out): the UI pod and the training Job
+tar -cf - --exclude=data --exclude=__pycache__ --exclude=tests pulse_pred | tar -xf - -C "$STAGE/app"
 cp test/test_knative/data/*.jsonl "$STAGE/app/test/test_knative/data/"
 cp baselines/llm_speculator/{service,common,prompt,speculate}.py "$STAGE/app/baselines/llm_speculator/"
 cp "$HERE/cloud_entry.sh" "$STAGE/app/"

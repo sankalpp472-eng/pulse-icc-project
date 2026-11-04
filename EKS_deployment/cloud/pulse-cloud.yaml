@@ -34,6 +34,9 @@ rules:
   - apiGroups: [""]                                 # Knative autoscaler config + version, node count
     resources: ["configmaps", "namespaces", "nodes", "services"]
     verbs: ["get", "list"]
+  - apiGroups: ["argoproj.io"]                      # the UI shows the GitOps sync status (deploy/gitops)
+    resources: ["applications"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -65,7 +68,7 @@ spec:
             - {name: PREDICTOR_MODEL, value: gbt}
             - {name: CRD_MODE, value: k8s}
             - {name: THETA, value: "__THETA__"}
-          ports: [{containerPort: 8000}]
+          ports: [{name: http, containerPort: 8000}]          # named: Prometheus finds /metrics/ by it (deploy/monitoring)
           readinessProbe: {httpGet: {path: /healthz, port: 8000}, periodSeconds: 5}
           resources: {requests: {cpu: 100m, memory: 384Mi}, limits: {memory: 1Gi}}
 ---
@@ -131,4 +134,6 @@ spec:
           command: ["python", "controller/prewarm_controller.py"]
           env:
             - {name: CONTROLLER_LOG, value: /tmp/controller.jsonl}   # also printed: kubectl logs deploy/pulse-controller
+            - {name: CONTROLLER_METRICS_PORT, value: "9102"}
+          ports: [{name: metrics, containerPort: 9102}]       # Prometheus (deploy/monitoring/monitors.yaml)
           resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 512Mi}}

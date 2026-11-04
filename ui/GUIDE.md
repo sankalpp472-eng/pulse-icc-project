@@ -304,6 +304,99 @@ Only one thing runs at a time: an experiment run and a demo episode share the to
    - plus `comparison.json`, the numbers behind them.
 5. Click an image to open it full size. The **zip** link on a run row downloads that whole run folder.
 
+### Recipe 8: load tests (Locust + asyncio)
+
+The tests are described in [loadtest/README.md](../loadtest/README.md). Install their packages once:
+`"$PY" -m pip install -r loadtest/requirements.txt`.
+
+1. **Experiments tab → Mode: Load test.**
+2. **Target:**
+   - **Predictor API:** works in simulated mode too, because it needs no cluster.
+   - **Tool services:** read-only MCP calls; needs Knative.
+   - **Whole agent episodes:** needs Knative.
+3. **Engine:**
+   - **Locust:** users ramp through **Stages** (`users:seconds[:spawn rate]`, empty = the default).
+     Tick **Locust web UI** for Locust's own live page on http://127.0.0.1:8089 (laptop only).
+   - **asyncio:** an exact rate, **Hints per second**, for the predictor; or **Burst sizes** of
+     simultaneous calls per tool. A **pause** of 90 s or more lets each burst start cold.
+4. **Configuration and predictor:**
+   - **C0 / C1 / C3:** sets the tools' min-scale. For C3 it starts the controller and sends hints.
+   - **Predictor:** used by the predictor test and by C3.
+   - Then **▶ Start load test**. The log streams in Run log; the summary shows requests, failed
+     requests, requests/s, peak load and p50/p95/p99.
+5. **Monitoring tab:** follows the running test, with pods, prewarms and predictor p95 live.
+6. **Results tab:** load runs show `load: <target> · <engine>` next to their configuration.
+   - **Columns:** Calls = requests, Cold = failed requests, the last column = requests/s at peak load.
+   - **Compare** and **Make plots** (`loadtest/plot_load.py`: latency, throughput and failures/cold
+     against load) work on load runs. Don't mix them with experiment runs.
+
+**Live demo with background load:** in Knative mode, set **Background load (agents)** to N before
+starting an episode. N extra agents replay recorded episodes on the same tools while yours plays, and
+they stop when it ends.
+
+### Recipe 9: pulse-v3 model versions and retraining (Models tab)
+
+Start the UI with the registry address, e.g. `PULSE_MODEL_URI=s3://pulse-models-<account>/pulse-v3`,
+and AWS credentials on the laptop. The UI pod in EKS has no S3 role yet.
+
+1. **Models tab:** lists every version, newest first, with its held-out **warm@3** (the release-gate
+   metric), hit@1, hit@3 and the model it was compared with. **latest** marks what predictors load
+   by default, and **serving** marks what the running pulse_v3 predictor uses. The Predictor card
+   also shows the served version.
+2. **Use:** starts the pulse_v3 predictor with exactly that version.
+3. **Promote:** makes a version the latest. Promoting an older version is a rollback.
+4. **Retrain:**
+   - **Where:** **Here** runs `pulse_pred/train.py`, which needs the embedding server for new texts.
+     **Training Job (EKS)** runs `deploy/training/run_training.sh`.
+   - **Promote:** **auto** applies the release gate; **always** or **never** override it.
+   - The log streams in Experiments → Run log. The verdict (`GATE: promoted …` or
+     `GATE: candidate …`) appears next to the button, and the table refreshes.
+
+Details: [pulse_pred/README.md](../pulse_pred/README.md#retraining-mlops).
+
+### Recipe 10: deployments, GitOps and pinning a model
+
+- **Top bar:**
+  - **Code:** shows `commit <hash>` on the laptop, or `image <tag>` in the cluster (the image CI
+    built).
+  - **GitOps:** with Argo CD installed (`deploy/gitops/install.sh`), **GitOps n/m synced** shows
+    whether the cluster matches Git. Hover over it for each application's status and revision.
+  - **Argo CD ↗:** opens Argo CD itself; the laptop UI keeps the tunnel. The login is `admin`, and
+    the password command is in [deploy/gitops/README.md](../deploy/gitops/README.md).
+- **Pinning a model for the cluster:** Models tab → **Pin in Git** on a version. It writes the
+  version into `EKS_deployment/cloud/gitops/config.yaml` in your checkout. Commit it, open a pull
+  request, and after the merge Argo CD rolls it out. The cluster's UI then serves that version for
+  pulse_v3.
+
+### Recipe 7: watch it live in Grafana (Prometheus monitoring)
+
+Knative mode only. The simulated cluster has no Prometheus.
+
+1. **Install once per cluster.**
+   - The top bar shows **no monitoring** next to the cluster switch. Click **Install** (laptop UI,
+     needs `helm`), or run `bash deploy/monitoring/install.sh` yourself.
+   - The log streams in the Experiments tab's **Run log**, and it takes about 2–3 min.
+   - On EKS the stack goes on the client node, away from the tools. Details:
+     [deploy/monitoring/README.md](../deploy/monitoring/README.md).
+2. **When it's ready,** the pill turns **monitoring on** and a **Grafana ↗** link appears.
+   - **Predictor card:** shows the predictor's p95 latency measured by Prometheus. It turns orange
+     above the 50 ms target (NFR-4).
+   - **Tool pods card:** shows the tools' ready pod-seconds over the last 15 minutes.
+3. **Monitoring tab:** pick a dashboard.
+   - **Pulse overview:** pods per tool, warm pod-seconds, cold share, tool latency, prewarms, warm-up
+     pings.
+   - **Predictor:** p95 against 50 ms, hints/s, prewarm candidates.
+   - **Cluster:** node CPU and memory, container CPU.
+
+   The time window **follows** whatever is running: an experiment run, or the current episode.
+   Otherwise it shows the last 15 minutes.
+4. **Results tab:** the **Grafana** link on a run row opens that run's exact time window in the
+   Monitoring tab. This works only while the cluster that ran it is still up (Prometheus keeps
+   2 days of data).
+
+The UI shows Grafana through its own address (`/grafana/`), so the single `ui_cloud.sh` tunnel is
+enough in EKS too.
+
 ---
 
 ## 6. Reading what you see

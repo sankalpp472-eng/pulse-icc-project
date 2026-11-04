@@ -16,6 +16,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -30,9 +31,11 @@ CONTROLLER_DEPLOY = "pulse-controller"           # in the cluster: the controlle
 # Where new runs and plots go: the pod's own folder in the cluster (fetch with ui_cloud.sh fetch), else results/
 WRITE_DIR = Path(os.environ["UI_RESULTS_DIR"]) if os.getenv("UI_RESULTS_DIR") else None
 RESULT_DIRS = {"local": ROOT / "results" / "local_runs", "cloud": ROOT / "results" / "cloud_runs",
-               "legacy": ROOT / "test" / "test_knative" / "results"}
+               "load": ROOT / "results" / "load_runs", "legacy": ROOT / "test" / "test_knative" / "results"}
+# load tests (loadtest/) write here: the pod's own folder in the cluster, else results/load_runs
+LOAD_WRITE_DIR = WRITE_DIR.parent / "load_runs" if WRITE_DIR else None
 if WRITE_DIR:
-    RESULT_DIRS = {"this pod": WRITE_DIR, **RESULT_DIRS}
+    RESULT_DIRS = {"this pod": WRITE_DIR, "this pod (load)": LOAD_WRITE_DIR, **RESULT_DIRS}
 TOOL_NAMES = ["book_reservation", "calculate", "cancel_reservation", "get_reservation_details", "get_user_details",
               "list_all_airports", "search_direct_flight", "search_onestop_flight", "send_certificate", "think",
               "transfer_to_human_agents", "update_reservation_baggages", "update_reservation_flights",
@@ -304,7 +307,8 @@ class Services:
 
     MODELS = {"gbt": "LightGBM next-action (main)", "lr_action": "Logistic regression (next action)",
               "ngram_action": "n-gram baseline", "ensemble": "Trajectory-only ensemble (older)",
-              "speculator": "LLM speculator (Groq gpt-oss-20b)"}
+              "speculator": "LLM speculator (Groq gpt-oss-20b)",
+              "pulse_v3": "pulse-v3 text + tool graph (pulse_pred/)"}
 
     def __init__(self, cluster: Cluster):
         self.cluster = cluster
@@ -312,7 +316,9 @@ class Services:
         self.health: dict | None = None
         threading.Thread(target=self._health_loop, daemon=True).start()
 
-    def start_predictor(self, model: str, theta: float, crd: bool, policy: dict | None = None) -> dict:
+    def start_predictor(self, model: str, theta: float, crd: bool, policy: dict | None = None,
+                        model_version: str | None = None) -> dict:
+        """model_version (pulse_v3 only): serve that registry version instead of the latest (Models tab)."""
         if model not in self.MODELS:
             raise ValueError(f"unknown predictor {model}")
         self.stop("predictor")
@@ -324,12 +330,18 @@ class Services:
             env["KUBE_CONTEXT"] = self.cluster.context or ""
         if model == "speculator":
             app_dir = "baselines/llm_speculator"
+        elif model == "pulse_v3":
+            app_dir = "pulse_pred"
+            model_version = model_version or os.getenv("PULSE_MODEL_VERSION") or None   # pinned by GitOps (pulse-config)
+            if model_version and MODEL_URI:
+                env["PULSE_MODEL_URI"] = f"{MODEL_URI.rstrip('/')}/{model_version}"
         else:
             app_dir, env["PREDICTOR_MODEL"] = "predictor", model
         cmd = [PY, "-m", "uvicorn", "service:app", "--app-dir", app_dir, "--host", "127.0.0.1",
                "--port", str(PREDICTOR_PORT), "--log-level", "warning"]
         self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
-                                                                "crd": "k8s" if crd else "off"})
+                                                                "crd": "k8s" if crd else "off",
+                                                                "model_version": model_version})
         self.health = None
         return self.status()
 
@@ -348,6 +360,19 @@ class Services:
         env = {**self.cluster.tool_env(), "CONTROLLER_LOG": str(CONTROLLER_LOG), "MAX_REQUEST_AGE_S": "30"}
         self.procs["controller"] = Proc("controller", [PY, "controller/prewarm_controller.py"], env,
                                         {"context": self.cluster.context})
+        return self.status()
+
+    def start_bgload(self, agents: int, predictor_url: str | None) -> dict:
+        """Live demo, 'background load': N more agents replaying recorded episodes (loadtest/locust_episodes.py)
+        while the demo episode runs, sending hints too when the demo uses the predictor. Stopped with the episode."""
+        self.stop("bgload")
+        env = {**self.cluster.tool_env(), **({"PULSE_LOAD_DIR": str(LOAD_WRITE_DIR)} if LOAD_WRITE_DIR else {})}
+        cmd = [PY, "-m", "locust", "-f", "loadtest/locust_episodes.py", "--headless", "--only-summary",
+               "--stages", f"{agents}:7200:{agents}", "--pulse-config", "C3" if predictor_url else "C0",
+               "--label", "ui-background", "--loglevel", "WARNING"]
+        if predictor_url:
+            cmd += ["--predictor-url", predictor_url]
+        self.procs["bgload"] = Proc("bgload", cmd, env, {"agents": agents})
         return self.status()
 
     def stop(self, name: str | None = None) -> dict:
@@ -393,12 +418,246 @@ class Services:
         if "predictor" in out:
             out["predictor"]["ready"] = self.predictor_ready()
             out["predictor"]["health"] = self.health
+            out["predictor"]["serving_version"] = served_version(self.health)
             out["predictor"]["policy_label"] = policy_label(out["predictor"].get("policy"), out["predictor"].get("theta"))
             # does this predictor understand the policy settings? (/healthz reports "policy" after the latency patch)
             out["predictor"]["policy_supported"] = bool(self.health and "policy" in self.health) if self.health else None
         if IN_CLUSTER:
             out["controller"] = {"running": self.controller_running(), "deployment": CONTROLLER_DEPLOY}
         return out
+
+
+# ====================================================================== models (pulse-v3's S3 registry)
+MODEL_URI = os.getenv("PULSE_MODEL_URI", "")     # s3://<bucket>/pulse-v3 (pulse_pred/model_store.py)
+
+
+def served_version(health: dict | None) -> str | None:
+    """The registry version a pulse_v3 predictor serves: its /healthz model_file is .../models/<version>/predictor.pkl."""
+    f = (health or {}).get("model_file") or ""
+    parts = Path(f).parts
+    return parts[-2] if len(parts) >= 3 and parts[-3] == "models" else None
+
+
+def _store():
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from pulse_pred import model_store
+    return model_store
+
+
+def models_list() -> dict:
+    """Every pulse-v3 version in the registry (newest first), or why they can't be listed."""
+    if not MODEL_URI:
+        return {"uri": None, "versions": [], "error": "PULSE_MODEL_URI is not set: start the UI with "
+                "PULSE_MODEL_URI=s3://<bucket>/pulse-v3 (terraform -chdir=terraform output -raw model_uri)"}
+    try:
+        return {"uri": MODEL_URI, "versions": _store().versions(MODEL_URI), "error": None}
+    except ImportError as e:
+        return {"uri": MODEL_URI, "versions": [], "error": f"{e}: pip install -r pulse_pred/requirements.txt"}
+    except Exception as e:                       # no AWS credentials (laptop) or no IAM role (UI pod)
+        return {"uri": MODEL_URI, "versions": [], "error": f"{type(e).__name__}: {e}"[:300] +
+                (" (the UI pod has no S3 role yet: use the laptop UI)" if IN_CLUSTER else "")}
+
+
+def models_promote(version: str):
+    _store().promote(MODEL_URI, version)
+
+
+def build_retrain(spec: dict) -> list[tuple[str, list[str], dict]]:
+    """Retraining (pulse_pred/train.py): on this machine, or as the training Job in the cluster."""
+    if not MODEL_URI:
+        raise ValueError("PULSE_MODEL_URI is not set (see the Models tab)")
+    promote, notes = spec.get("promote", "auto"), str(spec.get("notes") or "")
+    if spec.get("where") == "cluster":
+        b = bash()
+        if IN_CLUSTER or not b:
+            raise ValueError("the training Job is started from the laptop (deploy/training/run_training.sh)")
+        return [("retrain pulse-v3 as a Job in the cluster (deploy/training/run_training.sh)",
+                 [b, "deploy/training/run_training.sh"],
+                 {"PULSE_MODEL_URI": MODEL_URI, "PROMOTE": promote, "NOTES": notes})]
+    return [("retrain pulse-v3 here (pulse_pred/train.py)",
+             [PY, "pulse_pred/train.py", "--uri", MODEL_URI, "--promote", promote, "--notes", notes], {})]
+
+
+GITOPS_CONFIG = ROOT / "EKS_deployment" / "cloud" / "gitops" / "config.yaml"
+
+
+def models_pin_in_git(version: str) -> dict:
+    """GitOps: pin the production pulse-v3 version by editing pulse-config (EKS_deployment/cloud/gitops/config.yaml)
+    in this checkout. Nothing is committed: the change goes in through a reviewed commit / pull request, and Argo CD
+    rolls it out."""
+    if IN_CLUSTER or not GITOPS_CONFIG.exists():
+        raise ValueError("pinning in Git needs the repository checkout (the laptop UI)")
+    import re
+    text = GITOPS_CONFIG.read_text(encoding="utf-8")
+    new = re.sub(r'(PULSE_MODEL_VERSION:).*', rf'\1 "{version}"', text)
+    GITOPS_CONFIG.write_text(new, encoding="utf-8")
+    rel_path = GITOPS_CONFIG.relative_to(ROOT).as_posix()
+    return {"file": rel_path, "changed": new != text,
+            "next": f'git commit -m "models: pin pulse-v3 {version}" {rel_path}  then push and open a pull request'}
+
+
+# ====================================================================== deployment (CI image, GitOps / Argo CD)
+ARGOCD_LOCAL_PORT = int(os.getenv("UI_ARGOCD_PORT", "18080"))
+
+
+class Deployment:
+    """What runs and where it came from: the UI's own git commit / image (CI builds it, PULSE_GIT_COMMIT and
+    PULSE_IMAGE in the image), and in Knative mode Argo CD's applications (deploy/gitops/) with their sync and
+    health. On the laptop it keeps a port-forward to Argo CD's own UI (login needed there)."""
+
+    def __init__(self, cluster: Cluster):
+        self.cluster = cluster
+        self.apps: list[dict] = []
+        self.argocd = False
+        self.pf: subprocess.Popen | None = None
+        if os.getenv("PULSE_GIT_COMMIT"):
+            self.commit, self.image = os.getenv("PULSE_GIT_COMMIT"), os.getenv("PULSE_IMAGE", "")
+        else:
+            self.commit, self.image = _run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], 5)[1], ""
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def _loop(self):
+        while True:
+            try:
+                self.check()
+            except Exception:
+                self.apps = []
+            time.sleep(15)
+
+    def check(self):
+        if self.cluster.mode != "knative" or not self.cluster.reachable:
+            self.apps, self.argocd = [], False
+            self._stop_pf()
+            return
+        code, out = _run(["kubectl", "get", "applications.argoproj.io", "-n", "argocd", "-o", "json",
+                          "--request-timeout=6s"], 10)
+        self.argocd = code == 0
+        self.apps = [{"name": a["metadata"]["name"], "sync": (a.get("status") or {}).get("sync", {}).get("status"),
+                      "health": (a.get("status") or {}).get("health", {}).get("status"),
+                      "revision": ((a.get("status") or {}).get("sync", {}).get("revision") or "")[:7]}
+                     for a in json.loads(out).get("items", [])] if self.argocd else []
+        if self.argocd and not IN_CLUSTER and not (self.pf and self.pf.poll() is None):
+            self.pf = subprocess.Popen(["kubectl", "port-forward", "-n", "argocd", "svc/argocd-server",
+                                        f"{ARGOCD_LOCAL_PORT}:80"], stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+
+    def _stop_pf(self):
+        if self.pf and self.pf.poll() is None:
+            self.pf.terminate()
+        self.pf = None
+
+    def info(self) -> dict:
+        return {"commit": self.commit, "image": self.image.rsplit(":", 1)[-1] if self.image else "",
+                "argocd": self.argocd, "apps": self.apps,
+                "argocd_url": f"http://127.0.0.1:{ARGOCD_LOCAL_PORT}" if self.argocd and not IN_CLUSTER else None}
+
+
+# ====================================================================== monitoring (deploy/monitoring/)
+MON_NS, GRAFANA_SVC = "monitoring", "pulse-mon-grafana"
+GRAFANA_LOCAL_PORT = int(os.getenv("UI_GRAFANA_PORT", "13000"))
+DASHBOARDS = {"pulse-overview": "Pulse overview", "pulse-predictor": "Predictor", "pulse-cluster": "Cluster"}
+_READY_TOOL_PODS = ('sum(kube_pod_status_ready{namespace="default",condition="true"} * on (namespace, pod) group_left () '
+                    'kube_pod_labels{namespace="default",label_serving_knative_dev_service!=""})')
+
+
+class Monitoring:
+    """Prometheus + Grafana (deploy/monitoring/install.sh), Knative mode only. The page sees Grafana under this
+    server's /grafana/ (server.py proxies it), so one tunnel to the UI is enough in the cluster too. Grafana is
+    reached on the laptop through a kubectl port-forward kept up here, in the cluster at its Service. Prometheus
+    is queried through Grafana's data source (uid prometheus): no second tunnel."""
+
+    def __init__(self, cluster: Cluster):
+        self.cluster = cluster
+        self.installed, self.reachable, self.detail = None, False, "Knative mode only"
+        self.figures: dict = {}
+        self.pf: subprocess.Popen | None = None
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def base(self) -> str:
+        return (f"http://{GRAFANA_SVC}.{MON_NS}.svc.cluster.local" if IN_CLUSTER
+                else f"http://127.0.0.1:{GRAFANA_LOCAL_PORT}")
+
+    def _healthy(self) -> bool:
+        try:
+            with urllib.request.urlopen(self.base() + "/api/health", timeout=3) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    def _stop_pf(self):
+        if self.pf and self.pf.poll() is None:
+            self.pf.terminate()
+        self.pf = None
+
+    def check(self):
+        if self.cluster.mode != "knative" or not self.cluster.reachable:
+            self._stop_pf()
+            self.installed, self.reachable, self.detail, self.figures = None, False, "Knative mode only", {}
+            return
+        if IN_CLUSTER:
+            self.installed = self.reachable = self._healthy()
+            self.detail = "ok" if self.reachable else "not installed (deploy/monitoring/install.sh, from the laptop)"
+        else:
+            code, _ = _run(["kubectl", "get", "svc", GRAFANA_SVC, "-n", MON_NS, "-o", "name"], 8)
+            self.installed = code == 0
+            if not self.installed:
+                self._stop_pf()
+                self.reachable, self.detail, self.figures = False, "not installed", {}
+                return
+            if not (self.pf and self.pf.poll() is None):
+                self.pf = subprocess.Popen(["kubectl", "port-forward", "-n", MON_NS, f"svc/{GRAFANA_SVC}",
+                                            f"{GRAFANA_LOCAL_PORT}:80"], stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+                time.sleep(2)
+            self.reachable = self._healthy()
+            self.detail = "ok" if self.reachable else "port-forward to Grafana not answering yet"
+        if self.reachable:
+            self.figures = self._figures()
+
+    def _loop(self):
+        while True:
+            try:
+                self.check()
+            except Exception as e:                       # never let monitoring break the UI
+                self.reachable, self.detail = False, f"{type(e).__name__}: {e}"[:200]
+            time.sleep(10)
+
+    def query(self, promql: str) -> float | None:
+        """One instant Prometheus query (a single number), through Grafana's data source."""
+        url = (self.base() + "/api/datasources/proxy/uid/prometheus/api/v1/query?"
+               + urllib.parse.urlencode({"query": promql}))
+        with urllib.request.urlopen(url, timeout=5) as r:
+            res = json.loads(r.read()).get("data", {}).get("result", [])
+        return round(float(res[0]["value"][1]), 3) if res else None
+
+    def _figures(self) -> dict:
+        """The cluster-measured numbers the cards show next to the UI's own."""
+        out = {"tool_pods": self.query(_READY_TOOL_PODS),
+               "tool_pod_s_15m": self.query(f"sum_over_time(({_READY_TOOL_PODS})[15m:15s]) * 15")}
+        # the predictor this UI started: scraped as the UI pod (EKS) or from the laptop (kind); not on EKS-from-laptop
+        comp = "pulse-ui" if IN_CLUSTER else "laptop" if (self.cluster.context or "").startswith("kind-") else None
+        if comp:
+            p95 = self.query(f'histogram_quantile(0.95, sum by (le) '
+                             f'(rate(predictor_request_seconds_bucket{{component="{comp}"}}[2m])))')
+            out["predictor_p95_ms"] = round(p95 * 1000, 1) if p95 is not None and p95 == p95 else None
+        return out
+
+    def info(self) -> dict:
+        return {"installed": self.installed, "reachable": self.reachable, "detail": self.detail,
+                "url": "/grafana/", "dashboards": DASHBOARDS, "figures": self.figures,
+                "can_install": not IN_CLUSTER and bool(bash())}
+
+
+def run_window(path: str) -> tuple[float, float]:
+    """A run's start and end (epoch s) from its calls.csv, for a Grafana link covering exactly that run."""
+    import csv
+    d = result_path(path)
+    with open(d / "calls.csv" if (d / "calls.csv").exists() else d / "requests.csv", encoding="utf-8") as f:   # load runs
+        rows = [(float(r["t_start"]), float(r.get("latency_ms") or 0) / 1000) for r in csv.DictReader(f) if r.get("t_start")]
+    if not rows:
+        raise ValueError("no calls in this run")
+    return min(t for t, _ in rows), max(t + l for t, l in rows)
 
 
 # ====================================================================== batch runs
@@ -434,7 +693,9 @@ class BatchRun:
                     continue
                 self._say(f"• {title}")
                 self._say("  $ " + " ".join(Path(c).name if i == 0 else c for i, c in enumerate(cmd)))
-                self.p = subprocess.Popen(cmd, cwd=ROOT, env={**os.environ, **env, "PYTHONUNBUFFERED": "1",
+                # PULSE_METRICS_PORT: the replay serves live metrics for Prometheus (deploy/monitoring)
+                self.p = subprocess.Popen(cmd, cwd=ROOT, env={"PULSE_METRICS_PORT": "9105", **os.environ, **env,
+                                                              "PYTHONUNBUFFERED": "1",
                                                               "PYTHONIOENCODING": "utf-8", "MSYS_NO_PATHCONV": "1"},
                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                           encoding="utf-8", errors="replace", creationflags=NO_WINDOW)
@@ -483,6 +744,8 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     mode, config, where = spec["mode"], spec["config"], spec.get("where", "laptop")
     pred = spec.get("predictor", "gbt")
     tasks = [str(int(t)) for t in spec.get("tasks") or []]
+    if mode == "load":
+        return build_load(spec, cluster, services, tasks)
     steps: list[tuple[str, list[str], dict]] = []
     env = cluster.tool_env()
 
@@ -541,7 +804,7 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
             services.start_controller()
         steps.append(("__predictor__", [], {}))
         args += ["--predictor-url", PREDICTOR_URL]
-        if pred == "speculator" and mode == "replay":
+        if pred in ("speculator", "pulse_v3") and mode == "replay":
             args += ["--hint-context", "--hint-timeout", "10"]
         tag = ("-top%d" % policy["top_k"] if policy["policy"] == "topk" else "") + ("-look" if policy["lookahead"] else "")
         label = f"{label}-{pred}{tag}"
@@ -549,6 +812,70 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     steps.append((f"{mode} {config}{' (' + pred + ')' if config == 'C3' else ''} "
                   f"{'in the pulse-ui pod' if IN_CLUSTER else 'from the laptop'}",
                   [PY, script, *args, "--label", label], env))
+    return steps
+
+
+def ensure_predictor(spec: dict, services: Services, crd: bool) -> str:
+    """Start the predictor the spec asks for, unless exactly that one already runs; returns its model name."""
+    pred, theta, policy = spec.get("predictor", "gbt"), float(spec.get("theta", 0.3)), norm_policy(spec.get("policy"))
+    cur = services.procs.get("predictor")
+    if not (cur and cur.alive() and cur.info.get("model") == pred and cur.info.get("crd") == ("k8s" if crd else "off")
+            and abs(cur.info.get("theta", -1) - theta) < 1e-9 and cur.info.get("policy") == policy):
+        services.start_predictor(pred, theta, crd=crd, policy=policy)
+    if crd and not services.controller_running():
+        services.start_controller()
+    return pred
+
+
+def build_load(spec: dict, cluster: Cluster, services: Services, tasks: list[str]) -> list[tuple[str, list[str], dict]]:
+    """A load test (loadtest/): Locust (closed loop, users ramp through --stages) or asyncio (open loop: exact
+    hints/s, or tool bursts). The predictor test needs no cluster; tools and episodes need Knative."""
+    target, engine, config = spec.get("target", "predictor"), spec.get("engine", "locust"), spec.get("config", "C0")
+    if target not in ("predictor", "tools", "episodes"):
+        raise ValueError(f"unknown load target {target}")
+    if engine == "asyncio" and target == "episodes":
+        raise ValueError("whole episodes are a Locust test (asyncio does the predictor and tool bursts)")
+    knative = cluster.mode == "knative"
+    if target != "predictor" and not knative:
+        raise ValueError("the tools and episodes load tests need the real cluster: switch to Knative (top bar)")
+    steps: list[tuple] = []
+    env = {**(cluster.tool_env() if knative else {}), "PULSE_RUNNER": "pulse-ui pod" if IN_CLUSTER else "laptop"}
+    if LOAD_WRITE_DIR:
+        env["PULSE_LOAD_DIR"] = str(LOAD_WRITE_DIR)
+    label = spec.get("label") or ("ui-eks" if IN_CLUSTER else "ui")
+    if target != "predictor":
+        want = 1 if config == "C1" else 0
+        if cluster.min_scale != want:
+            steps.append((f"set the tools to min-scale {want} ({'always warm' if want else 'scale to zero'})",
+                          lambda say: cluster.set_min_scale(want, say), {}))
+    url = None
+    if target == "predictor" or config == "C3":
+        label += "-" + ensure_predictor(spec, services, crd=knative and config == "C3")
+        steps.append(("__predictor__", [], {}))
+        url = PREDICTOR_URL
+    shared = ["--seed", str(spec.get("seed") or 252)] + (["--tasks", " ".join(tasks)] if tasks else [])
+    if engine == "locust":
+        cmd = [PY, "-m", "locust", "-f", f"loadtest/locust_{target}.py", "--pulse-config", config, "--label", label,
+               *shared, "--loglevel", "WARNING"]
+        if spec.get("stages"):
+            cmd += ["--stages", str(spec["stages"]).replace(" ", "")]
+        if target == "predictor":
+            cmd += ["--host", url]
+        elif target == "episodes" and url:
+            cmd += ["--predictor-url", url]
+        web = bool(spec.get("interactive")) and not IN_CLUSTER
+        cmd += ["--autostart", "--autoquit", "5", "--web-host", "127.0.0.1", "--web-port", "8089"] if web \
+            else ["--headless", "--only-summary"]
+        title = f"Locust load test: {target} {config}" + (" (live web UI: http://127.0.0.1:8089)" if web else "")
+    else:
+        cmd = [PY, "loadtest/async_load.py", target, "--config", config, "--label", label, *shared]
+        if target == "predictor":
+            cmd += ["--url", url, "--rates", *str(spec.get("rates") or "1 5 10 20").split(),
+                    "--duration", str(spec.get("duration") or 60)]
+        else:
+            cmd += ["--burst", *str(spec.get("burst") or "1 5 10").split(), "--pause", str(spec.get("pause") or 0)]
+        title = f"asyncio load test: {target} {config}"
+    steps.append((title, cmd, env))
     return steps
 
 
@@ -563,6 +890,14 @@ def summarize(d: Path) -> dict | None:
     except (OSError, ValueError):
         cfg = {}
     lat = (s.get("latency_ms") or {}).get("all") or {}
+    if s.get("kind") == "load":                 # a load test (loadtest/): requests instead of tool calls
+        return {"name": d.name, "path": rel(d), "where": d.parent.name, "kind": "load", "config": s.get("config"),
+                "mode": f"load: {s.get('target')}", "target": s.get("target"), "engine": s.get("engine"),
+                "predictor": (s.get("params") or {}).get("predictor"), "calls": s.get("requests"),
+                "failures": s.get("failures"), "rps": s.get("rps"), "peak_load": s.get("peak_load"),
+                "cold": None, "cold_share": s.get("cold_share"), "p50": lat.get("p50"), "p95": lat.get("p95"),
+                "p99": lat.get("p99"), "mean": lat.get("mean"), "pod_seconds": None,
+                "files": sorted(p.name for p in d.iterdir())}
     pred = ((cfg.get("prewarm") or {}).get("predictor") or {}).get("model")
     return {"name": d.name, "path": rel(d),
             "where": d.parent.name, "config": s.get("config") or cfg.get("config"),
@@ -613,8 +948,15 @@ def make_plots(paths: list[str]) -> dict:
     # next to the first run, unless that folder is read-only (the results baked into the image): the pod's folder
     base = WRITE_DIR if WRITE_DIR else dirs[0].parent
     base.mkdir(parents=True, exist_ok=True)
+    load = [json.loads((d / "summary.json").read_text(encoding="utf-8")).get("kind") == "load" for d in dirs]
+    if any(load) and not all(load):
+        raise ValueError("pick either experiment runs or load runs, not both")
+    if all(load):                               # load runs: latency / throughput / failures against load
+        base = LOAD_WRITE_DIR if LOAD_WRITE_DIR else dirs[0].parent
+        base.mkdir(parents=True, exist_ok=True)
+    script = "loadtest/plot_load.py" if all(load) else "test/test_knative/plot_compare.py"
     out = base / f"compare_{time.strftime('%Y-%m-%d_%H%M%S')}_ui_{len(dirs)}runs"
-    p = subprocess.run([plot_python(), "test/test_knative/plot_compare.py", *map(str, dirs), "--out", str(out)],
+    p = subprocess.run([plot_python(), script, *map(str, dirs), "--out", str(out)],
                        cwd=ROOT, capture_output=True, text=True, timeout=180, creationflags=NO_WINDOW,
                        env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     if p.returncode != 0:

@@ -23,6 +23,16 @@
       <button data-mode="knative">Knative <span id="ctxName" class="muted"></span></button>
     </div>
     <button class="ghost small" id="detectBtn" title="Check the kubectl context">↻</button>
+    <span class="mon-box hidden" id="monBox">
+      <span class="pill" id="monPill" title="Prometheus + Grafana (deploy/monitoring)">monitoring</span>
+      <a id="monLink" class="hidden" href="/grafana/" target="_blank" title="Grafana, through this UI">Grafana ↗</a>
+      <button class="ghost small hidden" id="monInstall" title="bash deploy/monitoring/install.sh (needs helm)">Install</button>
+    </span>
+    <span class="mon-box" id="depBox">
+      <span class="pill mono" id="depPill" title="The code this UI runs (git commit; in the cluster: the image CI built)"></span>
+      <span class="pill hidden" id="gitopsPill" title="Argo CD applications (deploy/gitops): synced with Git / healthy"></span>
+      <a id="argoLink" class="hidden" target="_blank" title="Argo CD (login: admin, see deploy/gitops/install.sh)">Argo CD ↗</a>
+    </span>
   </div>
 </header>
 
@@ -33,6 +43,8 @@
       <button data-tab="demo" class="on">Live demo</button>
       <button data-tab="exp">Experiments</button>
       <button data-tab="results">Results</button>
+      <button data-tab="mon">Monitoring</button>
+      <button data-tab="models">Models</button>
       <button data-tab="about">How it works</button>
     </nav>
 
@@ -101,6 +113,9 @@
               <button data-v="off">None (C0)</button>
             </div>
           </label>
+          <label class="knative-only hidden" title="More agents replaying recorded episodes on the same tools while this episode runs (loadtest/locust_episodes.py); they send hints too when prewarming is on">Background load (agents)
+            <input type="number" id="bgAgents" min="0" max="50" value="0">
+          </label>
         </div>
         <div class="goal hidden" id="taskGoal"></div>
         <div class="actions">
@@ -160,7 +175,7 @@
         <div class="callout" id="expNote">Experiment runs use the real cluster (Knative). They are the same runners as RUN_EXPERIMENTS.md: results land in <code>results/</code>.</div>
         <div class="form-grid">
           <label>Mode
-            <div class="seg" id="xMode"><button data-v="replay" class="on">Replay</button><button data-v="live">Live</button></div>
+            <div class="seg" id="xMode"><button data-v="replay" class="on">Replay</button><button data-v="live">Live</button><button data-v="load">Load test</button></div>
           </label>
           <label>Configuration
             <div class="seg" id="xConfig">
@@ -183,7 +198,28 @@
           <label class="c3-only x-topk hidden">floor (P ≥) <input type="number" id="xPMin" min="0" max="0.9" step="0.05" value="0.1"></label>
           <label class="c3-only check"><input type="checkbox" id="xLook"> Lookahead</label>
           <label class="c3-only x-look hidden">θ_next <input type="number" id="xThetaNext" min="0.05" max="0.9" step="0.05" value="0.3"></label>
-          <label>Runner
+          <label class="load-x hidden">Load test target
+            <select id="lTarget">
+              <option value="predictor">Predictor API (/predict, NFR-4)</option>
+              <option value="tools">Tool services (MCP calls, read-only)</option>
+              <option value="episodes">Whole agent episodes (hints + calls)</option>
+            </select>
+          </label>
+          <label class="load-x hidden">Engine
+            <select id="lEngine">
+              <option value="locust">Locust (users ramp up)</option>
+              <option value="asyncio">asyncio (exact rate / bursts)</option>
+            </select>
+          </label>
+          <label class="load-x l-locust hidden" title="users:seconds[:spawn rate], comma separated; empty = the test's default">Stages
+            <input id="lStages" placeholder="1:60,5:60,10:60,20:60">
+          </label>
+          <label class="load-x l-locust check hidden"><input type="checkbox" id="lWeb"> Locust web UI (laptop, :8089)</label>
+          <label class="load-x l-async-pred hidden">Hints per second <input id="lRates" value="1 5 10 20"></label>
+          <label class="load-x l-async-pred hidden">Seconds per rate <input id="lDuration" type="number" value="60"></label>
+          <label class="load-x l-async-tools hidden">Burst sizes (calls per tool) <input id="lBurst" value="1 5 10"></label>
+          <label class="load-x l-async-tools hidden" title="90+ s lets the tools scale to zero, so every burst starts cold">Pause between bursts (s) <input id="lPause" type="number" value="0"></label>
+          <label class="not-load">Runner
             <div class="seg" id="xWhere"><button data-v="laptop" class="on" id="xWhereHere">Laptop</button><button data-v="cluster" id="xWherePod">Run pod (run_cloud.sh)</button></div>
           </label>
           <label>Tasks
@@ -239,10 +275,10 @@
           </div>
         </div>
         <div class="tbl-wrap"><table class="tbl" id="rTbl"><thead><tr>
-          <th></th><th>Run</th><th>Folder</th><th>Config</th><th>Predictor</th><th>Calls</th><th>Cold</th><th>Mean</th><th>p50</th><th>p95</th><th>p99</th><th>Pod-s</th><th></th></tr></thead><tbody></tbody></table></div>
+          <th></th><th>Run</th><th>Folder</th><th>Config</th><th>Predictor</th><th title="tool calls; load runs: requests">Calls</th><th title="cold calls; load runs: failed requests">Cold</th><th>Mean</th><th>p50</th><th>p95</th><th>p99</th><th title="pod-seconds; load runs: requests/s @ peak load">Pod-s</th><th></th><th></th></tr></thead><tbody></tbody></table></div>
         <div class="actions">
           <button class="primary" id="rCompare" disabled>Compare selected</button>
-          <button id="rPlot" disabled>Make plots (plot_compare.py)</button>
+          <button id="rPlot" disabled title="experiment runs: test/test_knative/plot_compare.py; load runs: loadtest/plot_load.py">Make plots</button>
           <span class="muted" id="rState"></span>
         </div>
       </div>
@@ -253,6 +289,57 @@
       <div class="card">
         <div class="card-head"><h3>Plots</h3></div>
         <div id="rGallery" class="gallery"><div class="empty">No comparison plots yet.</div></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ MONITORING -->
+    <section id="tab-mon" class="tab">
+      <div class="card">
+        <div class="card-head">
+          <h3>Grafana</h3>
+          <div>
+            <select id="mDash"></select>
+            <select id="mRange" title="Which time window the dashboard shows">
+              <option value="auto">follow: running run / episode, else last 15 min</option>
+              <option value="last15">last 15 min</option>
+              <option value="last60">last hour</option>
+              <option value="result" disabled>a result run (Results → Grafana)</option>
+            </select>
+            <a id="mOpen" href="/grafana/" target="_blank" class="small">open in Grafana ↗</a>
+          </div>
+        </div>
+        <div class="note small hidden" id="mNote"></div>
+        <iframe id="mFrame" class="mon-frame hidden" title="Grafana dashboard"></iframe>
+      </div>
+    </section>
+
+    <!-- ================================================================ MODELS -->
+    <section id="tab-models" class="tab">
+      <div class="card">
+        <div class="card-head">
+          <h3>pulse-v3 models <span class="muted small mono" id="gUri"></span></h3>
+          <button class="ghost small" id="gRefresh">↻</button>
+        </div>
+        <div class="note small hidden" id="gNote"></div>
+        <div class="tbl-wrap"><table class="tbl" id="gTbl"><thead><tr>
+          <th>Version</th><th>Created</th><th title="held-out share of next-step calls warm with the top 3 prewarmed (the release gate)">warm@3</th>
+          <th>hit@1</th><th>hit@3</th><th title="the model it was compared with at training time">vs</th><th>Notes</th><th></th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Retrain</h3><span class="muted small">pulse_pred/train.py: train → evaluate on held-out tasks → publish</span></div>
+        <div class="form-grid">
+          <label>Where
+            <div class="seg" id="gWhere"><button data-v="laptop" class="on">Here</button><button data-v="cluster">Training Job (EKS)</button></div>
+          </label>
+          <label title="auto: becomes latest only if its warm@3 beats the current latest">Promote
+            <select id="gPromote"><option value="auto">auto (release gate)</option><option value="always">always</option><option value="never">never (candidate)</option></select>
+          </label>
+          <label>Notes <input id="gNotes" placeholder="what changed"></label>
+        </div>
+        <div class="actions">
+          <button class="primary" id="gRetrain">▶ Retrain</button>
+          <span class="muted" id="gVerdict"></span>
+        </div>
       </div>
     </section>
 
@@ -274,6 +361,16 @@
           <li><b>Simulated cluster:</b> pods, cold starts (measured per tool on EKS), the 60 s idle window and prewarming, all on the laptop. <b>Knative</b> uses the real cluster in your kubectl context (kind or EKS).</li>
         </ol>
         <p><b>Configurations:</b> C0 = scale to zero, no prewarming · C1 = always warm (min-scale 1) · C3 = scale to zero + predictor + controller.</p>
+        <p><b>Monitoring</b> (Knative mode): Prometheus scrapes the predictor, the prewarm controller, the replay runner,
+        the tools' pods (kube-state-metrics) and the nodes; Grafana's dashboards (<code>deploy/monitoring</code>) show
+        them live in the <i>Monitoring</i> tab, for the running episode or run, or for any finished run from <i>Results</i>.</p>
+        <p><b>The cloud around it:</b></p>
+        <ul>
+          <li><b>Load tests</b> (Experiments → Load test): Locust and asyncio drive the predictor, the tools or whole episodes harder and harder.</li>
+          <li><b>Model registry + retraining</b> (Models tab): pulse-v3's models are versioned in S3. Retraining (here or as a Kubernetes Job) publishes a new version that becomes the latest only if it beats the current one on held-out tasks.</li>
+          <li><b>Infrastructure as code</b>: Terraform makes the S3 registry, ECR, the CI roles and, optionally, the EKS cluster.</li>
+          <li><b>CI/CD + GitOps</b>: GitHub Actions test the code and build the image; Argo CD makes the cluster follow Git (top bar: commit, sync status).</li>
+        </ul>
         <p class="muted">Tip for a demo: reset the cluster (side panel), run a task with <i>None (C0)</i>, reset again, run the same task with the predictor. Then compare the two rows in <i>Episodes so far</i>.</p>
       </div>
     </section>

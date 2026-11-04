@@ -19,19 +19,25 @@ spec:
       labels: {app: pulse-ui, pulse/role: ui}
     spec:
       serviceAccountName: pulse
-__PLACE__
+      # __PLACE__  (ui_cloud.sh puts the client-node placement here; a comment, so the file is valid YAML for kustomize)
       containers:
         - name: ui
           image: __IMAGE__
           imagePullPolicy: IfNotPresent
           command: ["python", "ui/server.py"]
-          ports: [{containerPort: 8765}]
+          ports:                               # the named ones are scraped by Prometheus (deploy/monitoring)
+            - {containerPort: 8765}
+            - {name: predictor, containerPort: 8000}        # the predictor this pod starts
+            - {name: runner-metrics, containerPort: 9105}   # the runs this pod starts
           env:
             - {name: UI_HOST, value: "0.0.0.0"}
+            - {name: PULSE_METRICS_PORT, value: "9105"}
             - {name: UI_STATE_DIR, value: /home/app/ui-state}
             - {name: UI_RESULTS_DIR, value: /home/app/results/cloud_runs}
             - {name: CLUSTER_NAME, value: pulse-eks}
-          envFrom: [{secretRef: {name: pulse-llm-keys, optional: true}}]
+          envFrom:
+            - secretRef: {name: pulse-llm-keys, optional: true}
+            - configMapRef: {name: pulse-config, optional: true}   # GitOps settings, e.g. PULSE_MODEL_URI (deploy/gitops)
           readinessProbe:
             httpGet: {path: /api/tasks, port: 8765}
             initialDelaySeconds: 5

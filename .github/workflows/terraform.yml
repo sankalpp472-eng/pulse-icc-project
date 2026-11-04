@@ -1,0 +1,30 @@
+# `terraform plan` for the long-lived AWS resources on every pull request that changes terraform/, so reviewers
+# see what a merge would change. Read-only role (OIDC): CI never applies; a person runs `terraform apply`.
+# Needs the repository variables AWS_PLAN_ROLE_ARN and TF_STATE_BUCKET (terraform/README.md).
+name: terraform
+on:
+  pull_request:
+    paths: [terraform/**]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ap-south-1
+      - name: plan the registry root (models, ECR, CI roles)
+        run: |
+          terraform -chdir=terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          terraform -chdir=terraform plan -input=false -lock=false -no-color | tee plan.txt
+      - name: plan summary
+        if: always()
+        run: |
+          { echo '### terraform plan (terraform/)'; echo '```'; tail -n 60 plan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
