@@ -19,6 +19,7 @@ concurrency: image
 
 jobs:
   build-push-deploy:
+    if: ${{ vars.AWS_IMAGE_ROLE_ARN != '' }}      # skipped until the AWS side is set up (docs/RUNNING.md, section 6)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

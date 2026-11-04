@@ -2,13 +2,14 @@
 # Two roles, both only for workflows of var.github_repo:
 #   pulse-ci-image  push the runner image to ECR      (.github/workflows/image.yml; main branch only)
 #   pulse-ci-plan   read-only, for `terraform plan`   (.github/workflows/terraform.yml; any branch / PR)
-# Created only when github_repo is set. The repository then needs the variables AWS_IMAGE_ROLE_ARN and
+# Created for github_repo (empty = none). The repository then needs the variables AWS_IMAGE_ROLE_ARN and
 # AWS_PLAN_ROLE_ARN (Settings -> Secrets and variables -> Actions -> Variables) = the outputs below.
+# The default is the project's repository, so a plain `terraform plan` (and CI's) keeps the applied roles.
 
 variable "github_repo" {
   description = "owner/name of the GitHub repository whose workflows may assume the CI roles (empty = none)"
   type        = string
-  default     = ""
+  default     = "sankalpp472-eng/pulse-icc-project"
 }
 
 locals {
