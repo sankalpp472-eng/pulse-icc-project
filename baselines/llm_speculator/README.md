@@ -9,42 +9,64 @@ It is scored like the v2 predictor's models: same τ-bench airline runs, same ta
 10 unseen tasks, 1,578 steps), same `evaluate.accuracy` and `evaluate.theta_sweep`. It also gets
 timing scores, since a correct guess only helps if it comes back before the tool call.
 
-## Pipeline (from the repo root, with the agent's venv: it has `openai` and `python-dotenv`)
+## How it maps onto the paper (Algorithm 1)
+
+| Paper | Here |
+|---|---|
+| Actor: slow, authoritative call that decides `a_t` | the agent's LLM step (tool + arguments, or RESPOND) |
+| Speculator `g(s_t)`: fast model, k guesses | `speculate.py`: a fast Groq model, k guesses with confidences and arguments |
+| Pre-launch the next call for each guess | prewarm the guessed tool (a ping: no side effects, so nothing to roll back) |
+| Commit if the actor matches a guess | hit: the real call's tool was prewarmed |
+| Breadth k, confidence-aware selection (Thm 4) | launch policies in `score_vs_action_model.py`: top-k, θ, greedy λ |
+| Multi-model speculator, outputs pooled | `--models a,b`: models in parallel, distributions averaged |
+
+## Pipeline (from the repo root)
 
 ```bash
-agent/.venv/Scripts/python.exe baselines/llm_speculator/steps.py                  # 1. held-out steps + 300-step sample
-agent/.venv/Scripts/python.exe baselines/llm_speculator/speculate.py --dry-run    # see one prompt + token estimate
-agent/.venv/Scripts/python.exe baselines/llm_speculator/speculate.py              # 2. Groq, gpt-oss-20b, 300 steps
-agent/.venv/Scripts/python.exe baselines/llm_speculator/score.py results/<run>    # 3. vs n-gram (+ lr/gbdt if trained)
+python baselines/llm_speculator/steps.py --tau-bench ../tau-bench          # 1. held-out steps + 300-step sample
+python baselines/llm_speculator/speculate.py --dry-run                    #    one prompt + the call budget
+python baselines/llm_speculator/speculate.py                              # 2. list, k=3, gpt-oss-20b (300 calls)
+python predictor/build_action_data.py --tau-bench ../tau-bench --split speculator   # 3. same steps as rows
+python predictor/train_action.py --split speculator                       # 4. gbt / lr / ngram on that split
+python baselines/llm_speculator/score_vs_action_model.py results/<run> [results/<run2> ...]   # 5. compare
 ```
 
-* `steps.py` uses the v2 predictor's `tau_data.py` (in `predictor/` once the v2 patch is applied,
-  in `predictor_v2/pulse_predictor_v2_files/predictor/` until then; `PREDICTOR_DIR` overrides).
-  It downloads τ-bench's trajectories into that predictor's `data/tau/` if they are missing.
-* `speculate.py` reads `GROQ_API_KEY_1..N` from `agent/.env`. Requests go round-robin over the
-  keys, and a key that hits its daily limit is dropped. Rows are appended as they arrive, so a run
-  cut off by the quota resumes with `--out results/<same folder>`.
-* `score.py` fits the n-gram here (on the training tasks). It adds `lr` / `gbdt` when the v2
-  `data/predictor.pkl` exists and was not trained with `--final`. Several runs (models) can be
-  scored together if they used the same sample.
+`steps.py` uses `predictor/build_action_data.py`'s split (it used to need the uncommitted v2 `tau_data.py`);
+it reproduces the 1,578 held-out steps and the committed 300-step sample exactly. `score.py` still needs v2.
+
+## Speculation strategies (`speculate.py`)
+
+| Strategy | LLM calls per step | Confidence | Paper |
+|---|---|---|---|
+| `--strategy list --k K` (default K=3) | 1 per model | stated by the model | chess: top-k predictions from one call |
+| `--strategy sample --samples N` (default N=5, T=1.0) | N per model | vote share of N independent guesses | (self-consistency; measured instead of stated) |
+| `--models a,b` (with either) | x number of models | average of the models | e-commerce: multi-model speculator |
+
+The calls of a step run in parallel; the step's latency is the slowest call. Each guess includes the
+tool's arguments, so the paper's strict match (tool AND arguments) is scored too.
+Budget: 300 steps = 300 calls for `list`, 1,500 for `sample --samples 5`, 600 for `list` with 2 models.
+Keys from the same Groq organization share one quota.
 
 ## Prompt (`prompt.py`)
 
-Trimmed to fit Groq's free tier, ~1.1K prompt tokens per step:
-tool names with one-line descriptions, every tool called so far, the last 10 messages (each cut to
-400 characters), no policy text and no parameter schemas. The answer is JSON with 4 actions and
-probabilities. It is 4, not 3, so that "tool top-3" (RESPOND removed) still has 3 tools to rank.
-Unparseable answers count as misses.
+~1.1K prompt tokens per step: tool names with one-line descriptions, every tool called so far, the last 10
+messages (each cut to 400 characters), no policy text and no parameter schemas. The schema shows no example
+numbers: with `0.55 / 0.25 / 0.1 / 0.05` in it, gpt-oss-20b copied them in 147 of 300 answers (run
+`2026-10-25_1900`), so θ could not tell sure guesses from unsure ones. That run is still scored correctly
+for top-k, but its θ / greedy rows mean little.
 
-## Metrics (`score.py`)
+## Metrics (`score_vs_action_model.py`)
 
 | Column | Meaning |
 |---|---|
-| tool top1 / top3 | steps where the agent called a tool, ranking tools only (as in `evaluate.py`) |
+| tool top1 / top3 | steps where the agent called a tool, ranking tools only |
 | all top1 | all steps, tools + RESPOND |
-| p50 / p95 s | prediction latency (LLM: the successful request only, rate-limit waits excluded) |
+| p50 / p95 s | prediction latency (LLM: the slowest call of the step, rate-limit waits excluded) |
 | timely top3 | tool in the top 3 **and** the guess back within `--lead-s` (1.0 s, hint → call) |
 | cold hidden | share of the cold start (`--cold-s` 1.8 s) hidden: min(lead − latency, cold) / cold, 0 on a miss |
+| launch policies | for every method: top-k (k = 1..4, with Proposition 1's independent p(k)), θ, greedy λ (Thm 4: add the next tool while p_j·Π(1 − p_i) ≥ λ); hit, pods and wasted per step, timely hit, cold hidden |
+| args exact | LLM only: tool AND arguments right, top-1 / any kept guess (the paper's strict match) |
+| cost | LLM only: calls, prompt and completion tokens per step |
 
 With a 1.0 s lead and a 1.8 s cold start, even an instant, perfect predictor hides at most 56%.
 

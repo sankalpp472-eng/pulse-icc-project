@@ -17,6 +17,17 @@ Same definitions as score.py (accuracy, timing) and predictor/train_action.py (t
   cold hidden       tool steps: min(lead - latency, cold) / cold when the tool is in the top 3, else 0
   hit / wasted @ θ  tool steps whose tool had p >= θ / prewarmed tools that were not the next action, per step
 LLM answers that could not be parsed count as misses; unlisted actions share the leftover mass (as score.py).
+
+Launch policies (which guesses become prewarms), applied the SAME way to every method:
+  top-k     the k most likely actions, minus RESPOND (Algorithm 1 with breadth k; a guessed RESPOND launches
+            nothing). Also reports p(k) next to the independence formula 1-(1-p)^k from Proposition 1.
+  theta     every tool with p >= theta (what the predictor service does)
+  greedy λ  the paper's confidence-aware rule (Theorem 4 / Corollary 6): take tools in descending p and add
+            one while its marginal hit probability p_j * prod_{i<j}(1-p_i) >= λ, with λ = c / Δ* =
+            (cost of a wasted pod) / (value of a hit). Sweeping λ traces the cost-latency curve (Fig. 6).
+  per policy: hit (tool steps prewarmed), pods / wasted per step, timely hit, cold hidden (as above).
+LLM only: args exact = the paper's strict match (tool AND arguments) for the top-1 / any kept guess,
+and the cost per step (LLM calls, prompt + completion tokens).
 Writes results/compare_action_model_<time>.json
 """
 
@@ -80,6 +91,75 @@ def score(P, actions, lat_s, lead_s, cold_s):
     return out
 
 
+NO_WARM = (RESPOND, "END")
+TOPK, GREEDY = [1, 2, 3, 4], [0.05, 0.1, 0.2, 0.3]
+
+
+def ranked_all(p):
+    return [a for a, _ in sorted(p.items(), key=lambda kv: -kv[1])]
+
+
+def launch(p, policy, x):
+    if not p:
+        return []
+    if policy == "top-k":
+        return [a for a in ranked_all(p)[:x] if a not in NO_WARM]
+    if policy == "theta":
+        return [a for a, v in p.items() if v >= x and a not in NO_WARM]
+    out, miss = [], 1.0                                  # greedy, Theorem 4
+    for a in ranked_all(p):
+        if a in NO_WARM:
+            continue
+        if miss * p[a] < x:
+            break
+        out.append(a)
+        miss *= 1 - p[a]
+    return out
+
+
+def policy_scores(P, actions, lat_s, lead_s, cold_s):
+    rows, tool_n = [], max(1, sum(y != RESPOND for y in actions))
+    for policy, xs in (("top-k", TOPK), ("theta", THETAS), ("greedy", GREEDY)):
+        for x in xs:
+            L = [launch(p, policy, x) for p in P]
+            hits = [y != RESPOND and y in w for w, y in zip(L, actions)]
+            on_time = [l is not None and l <= lead_s for l in lat_s]
+            rows.append({"policy": policy, "x": x,
+                         "hit": sum(hits) / tool_n,
+                         "pods_per_step": statistics.mean(len(w) for w in L),
+                         "wasted_per_step": statistics.mean(sum(a != y for a in w) for w, y in zip(L, actions)),
+                         "timely_hit": sum(h and t for h, t in zip(hits, on_time)) / tool_n,
+                         "cold_hidden": sum(min(max(lead_s - l, 0.0), cold_s) / cold_s
+                                            for h, l in zip(hits, lat_s) if h and l is not None) / tool_n})
+    p1 = rows[0]["hit"]
+    for r in rows[:len(TOPK)]:
+        r["independent_p_k"] = 1 - (1 - p1) ** r["x"]       # Proposition 1's p(k) if guesses were independent
+    return rows
+
+
+def _norm_args(args):
+    def v(x):
+        return json.dumps(x, sort_keys=True) if isinstance(x, (dict, list)) else str(x).strip().lower()
+    return {str(k).strip().lower(): v(x) for k, x in (args or {}).items()}
+
+
+def llm_extras(rs, actions):
+    tool = [(r, y) for r, y in zip(rs, actions) if y != RESPOND]
+    nt = max(1, len(tool))
+    out = {"llm_calls_per_step": statistics.mean(r.get("n_calls", 1) for r in rs),
+           "prompt_tokens_per_step": statistics.mean((r.get("prompt_tokens") or 0) for r in rs),
+           "completion_tokens_per_step": statistics.mean((r.get("completion_tokens") or 0) for r in rs)}
+    if all("true_args" in r and "args" in r for r in rs):
+        def match(r, y, top1):
+            if not r.get("pred") or not r.get("args"):
+                return False
+            cands = ranked_all(r["pred"])[:1] if top1 else ranked_all(r["pred"])
+            return any(a == y and _norm_args(r["args"].get(a)) == _norm_args(r["true_args"]) for a in cands)
+        out["args_exact_top1"] = sum(match(r, y, True) for r, y in tool) / nt
+        out["args_exact_any"] = sum(match(r, y, False) for r, y in tool) / nt
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("runs", nargs="+", help="speculate.py result folders (same sample)")
@@ -120,16 +200,27 @@ def main():
     results = []
     for name in ("ngram", "lr", "gbt"):
         P, lat = model_preds(name, keys)
-        results.append({"method": name, **score(P, [rows.loc[k, "target"] for k in keys], lat, a.lead_s, a.cold_s)})
+        results.append({"method": name, **score(P, [rows.loc[k, "target"] for k in keys], lat, a.lead_s, a.cold_s),
+                        "_P": P, "_lat": lat})
         Pf, latf = model_preds(name, list(rows.index))           # all held-out steps: is the sample representative?
         results[-1]["full_test_tool_top1"] = score(Pf, list(rows.target), latf, a.lead_s, a.cold_s)["tool_top1"]
     for d, cfg, pr in zip(run_dirs, cfgs, preds):
         rs = [pr[k] for k in keys]
         P = [llm_distribution(r["pred"], names) if r.get("ok") else {} for r in rs]
-        results.append({"method": f"llm:{cfg['model']}", "run": d.name,
+        lat = [r.get("latency_s") for r in rs]
+        label = cfg.get("strategy", "list") + (f"-k{cfg['k']}" if "k" in cfg else "") + \
+            (f"-n{cfg['samples']}" if cfg.get("strategy") == "sample" else "")
+        acts = [rows.loc[k, "target"] for k in keys]
+        results.append({"method": f"llm:{cfg['model']} [{label}]", "run": d.name,
                         "parse_fail": sum(not r.get("ok") for r in rs) / len(rs),
-                        **score(P, [rows.loc[k, "target"] for k in keys], [r.get("latency_s") for r in rs],
-                                a.lead_s, a.cold_s)})
+                        **score(P, acts, lat, a.lead_s, a.cold_s), **llm_extras(rs, acts),
+                        # launch only what the speculator actually guessed (not the leftover mass
+                        # spread over unlisted actions for log-loss)
+                        "_P": [dict(r["pred"]) if r.get("ok") and r.get("pred") else {} for r in rs], "_lat": lat})
+
+    for r in results:                                 # every method through the same launch policies
+        P, lat = r.pop("_P"), r.pop("_lat")
+        r["policies"] = policy_scores(P, [rows.loc[k, "target"] for k in keys], lat, a.lead_s, a.cold_s)
 
     def f(x, w=7, d=3):
         return f"{x:{w}.{d}f}" if x is not None else f"{'-':>{w}}"
@@ -143,6 +234,20 @@ def main():
               + (f"  parse fail {r['parse_fail']:.2f}" if "parse_fail" in r else ""))
     print("  (full held-out tool top1: " + ", ".join(f"{r['method']} {r['full_test_tool_top1']:.3f}"
                                                      for r in results if "full_test_tool_top1" in r) + ")")
+
+    print(f"\n  Launch policies (same rule for every method; lead {a.lead_s} s, cold start {a.cold_s} s)")
+    print(f"  {'method':40} {'policy':12} {'hit':>5} {'pods/step':>9} {'wasted':>6} {'timely':>6} {'cold hid':>8} {'indep p(k)':>10}")
+    for r in results:
+        for q in r["policies"]:
+            ind = f"{q['independent_p_k']:10.3f}" if "independent_p_k" in q else " " * 10
+            print(f"  {r['method'][:40]:40} {q['policy'] + ' ' + str(q['x']):12} {q['hit']:5.3f} "
+                  f"{q['pods_per_step']:9.2f} {q['wasted_per_step']:6.2f} {q['timely_hit']:6.3f} {q['cold_hidden']:8.3f} {ind}")
+    for r in results:
+        if "llm_calls_per_step" in r:
+            extra = (f", args exact top-1 {r['args_exact_top1']:.3f} / any {r['args_exact_any']:.3f}"
+                     if "args_exact_top1" in r else ", args not predicted (old run)")
+            print(f"  {r['method']}: {r['llm_calls_per_step']:.1f} LLM calls, "
+                  f"{r['prompt_tokens_per_step']:.0f} + {r['completion_tokens_per_step']:.0f} tokens per step{extra}")
 
     out = HERE / "results" / f"compare_action_model_{time.strftime('%Y%m%d-%H%M%S')}.json"
     out.write_text(json.dumps({"domain": sample["domain"], "steps": len(keys), "lead_s": a.lead_s, "cold_s": a.cold_s,
