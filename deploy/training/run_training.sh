@@ -20,7 +20,7 @@ if ! kubectl get serviceaccount pulse-trainer >/dev/null 2>&1; then
   echo "No service account pulse-trainer. Create it once per cluster, bound to the publisher policy:"
   echo "  eksctl create iamserviceaccount --cluster <cluster> --region ap-south-1 --namespace default \\"
   echo "    --name pulse-trainer --attach-policy-arn \$(terraform -chdir=terraform output -raw model_publisher_policy_arn) --approve"
-  echo "(or Terraform: set eks_oidc_provider_arn, see terraform/training.tf)"
+  echo "(or, with the Terraform cluster + GitOps: terraform/eks/irsa.tf makes the role, deploy/gitops/ the account)"
   exit 1
 fi
 

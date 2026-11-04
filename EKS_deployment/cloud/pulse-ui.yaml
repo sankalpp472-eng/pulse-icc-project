@@ -19,7 +19,7 @@ spec:
       labels: {app: pulse-ui, pulse/role: ui}
     spec:
       serviceAccountName: pulse
-__PLACE__
+      # __PLACE__  (ui_cloud.sh puts the client-node placement here; a comment, so the file is valid YAML for kustomize)
       containers:
         - name: ui
           image: __IMAGE__
@@ -35,7 +35,9 @@ __PLACE__
             - {name: UI_STATE_DIR, value: /home/app/ui-state}
             - {name: UI_RESULTS_DIR, value: /home/app/results/cloud_runs}
             - {name: CLUSTER_NAME, value: pulse-eks}
-          envFrom: [{secretRef: {name: pulse-llm-keys, optional: true}}]
+          envFrom:
+            - secretRef: {name: pulse-llm-keys, optional: true}
+            - configMapRef: {name: pulse-config, optional: true}   # GitOps settings, e.g. PULSE_MODEL_URI (deploy/gitops)
           readinessProbe:
             httpGet: {path: /api/tasks, port: 8765}
             initialDelaySeconds: 5

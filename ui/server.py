@@ -58,6 +58,7 @@ async def no_stale_page(request, call_next):
 cluster = backend.Cluster()
 services = backend.Services(cluster)
 monitoring = backend.Monitoring(cluster)
+deployment = backend.Deployment(cluster)
 sim = SimCluster(backend.TOOL_NAMES)
 S: dict = {"session": None, "run": None, "history": []}
 RECORDINGS = backend.STATE / "recordings"      # live episodes recorded by the UI, replayable exactly (kind=recorded)
@@ -89,7 +90,8 @@ def state(session_after: int = 0, run_after: int = 0, events_after: int = 0):
             "events": events[events_after:], "events_n": len(events),
             "session": s.view(session_after) if s else None,
             "run": r.view(run_after) if r else None,
-            "history": S["history"][:20], "monitoring": monitoring.info(), "now": time.time()}
+            "history": S["history"][:20], "monitoring": monitoring.info(), "deployment": deployment.info(),
+            "now": time.time()}
 
 
 @app.post("/api/cluster")
@@ -314,6 +316,15 @@ def models_promote(body: dict):
     return backend.models_list()
 
 
+@app.post("/api/models/pin")
+def models_pin(body: dict):
+    """GitOps: write the version into pulse-config in this checkout (no commit; review it, then push / PR)."""
+    try:
+        return backend.models_pin_in_git(str(body.get("version") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/models/retrain")
 def models_retrain(spec: dict):
     """pulse_pred/train.py here, or the training Job in the cluster; its log streams in the Experiments tab."""
@@ -449,6 +460,7 @@ def _shutdown():
         S["run"].stop()
     services.stop()
     monitoring._stop_pf()
+    deployment._stop_pf()
 
 
 if __name__ == "__main__":

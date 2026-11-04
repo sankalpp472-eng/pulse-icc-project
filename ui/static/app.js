@@ -642,6 +642,22 @@ function renderServices(sv) {
   }
 }
 
+// ------------------------------------------------------------------ deployment: code version, GitOps (Argo CD)
+function renderDeployment(d) {
+  if (!d) return;
+  $("#depPill").textContent = d.image ? `image ${d.image}` : (d.commit ? `commit ${d.commit}` : "");
+  $("#depPill").classList.toggle("hidden", !d.commit && !d.image);
+  const apps = d.apps || [];
+  const ok = apps.filter((a) => a.sync === "Synced" && a.health === "Healthy").length;
+  const pill = $("#gitopsPill");
+  pill.classList.toggle("hidden", !d.argocd);
+  pill.textContent = `GitOps ${ok}/${apps.length} synced`;
+  pill.className = "pill " + (ok === apps.length ? "ok" : "wait") + (d.argocd ? "" : " hidden");
+  pill.title = apps.map((a) => `${a.name}: ${a.sync} / ${a.health}${a.revision ? " @ " + a.revision : ""}`).join("\n");
+  $("#argoLink").classList.toggle("hidden", !d.argocd_url);
+  if (d.argocd_url) $("#argoLink").href = d.argocd_url;
+}
+
 // ------------------------------------------------------------------ models (pulse-v3 registry on S3)
 const gWhere = seg("gWhere");
 let MODELS = { versions: [] };
@@ -666,11 +682,18 @@ function renderModels() {
       <td class="muted small">${cur["warm@3"] != null ? `${fmt(cur["warm@3"], 3)} (${esc((m.metrics || {}).current_version || "")})` : "–"}</td>
       <td class="small">${esc(m.notes || "")}</td>
       <td><button class="small" data-use="${esc(m.version)}" title="Start the pulse_v3 predictor with this version">Use</button>
-        ${m.latest ? "" : `<button class="small ghost" data-promote="${esc(m.version)}" title="Make it the latest (also: roll back)">Promote</button>`}</td></tr>`;
+        ${m.latest ? "" : `<button class="small ghost" data-promote="${esc(m.version)}" title="Make it the latest (also: roll back)">Promote</button>`}
+        ${state.cluster && state.cluster.in_cluster ? "" : `<button class="small ghost" data-pin="${esc(m.version)}" title="GitOps: pin this version for the cluster in EKS_deployment/cloud/gitops/config.yaml (no commit)">Pin in Git</button>`}</td></tr>`;
   }).join("") || `<tr><td colspan="8" class="muted">${MODELS.error ? "–" : "No versions yet."}</td></tr>`;
   $$("#gTbl [data-use]").forEach((b) => (b.onclick = async () => {
     try { await api("/api/models/use", { version: b.dataset.use }); predModel.value = "pulse_v3";
       toast(`Starting pulse_v3 with model ${b.dataset.use} (about a minute)`); } catch (e) { toast(e.message, 6000); }
+  }));
+  $$("#gTbl [data-pin]").forEach((b) => (b.onclick = async () => {
+    try {
+      const r = await api("/api/models/pin", { version: b.dataset.pin });
+      toast(r.changed ? `Pinned ${b.dataset.pin} in ${r.file}. Next: ${r.next}` : `${r.file} already pins ${b.dataset.pin}`, 12000);
+    } catch (e) { toast(e.message, 6000); }
   }));
   $$("#gTbl [data-promote]").forEach((b) => (b.onclick = async () => {
     if (!confirm(`Make ${b.dataset.promote} the latest model? Predictors that load "latest" pick it up when they restart.`)) return;
@@ -843,6 +866,7 @@ async function poll() {
     $("#podSec").textContent = c.mode === "sim" ? `${fmt(s.pod_seconds)} pod-s`
       : (c.context || "") + (mf.tool_pod_s_15m != null ? ` · ${fmt(mf.tool_pod_s_15m)} pod-s / 15 min (Prometheus)` : "");
     renderMonitoring(s.monitoring);
+    renderDeployment(s.deployment);
     renderServices(s.services);
     renderPods(s.pods);
     if (s.events_n < eventsAfter) eventsAfter = 0;

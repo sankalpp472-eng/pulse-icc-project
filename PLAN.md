@@ -160,9 +160,9 @@ Deviations from the plan:
   embedding cache), so the existing reader and publisher policies already cover it.
 - **Run traces:** the team's run traces aren't uploaded or converted into training data yet; that's
   a follow-up.
-- **Training Job permissions:** the Job's IAM role comes from `eksctl create iamserviceaccount`
-  today. `terraform/training.tf` creates it when given the cluster's OIDC provider ARN; it isn't
-  applied.
+- **Training Job permissions:** the Job's IAM role comes from `eksctl create iamserviceaccount`, or,
+  on the Terraform cluster, from `terraform/eks/irsa.tf`. Phase 4 replaced Phase 3's
+  `terraform/training.tf`, which was never applied.
 - **Held-out test split:** the deployed model now trains on 70% of tasks, plus 10% for validation,
   so that it has held-out tasks for the gate. Before, it trained on 90%.
 
@@ -194,6 +194,23 @@ Deviations from the plan:
    IAM role (Phase 4); until then the Models card works from the laptop only, and the card says so.
 
 ## Phase 4: infrastructure as code + GitOps
+
+Status: implemented on branch `iac-gitops`, which builds on `retraining`. Nothing is applied,
+installed or run.
+
+Deviations from the plan:
+- **EKS in Terraform is opt-in** (`USE_TERRAFORM=1`); eksctl stays the default. It uses a separate
+  root and state, so destroying the cluster never touches the registry.
+- **Tools outside GitOps:** Argo CD doesn't manage the Knative tools, because experiments switch
+  their min-scale at runtime. `pulse-system` has self-heal off for the same reason.
+- **Remote state:** a bootstrap root creates the state bucket. The registry root's local state has to
+  be migrated once (`terraform init -migrate-state`); until then, Terraform commands there ask for
+  that first.
+- **Pinning a model version:** "Pin in Git" edits the file in the checkout and leaves the commit and
+  pull request to the person, rather than opening a pull request itself (which would need a GitHub
+  token in the UI).
+- **IAM roles:** the UI pod shares the `pulse` service account, which can read models only. Promote
+  and Retrain need the laptop or the Job.
 
 ### Infrastructure
 

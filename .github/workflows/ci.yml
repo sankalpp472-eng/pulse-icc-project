@@ -1,0 +1,42 @@
+# Checks on every pull request and push to main: Python compiles and its tests pass, the Terraform roots are
+# formatted and valid, and the GitOps manifests build. Needs no AWS access (tests that need the S3 model skip).
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r predictor/requirements.txt -r pulse_pred/requirements.txt -r loadtest/requirements.txt pytest
+      - run: python -m compileall -q agent predictor controller pulse_pred loadtest ui test/test_knative baselines deploy
+      - run: python -m pytest -q predictor/tests pulse_pred/tests
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: fmt and validate (no backend, no AWS)
+        run: |
+          terraform fmt -check -recursive terraform
+          for d in terraform terraform/eks terraform/bootstrap; do
+            terraform -chdir=$d init -backend=false -input=false >/dev/null
+            terraform -chdir=$d validate
+          done
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the GitOps kustomizations build
+        run: |
+          kubectl kustomize EKS_deployment/cloud > /dev/null
+          kubectl kustomize deploy/monitoring > /dev/null

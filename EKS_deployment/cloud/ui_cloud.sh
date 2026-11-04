@@ -37,7 +37,7 @@ case "$CMD" in
       tolerations: [{key: pulse/role, operator: Equal, value: client, effect: NoSchedule}]'
     fi
     TMP=$(mktemp)
-    awk -v img="$IMAGE" -v place="$PLACE" '{ gsub("__IMAGE__", img); if ($0 == "__PLACE__") print place; else print }' \
+    awk -v img="$IMAGE" -v place="$PLACE" '{ gsub("__IMAGE__", img); if ($0 ~ /^ *# __PLACE__/) print place; else print }' \
       "$HERE/pulse-ui.yaml" > "$TMP"
     kubectl apply -f "$TMP"
     rm -f "$TMP"

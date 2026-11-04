@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.10"
 
   required_providers {
     aws = {
@@ -8,13 +8,13 @@ terraform {
     }
   }
 
-  # State is local for now. Once the team shares this config (CI / GitOps), move it to S3:
-  # backend "s3" {
-  #   bucket       = "<state bucket>"
-  #   key          = "pulse/terraform.tfstate"
-  #   region       = "ap-south-1"
-  #   use_lockfile = true
-  # }
+  # Shared state in S3 (bucket from terraform/bootstrap), so the team and CI plan against the same state.
+  # First time, with an existing local state:  terraform init -migrate-state -backend-config="bucket=pulse-tfstate-<account>"
+  backend "s3" {
+    key          = "pulse/registry.tfstate"
+    region       = "ap-south-1"
+    use_lockfile = true
+  }
 }
 
 provider "aws" {

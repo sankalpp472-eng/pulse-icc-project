@@ -354,6 +354,20 @@ and AWS credentials on the laptop. The UI pod in EKS has no S3 role yet.
 
 Details: [pulse_pred/README.md](../pulse_pred/README.md#retraining-mlops).
 
+### Recipe 10: deployments, GitOps and pinning a model
+
+- **Top bar:**
+  - **Code:** shows `commit <hash>` on the laptop, or `image <tag>` in the cluster (the image CI
+    built).
+  - **GitOps:** with Argo CD installed (`deploy/gitops/install.sh`), **GitOps n/m synced** shows
+    whether the cluster matches Git. Hover over it for each application's status and revision.
+  - **Argo CD ↗:** opens Argo CD itself; the laptop UI keeps the tunnel. The login is `admin`, and
+    the password command is in [deploy/gitops/README.md](../deploy/gitops/README.md).
+- **Pinning a model for the cluster:** Models tab → **Pin in Git** on a version. It writes the
+  version into `EKS_deployment/cloud/gitops/config.yaml` in your checkout. Commit it, open a pull
+  request, and after the merge Argo CD rolls it out. The cluster's UI then serves that version for
+  pulse_v3.
+
 ### Recipe 7: watch it live in Grafana (Prometheus monitoring)
 
 Knative mode only. The simulated cluster has no Prometheus.

@@ -332,6 +332,7 @@ class Services:
             app_dir = "baselines/llm_speculator"
         elif model == "pulse_v3":
             app_dir = "pulse_pred"
+            model_version = model_version or os.getenv("PULSE_MODEL_VERSION") or None   # pinned by GitOps (pulse-config)
             if model_version and MODEL_URI:
                 env["PULSE_MODEL_URI"] = f"{MODEL_URI.rstrip('/')}/{model_version}"
         else:
@@ -476,6 +477,80 @@ def build_retrain(spec: dict) -> list[tuple[str, list[str], dict]]:
                  {"PULSE_MODEL_URI": MODEL_URI, "PROMOTE": promote, "NOTES": notes})]
     return [("retrain pulse-v3 here (pulse_pred/train.py)",
              [PY, "pulse_pred/train.py", "--uri", MODEL_URI, "--promote", promote, "--notes", notes], {})]
+
+
+GITOPS_CONFIG = ROOT / "EKS_deployment" / "cloud" / "gitops" / "config.yaml"
+
+
+def models_pin_in_git(version: str) -> dict:
+    """GitOps: pin the production pulse-v3 version by editing pulse-config (EKS_deployment/cloud/gitops/config.yaml)
+    in this checkout. Nothing is committed: the change goes in through a reviewed commit / pull request, and Argo CD
+    rolls it out."""
+    if IN_CLUSTER or not GITOPS_CONFIG.exists():
+        raise ValueError("pinning in Git needs the repository checkout (the laptop UI)")
+    import re
+    text = GITOPS_CONFIG.read_text(encoding="utf-8")
+    new = re.sub(r'(PULSE_MODEL_VERSION:).*', rf'\1 "{version}"', text)
+    GITOPS_CONFIG.write_text(new, encoding="utf-8")
+    rel_path = GITOPS_CONFIG.relative_to(ROOT).as_posix()
+    return {"file": rel_path, "changed": new != text,
+            "next": f'git commit -m "models: pin pulse-v3 {version}" {rel_path}  then push and open a pull request'}
+
+
+# ====================================================================== deployment (CI image, GitOps / Argo CD)
+ARGOCD_LOCAL_PORT = int(os.getenv("UI_ARGOCD_PORT", "18080"))
+
+
+class Deployment:
+    """What runs and where it came from: the UI's own git commit / image (CI builds it, PULSE_GIT_COMMIT and
+    PULSE_IMAGE in the image), and in Knative mode Argo CD's applications (deploy/gitops/) with their sync and
+    health. On the laptop it keeps a port-forward to Argo CD's own UI (login needed there)."""
+
+    def __init__(self, cluster: Cluster):
+        self.cluster = cluster
+        self.apps: list[dict] = []
+        self.argocd = False
+        self.pf: subprocess.Popen | None = None
+        if os.getenv("PULSE_GIT_COMMIT"):
+            self.commit, self.image = os.getenv("PULSE_GIT_COMMIT"), os.getenv("PULSE_IMAGE", "")
+        else:
+            self.commit, self.image = _run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], 5)[1], ""
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def _loop(self):
+        while True:
+            try:
+                self.check()
+            except Exception:
+                self.apps = []
+            time.sleep(15)
+
+    def check(self):
+        if self.cluster.mode != "knative" or not self.cluster.reachable:
+            self.apps, self.argocd = [], False
+            self._stop_pf()
+            return
+        code, out = _run(["kubectl", "get", "applications.argoproj.io", "-n", "argocd", "-o", "json",
+                          "--request-timeout=6s"], 10)
+        self.argocd = code == 0
+        self.apps = [{"name": a["metadata"]["name"], "sync": (a.get("status") or {}).get("sync", {}).get("status"),
+                      "health": (a.get("status") or {}).get("health", {}).get("status"),
+                      "revision": ((a.get("status") or {}).get("sync", {}).get("revision") or "")[:7]}
+                     for a in json.loads(out).get("items", [])] if self.argocd else []
+        if self.argocd and not IN_CLUSTER and not (self.pf and self.pf.poll() is None):
+            self.pf = subprocess.Popen(["kubectl", "port-forward", "-n", "argocd", "svc/argocd-server",
+                                        f"{ARGOCD_LOCAL_PORT}:80"], stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+
+    def _stop_pf(self):
+        if self.pf and self.pf.poll() is None:
+            self.pf.terminate()
+        self.pf = None
+
+    def info(self) -> dict:
+        return {"commit": self.commit, "image": self.image.rsplit(":", 1)[-1] if self.image else "",
+                "argocd": self.argocd, "apps": self.apps,
+                "argocd_url": f"http://127.0.0.1:{ARGOCD_LOCAL_PORT}" if self.argocd and not IN_CLUSTER else None}
 
 
 # ====================================================================== monitoring (deploy/monitoring/)

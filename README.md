@@ -174,17 +174,34 @@ Results go to `results/load_runs/`, and `loadtest/plot_load.py` plots them.
 
 ## Infrastructure as code
 
-`terraform/` holds the AWS resources managed with Terraform. So far that's the model registry:
-- an S3 bucket that is private, versioned and encrypted, and accepts TLS only;
-- IAM policies for reading models and for publishing them.
+`terraform/` has three roots, each with its own state:
+- `bootstrap/`: the remote-state bucket;
+- the long-lived **registry** (`terraform/`): the S3 model bucket, ECR, and the CI roles for GitHub
+  Actions through OIDC;
+- the **EKS cluster** (`terraform/eks/`): the same nodes as `cluster.yaml`, with IRSA roles so pods
+  get AWS access without keys.
 
 ```bash
-cd terraform && terraform init && terraform plan && terraform apply
+USE_TERRAFORM=1 bash EKS_deployment/eks_up.sh      # the cluster from Terraform (eksctl remains the default)
 ```
 
-The cluster itself is still created by `eksctl` (`EKS_deployment/`). Planned next: EKS and ECR in
-Terraform, remote state, CI with GitHub Actions, and GitOps with Argo CD. See
-[terraform/README.md](terraform/README.md).
+The setup order is in [terraform/README.md](terraform/README.md).
+
+## CI/CD and GitOps
+
+- **On pull requests:** GitHub Actions (`.github/workflows/`) run the tests, `terraform
+  fmt/validate`, the kustomize builds, and a read-only `terraform plan`.
+- **On merge to main:** the workflow builds the runner image, pushes it to ECR, and writes its tag
+  into `EKS_deployment/cloud/kustomization.yaml`.
+- **In the cluster:** Argo CD makes it follow Git: Pulse's services, the CRD and monitoring.
+
+```bash
+USE_GITOPS=1 bash EKS_deployment/eks_up.sh         # or: bash deploy/gitops/install.sh
+```
+
+In the UI, the top bar shows the running commit or image, the **GitOps n/m synced** status and an
+**Argo CD ↗** link, and the Models tab can **Pin in Git**. See
+[deploy/gitops/README.md](deploy/gitops/README.md).
 
 ## Results
 
@@ -209,7 +226,8 @@ Each run writes one folder:
 | `loadtest/` | Load tests: Locust (predictor, tools, episodes), asyncio open-loop generator, `plot_load.py` |
 | `deploy/training/` | pulse-v3 retraining as a Kubernetes Job (with an embedding sidecar), `run_training.sh` |
 | `EKS_deployment/` | EKS cluster scripts, in-cluster runner image and services |
-| `terraform/` | Infrastructure as code (S3 model registry) |
+| `terraform/` | Infrastructure as code: state bucket (`bootstrap/`), model registry + ECR + CI roles, EKS cluster (`eks/`) |
+| `deploy/gitops/`, `.github/workflows/` | Argo CD applications and install script; CI (tests, image build, terraform plan) |
 | `test/test_knative/` | kind setup, C0/C1/C3 runners, plots |
 | `ui/` | Demo UI |
 | `results/` | Run results (`cloud_runs/`, `local_runs/`) |
@@ -222,6 +240,7 @@ Each run writes one folder:
 - [deploy/prewarm/README.md](deploy/prewarm/README.md): the predictor ↔ controller contract.
 - [deploy/monitoring/README.md](deploy/monitoring/README.md): Prometheus and Grafana.
 - [loadtest/README.md](loadtest/README.md): load testing.
+- [deploy/gitops/README.md](deploy/gitops/README.md): CI/CD and GitOps.
 - [EKS_deployment/README.md](EKS_deployment/README.md): the older laptop-driven EKS scripts.
 - [NEXT_EXPERIMENTS.md](NEXT_EXPERIMENTS.md): planned experiments.
 - [pulse_pred/README.md](pulse_pred/README.md): the pulse-v3 predictor.

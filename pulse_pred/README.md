@@ -84,7 +84,8 @@ python pulse_pred/model_store.py promote "$PULSE_MODEL_URI" <version> # also: ro
 - **Training Job** (`deploy/training/`): runs on the client node, with an embedding-server sidecar
   (llama.cpp + nomic-embed-text). Its service account `pulse-trainer` gets the
   `pulse-model-publisher` policy through IRSA: run `eksctl create iamserviceaccount` (the script
-  prints it), or Terraform `terraform/training.tf`.
+  prints it). With the Terraform cluster and GitOps, `terraform/eks/irsa.tf` creates the role and
+  `deploy/gitops/` the service account.
 - **In the UI, Models tab:**
   - **Versions:** every version with its held-out metrics, which one is `latest` and which one the
     predictor serves.

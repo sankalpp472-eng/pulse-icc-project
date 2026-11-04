@@ -28,6 +28,11 @@
       <a id="monLink" class="hidden" href="/grafana/" target="_blank" title="Grafana, through this UI">Grafana ↗</a>
       <button class="ghost small hidden" id="monInstall" title="bash deploy/monitoring/install.sh (needs helm)">Install</button>
     </span>
+    <span class="mon-box" id="depBox">
+      <span class="pill mono" id="depPill" title="The code this UI runs (git commit; in the cluster: the image CI built)"></span>
+      <span class="pill hidden" id="gitopsPill" title="Argo CD applications (deploy/gitops): synced with Git / healthy"></span>
+      <a id="argoLink" class="hidden" target="_blank" title="Argo CD (login: admin, see deploy/gitops/install.sh)">Argo CD ↗</a>
+    </span>
   </div>
 </header>
 
@@ -359,6 +364,13 @@
         <p><b>Monitoring</b> (Knative mode): Prometheus scrapes the predictor, the prewarm controller, the replay runner,
         the tools' pods (kube-state-metrics) and the nodes; Grafana's dashboards (<code>deploy/monitoring</code>) show
         them live in the <i>Monitoring</i> tab, for the running episode or run, or for any finished run from <i>Results</i>.</p>
+        <p><b>The cloud around it:</b></p>
+        <ul>
+          <li><b>Load tests</b> (Experiments → Load test): Locust and asyncio drive the predictor, the tools or whole episodes harder and harder.</li>
+          <li><b>Model registry + retraining</b> (Models tab): pulse-v3's models are versioned in S3. Retraining (here or as a Kubernetes Job) publishes a new version that becomes the latest only if it beats the current one on held-out tasks.</li>
+          <li><b>Infrastructure as code</b>: Terraform makes the S3 registry, ECR, the CI roles and, optionally, the EKS cluster.</li>
+          <li><b>CI/CD + GitOps</b>: GitHub Actions test the code and build the image; Argo CD makes the cluster follow Git (top bar: commit, sync status).</li>
+        </ul>
         <p class="muted">Tip for a demo: reset the cluster (side panel), run a task with <i>None (C0)</i>, reset again, run the same task with the predictor. Then compare the two rows in <i>Episodes so far</i>.</p>
       </div>
     </section>

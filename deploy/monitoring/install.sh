@@ -18,7 +18,7 @@ command -v helm >/dev/null || { echo "helm not found: https://helm.sh/docs/intro
 CTX=$(kubectl config current-context)
 
 if [ "${1:-}" = "uninstall" ]; then
-  kubectl delete -f "$DIR/monitors.yaml" --ignore-not-found
+  kubectl delete -k "$DIR" --ignore-not-found
   helm uninstall "$REL" -n "$NS" || true
   kubectl delete namespace "$NS" --ignore-not-found
   echo "monitoring removed from $CTX (the chart's CRDs stay: kubectl get crd | grep monitoring.coreos.com)"
@@ -37,13 +37,7 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm upgrade --install "$REL" prometheus-community/kube-prometheus-stack -n "$NS" --create-namespace \
   "${FILES[@]}" ${CHART_VERSION:+--version "$CHART_VERSION"} --wait --timeout 10m
 
-kubectl apply -f "$DIR/monitors.yaml"
-for f in "$DIR"/dashboards/*.json; do                 # dashboards as code -> ConfigMaps Grafana's sidecar loads
-  name="pulse-dashboard-$(basename "$f" .json)"
-  kubectl create configmap "$name" -n "$NS" --from-file="$(basename "$f")=$f" --dry-run=client -o yaml |
-    kubectl label --local -f - grafana_dashboard=1 -o yaml | kubectl apply -f - >/dev/null
-  echo "dashboard: $name"
-done
+kubectl apply -k "$DIR"          # scrape configs + dashboards as ConfigMaps (kustomization.yaml; Argo CD applies the same)
 
 helm list -n "$NS" --filter "^$REL\$"
 echo

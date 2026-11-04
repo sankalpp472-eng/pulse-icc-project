@@ -58,7 +58,8 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 | `test/test_knative/` | Local cluster setup, C0/C1/C3 runners, plots, `results/` |
 | `test/test_cold_start/` | The OpenFaaS CE tests that led to the move to Knative |
 | `EKS_deployment/` | EKS cluster, Knative setup, `run_c0/c1/c3/all.sh` |
-| `terraform/` | Infrastructure as code; so far the S3 model registry (versioned bucket + reader/publisher IAM policies) |
+| `terraform/` | Infrastructure as code, three roots: `bootstrap/` (state bucket), `.` (S3 model registry, ECR, GitHub OIDC CI roles), `eks/` (the EKS cluster + IRSA; opt-in via `USE_TERRAFORM=1 eks_up.sh`) |
+| `deploy/gitops/`, `.github/workflows/` | GitOps (Argo CD apps for `EKS_deployment/cloud` via kustomize, the CRD, monitoring) and CI (tests, image → ECR → tag commit, terraform plan) |
 | `workloads/` | Workload spreadsheet (prompts, graphs, real traces) |
 | `ui/` | Demo UI (`agent/.venv/Scripts/python ui/server.py` → http://127.0.0.1:8765): live / replay episodes on a simulated or real cluster, predictor choice, experiment runs, results |
 | `docs/` | PRD and the Knative decision document |
