@@ -60,6 +60,7 @@ os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 from c0_common import (COLD_LATENCY_S, PodWatcher, peak_pods, reset_db, run_config, run_dir,  # noqa: E402
                        save_predictor_health,
                        shared_db, tasks_tag, wait_all_ready, wait_all_zero)
+from pulse_metrics import RunMetrics  # noqa: E402
 from tools import READ_ONLY_TOOLS as READ_TOOLS, LocalToolBackend, MCPToolBackend  # noqa: E402
 
 TRACES = HERE / "data" / "w1_tau_traces.jsonl"
@@ -333,8 +334,9 @@ def plan(a) -> list[dict]:
 
 class Replay:
     def __init__(self, predictor_url: str | None = None, workflow_id: str = "W1", hint_log: Path | None = None,
-                 hint_context: bool = False, hint_timeout: float = 1.0):
+                 hint_context: bool = False, hint_timeout: float = 1.0, metrics: RunMetrics | None = None):
         self.rows, self.lock, self.active = [], threading.Lock(), 0
+        self.metrics = metrics
         self.predictor_url, self.workflow_id, self.hint_log = predictor_url, workflow_id, hint_log
         self.hint_context, self.hint_timeout = hint_context, hint_timeout
         self.hints_sent = self.hints_ok = 0
@@ -405,6 +407,8 @@ class Replay:
                                       "planned_gap_s": gap if j == i else 0.0, "user_turns_before": call["user_turns_before"],
                                       "concurrent_episodes": concurrent,
                                       "transport_ok": "MCP call" not in out, "tool_error": out.startswith("Error")})
+                    if self.metrics:            # live view in Grafana; cold here = slower than 1 s (the pod rule needs the whole run)
+                        self.metrics.call(call["tool"], latency > COLD_LATENCY_S, latency, None, None, None)
             trajectory += [tr["calls"][j]["tool"] for j in idx]
         ep["t_end"] = time.time()
         with self.lock:
@@ -454,6 +458,8 @@ def main():
     ap.add_argument("--no-signals", action="store_true",
                     help="C3: send trajectory-only hints (the predictor then uses its ensemble, not gbt)")
     ap.add_argument("--label", default="", help="extra text at the end of the result folder name (e.g. eks)")
+    ap.add_argument("--metrics-port", type=int, default=int(os.getenv("PULSE_METRICS_PORT", "0")),
+                    help="serve Prometheus metrics of the run on this port (0 = off; deploy/monitoring scrapes 9105)")
     a = ap.parse_args()
 
     episodes = plan(a)
@@ -520,8 +526,11 @@ def main():
         reset_db()
     print(f"{start_state}, database reset; starting\n")
 
+    metrics = RunMetrics(a.metrics_port, out_dir.name, a.workflow_id, sorted({c["tool"] for e in episodes for c in e["trace"]["calls"]}),
+                         {"config": cfg["config"], "window": str(cfg["knative"]["tool_window"]), "agent_model": "replay",
+                          "user_model": "replay", "database": db.split(" ")[0]})
     rp = Replay(a.predictor_url, a.workflow_id, out_dir / "hints.jsonl" if a.predictor_url else None,
-                a.hint_context, a.hint_timeout)
+                a.hint_context, a.hint_timeout, metrics if metrics.on else None)
     if a.sequential:                    # one conversation at a time, each starting from the same state
         for k, e in enumerate(episodes):
             if k and scale_to_zero:

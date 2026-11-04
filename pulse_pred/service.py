@@ -7,6 +7,7 @@ pulse-v3 as a live prewarm source: the same API as predictor/service.py, so the 
   POST /predict   hint + "history" (compact messages, as for the LLM speculator) -> ranked next tools;
                   the tools picked by PREWARM_POLICY become PrewarmRequests (k = 1)
   GET  /healthz   model, policy, CRD writer state, sessions, embedding server state
+  GET  /metrics   Prometheus, the same metric names as predictor/service.py (deploy/monitoring dashboards)
 
 pulse-v3 follows a session: the first hint of an episode starts it (first customer message), and every
 new tool step in the trajectory is replayed into it as a call (with its arguments, from the history) and
@@ -36,6 +37,7 @@ for p in (ROOT, ROOT / "predictor"):                 # pulse_pred package; predi
         sys.path.insert(0, str(p))
 
 from fastapi import FastAPI  # noqa: E402
+from prometheus_client import CollectorRegistry, Counter, Histogram, make_asgi_app  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from crd_writer import CRDWriter  # noqa: E402
@@ -61,6 +63,13 @@ PRED = PulseV3Predictor.load(path=MODEL_FILE, embedder=Embedder(timeout=float(os
 WRITER = CRDWriter()
 LOCK = threading.Lock()
 EPISODES = {}                                         # episode_id -> what this service has told pulse-v3
+
+# own registry: predictor/service.py registers the same names when both are imported in one process (tests)
+REGISTRY = CollectorRegistry()
+LATENCY = Histogram("predictor_request_seconds", "Time to answer one /predict call",
+                    buckets=(0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25), registry=REGISTRY)
+HINTS = Counter("predictor_hints_total", "Hints received", ["workflow_id"], registry=REGISTRY)
+PREWARMS = Counter("predictor_prewarm_candidates_total", "Tools at or above theta", ["tool"], registry=REGISTRY)
 
 
 class Hint(BaseModel):
@@ -164,6 +173,7 @@ def update(h):
 
 
 app = FastAPI(title="Pulse next-tool predictor (pulse-v3)")
+app.mount("/metrics", make_asgi_app(registry=REGISTRY))
 
 
 @app.get("/healthz")
@@ -184,6 +194,10 @@ def predict(h: Hint):                     # sync: FastAPI runs it in a thread po
     warm = set(prewarm_select(ranked, PREWARM_POLICY, THETA, TOP_K, P_MIN))
     pw = [(t, v) for t, v in ranked if t in warm]
     wf = h.workflow_id or "W1"
+    LATENCY.observe(time.perf_counter() - t0)
+    HINTS.labels(wf).inc()
+    for t, _ in pw:
+        PREWARMS.labels(t).inc()
     WRITER.submit([(t, v, 1) for t, v in pw], THETA, TTL_S, episode_id=h.episode_id, workflow_id=wf)
     return Prediction(workflow_id=wf, episode_id=h.episode_id, model=MODEL,
                       ranked=[ToolProb(tool=t, p=round(v, 6)) for t, v in ranked],

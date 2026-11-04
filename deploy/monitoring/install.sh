@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Prometheus + Grafana (kube-prometheus-stack) for Pulse, in the namespace `monitoring` of the current kubectl
+# context (kind or EKS). Safe to rerun: it upgrades in place and refreshes the scrape configs and dashboards.
+#
+#   bash deploy/monitoring/install.sh              # install / update
+#   bash deploy/monitoring/install.sh uninstall    # remove it all (Prometheus data goes with it)
+#
+# Needs helm and kubectl. On EKS run it after eks_up.sh (it puts the stack on the client node); the UI and
+# `kubectl port-forward -n monitoring svc/pulse-mon-grafana 3000:80` then show Grafana. CHART_VERSION pins the
+# chart version (default: the newest).
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+NS=monitoring
+REL=pulse-mon
+DIR=deploy/monitoring
+
+command -v helm >/dev/null || { echo "helm not found: https://helm.sh/docs/intro/install/"; exit 1; }
+CTX=$(kubectl config current-context)
+
+if [ "${1:-}" = "uninstall" ]; then
+  kubectl delete -f "$DIR/monitors.yaml" --ignore-not-found
+  helm uninstall "$REL" -n "$NS" || true
+  kubectl delete namespace "$NS" --ignore-not-found
+  echo "monitoring removed from $CTX (the chart's CRDs stay: kubectl get crd | grep monitoring.coreos.com)"
+  exit 0
+fi
+
+FILES=(-f "$DIR/values.yaml")
+if [[ "$CTX" == kind-* ]]; then
+  FILES+=(-f "$DIR/values-kind.yaml")
+elif [ -n "$(kubectl get nodes -l pulse/role=client -o name)" ]; then
+  FILES+=(-f "$DIR/values-eks.yaml")
+fi
+echo "context $CTX | values: ${FILES[*]}"
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update >/dev/null
+helm upgrade --install "$REL" prometheus-community/kube-prometheus-stack -n "$NS" --create-namespace \
+  "${FILES[@]}" ${CHART_VERSION:+--version "$CHART_VERSION"} --wait --timeout 10m
+
+kubectl apply -f "$DIR/monitors.yaml"
+for f in "$DIR"/dashboards/*.json; do                 # dashboards as code -> ConfigMaps Grafana's sidecar loads
+  name="pulse-dashboard-$(basename "$f" .json)"
+  kubectl create configmap "$name" -n "$NS" --from-file="$(basename "$f")=$f" --dry-run=client -o yaml |
+    kubectl label --local -f - grafana_dashboard=1 -o yaml | kubectl apply -f - >/dev/null
+  echo "dashboard: $name"
+done
+
+helm list -n "$NS" --filter "^$REL\$"
+echo
+echo "Grafana: in the UI (Knative mode -> Monitoring tab), or"
+echo "  kubectl port-forward -n $NS svc/pulse-mon-grafana 3000:80   ->  http://127.0.0.1:3000 (read-only without login)"
+echo "  admin password: kubectl get secret -n $NS pulse-mon-grafana -o jsonpath='{.data.admin-password}' | base64 -d"

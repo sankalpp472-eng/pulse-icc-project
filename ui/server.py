@@ -14,11 +14,15 @@ import sys
 import time
 from pathlib import Path
 
+import urllib.error
+import urllib.request
+
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -53,6 +57,7 @@ async def no_stale_page(request, call_next):
     return resp
 cluster = backend.Cluster()
 services = backend.Services(cluster)
+monitoring = backend.Monitoring(cluster)
 sim = SimCluster(backend.TOOL_NAMES)
 S: dict = {"session": None, "run": None, "history": []}
 RECORDINGS = backend.STATE / "recordings"      # live episodes recorded by the UI, replayable exactly (kind=recorded)
@@ -82,7 +87,7 @@ def state(session_after: int = 0, run_after: int = 0, events_after: int = 0):
             "events": events[events_after:], "events_n": len(events),
             "session": s.view(session_after) if s else None,
             "run": r.view(run_after) if r else None,
-            "history": S["history"][:20], "now": time.time()}
+            "history": S["history"][:20], "monitoring": monitoring.info(), "now": time.time()}
 
 
 @app.post("/api/cluster")
@@ -274,6 +279,58 @@ def run_stop():
     return {"ok": True}
 
 
+# ---------------------------------------------------------------- monitoring (Prometheus + Grafana)
+@app.post("/api/monitoring/install")
+def monitoring_install():
+    """Run deploy/monitoring/install.sh like an experiment run (its log streams in the Experiments tab)."""
+    if busy():
+        raise HTTPException(409, busy())
+    if cluster.mode != "knative":
+        raise HTTPException(400, "Monitoring is installed into the real cluster: switch to Knative (top bar) first")
+    if backend.IN_CLUSTER or not backend.bash():
+        raise HTTPException(400, "Install it from the laptop: bash deploy/monitoring/install.sh (needs helm)")
+    S["run"] = backend.BatchRun({"mode": "monitoring install"},
+                                [("install Prometheus + Grafana (deploy/monitoring/install.sh)",
+                                  [backend.bash(), "deploy/monitoring/install.sh"], {})], services)
+    return {"ok": True}
+
+
+@app.get("/api/monitoring/link")
+def monitoring_link(path: str, dashboard: str = "pulse-overview"):
+    """Grafana for exactly one result run: its start-to-end window (from calls.csv), a minute either side."""
+    try:
+        t0, t1 = backend.run_window(path)
+    except (ValueError, OSError) as e:
+        raise HTTPException(400, str(e))
+    return {"dashboard": dashboard, "from": int((t0 - 60) * 1000), "to": int((t1 + 60) * 1000)}
+
+
+_GRAFANA_HEADERS = ("content-type", "accept", "x-grafana-org-id", "x-dashboard-uid", "x-panel-id",
+                    "x-datasource-uid", "x-query-group-id", "x-grafana-device-id", "x-plugin-id")
+
+
+@app.api_route("/grafana/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def grafana(path: str, request: Request):
+    """Grafana through the UI (it builds its links under /grafana/, values.yaml): the page needs no second tunnel."""
+    if not monitoring.reachable:
+        raise HTTPException(503, f"Grafana not available: {monitoring.detail}")
+    url = f"{monitoring.base()}/{path}" + (f"?{request.url.query}" if request.url.query else "")
+    body = await request.body()
+    req = urllib.request.Request(url, data=body or None, method=request.method,
+                                 headers={k: v for k, v in request.headers.items() if k.lower() in _GRAFANA_HEADERS})
+
+    def fetch():
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.status, r.read(), r.headers
+        except urllib.error.HTTPError as e:
+            return e.code, e.read(), e.headers
+
+    status, data, headers = await run_in_threadpool(fetch)
+    keep = {k: v for k, v in headers.items() if k.lower() in ("content-type", "cache-control", "etag", "last-modified")}
+    return Response(data, status_code=status, headers=keep)
+
+
 # ---------------------------------------------------------------- results
 @app.get("/api/results")
 def results():
@@ -343,6 +400,7 @@ def _shutdown():
     if S["run"]:
         S["run"].stop()
     services.stop()
+    monitoring._stop_pf()
 
 
 if __name__ == "__main__":

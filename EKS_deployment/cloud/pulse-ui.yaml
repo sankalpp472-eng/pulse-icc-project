@@ -25,9 +25,13 @@ __PLACE__
           image: __IMAGE__
           imagePullPolicy: IfNotPresent
           command: ["python", "ui/server.py"]
-          ports: [{containerPort: 8765}]
+          ports:                               # the named ones are scraped by Prometheus (deploy/monitoring)
+            - {containerPort: 8765}
+            - {name: predictor, containerPort: 8000}        # the predictor this pod starts
+            - {name: runner-metrics, containerPort: 9105}   # the runs this pod starts
           env:
             - {name: UI_HOST, value: "0.0.0.0"}
+            - {name: PULSE_METRICS_PORT, value: "9105"}
             - {name: UI_STATE_DIR, value: /home/app/ui-state}
             - {name: UI_RESULTS_DIR, value: /home/app/results/cloud_runs}
             - {name: CLUSTER_NAME, value: pulse-eks}

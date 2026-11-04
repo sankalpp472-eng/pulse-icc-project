@@ -131,6 +131,24 @@ export PULSE_MODEL_URI=s3://pulse-models-<account id>/pulse-v3   # = terraform -
 - **Embedding server:** pulse-v3 is more accurate with its local embedding server
   (llama.cpp + nomic-embed-text on port 8091). Without it, it runs with a zero embedding.
 
+## Monitoring (Prometheus + Grafana)
+
+```bash
+bash deploy/monitoring/install.sh      # into the current kubectl context (kind or EKS), needs helm
+```
+
+- **What it is:** kube-prometheus-stack with three dashboards kept as code: Pulse overview, Predictor
+  and Cluster.
+- **What is scraped:** the predictors (`/metrics`), the prewarm controller, the replay runner's live
+  tool-call metrics, the tool pods (kube-state-metrics), the nodes and Knative.
+- **In the UI** (Knative mode):
+  - a monitoring status, **Install** button and **Grafana ↗** link in the top bar;
+  - a **Monitoring** tab whose time window follows the running run or episode;
+  - Prometheus figures on the Predictor and Tool pods cards;
+  - a **Grafana** link per run in Results.
+- **On EKS** it runs on the client node, away from the tools.
+- **Details:** [deploy/monitoring/README.md](deploy/monitoring/README.md).
+
 ## Infrastructure as code
 
 `terraform/` holds the AWS resources managed with Terraform. So far that's the model registry:
@@ -164,6 +182,7 @@ Each run writes one folder:
 | `pulse_pred/` | pulse-v3 predictor and its S3 model store |
 | `controller/` | Prewarm controller |
 | `deploy/knative/`, `deploy/prewarm/` | Knative services for the tools; the `PrewarmRequest` CRD and contract |
+| `deploy/monitoring/` | Prometheus + Grafana: Helm values, scrape configs, dashboards as code, `install.sh` |
 | `EKS_deployment/` | EKS cluster scripts, in-cluster runner image and services |
 | `terraform/` | Infrastructure as code (S3 model registry) |
 | `test/test_knative/` | kind setup, C0/C1/C3 runners, plots |
@@ -176,6 +195,7 @@ Each run writes one folder:
 - [RUN_EXPERIMENTS.md](RUN_EXPERIMENTS.md): every experiment step by step, on EKS or kind.
 - [ui/GUIDE.md](ui/GUIDE.md): the demo UI.
 - [deploy/prewarm/README.md](deploy/prewarm/README.md): the predictor ↔ controller contract.
+- [deploy/monitoring/README.md](deploy/monitoring/README.md): Prometheus and Grafana.
 - [EKS_deployment/README.md](EKS_deployment/README.md): the older laptop-driven EKS scripts.
 - [NEXT_EXPERIMENTS.md](NEXT_EXPERIMENTS.md): planned experiments.
 - [pulse_pred/README.md](pulse_pred/README.md): the pulse-v3 predictor.

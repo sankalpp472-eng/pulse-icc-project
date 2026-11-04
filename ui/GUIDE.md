@@ -304,6 +304,35 @@ Only one thing runs at a time: an experiment run and a demo episode share the to
    - plus `comparison.json`, the numbers behind them.
 5. Click an image to open it full size. The **zip** link on a run row downloads that whole run folder.
 
+### Recipe 7: watch it live in Grafana (Prometheus monitoring)
+
+Knative mode only. The simulated cluster has no Prometheus.
+
+1. **Install once per cluster.**
+   - The top bar shows **no monitoring** next to the cluster switch. Click **Install** (laptop UI,
+     needs `helm`), or run `bash deploy/monitoring/install.sh` yourself.
+   - The log streams in the Experiments tab's **Run log**, and it takes about 2–3 min.
+   - On EKS the stack goes on the client node, away from the tools. Details:
+     [deploy/monitoring/README.md](../deploy/monitoring/README.md).
+2. **When it's ready,** the pill turns **monitoring on** and a **Grafana ↗** link appears.
+   - **Predictor card:** shows the predictor's p95 latency measured by Prometheus. It turns orange
+     above the 50 ms target (NFR-4).
+   - **Tool pods card:** shows the tools' ready pod-seconds over the last 15 minutes.
+3. **Monitoring tab:** pick a dashboard.
+   - **Pulse overview:** pods per tool, warm pod-seconds, cold share, tool latency, prewarms, warm-up
+     pings.
+   - **Predictor:** p95 against 50 ms, hints/s, prewarm candidates.
+   - **Cluster:** node CPU and memory, container CPU.
+
+   The time window **follows** whatever is running: an experiment run, or the current episode.
+   Otherwise it shows the last 15 minutes.
+4. **Results tab:** the **Grafana** link on a run row opens that run's exact time window in the
+   Monitoring tab. This works only while the cluster that ran it is still up (Prometheus keeps
+   2 days of data).
+
+The UI shows Grafana through its own address (`/grafana/`), so the single `ui_cloud.sh` tunnel is
+enough in EKS too.
+
 ---
 
 ## 6. Reading what you see

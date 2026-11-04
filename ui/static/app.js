@@ -49,7 +49,9 @@ $("#tabs").addEventListener("click", (e) => {
   $$("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
   $$(".tab").forEach((t) => t.classList.toggle("on", t.id === "tab-" + b.dataset.tab));
   if (b.dataset.tab === "results") loadResults();
+  if (b.dataset.tab === "mon") renderMonTab();
 });
+const showTab = (name) => $(`#tabs button[data-tab="${name}"]`).click();
 
 // ------------------------------------------------------------------ cluster switch
 const clusterSeg = seg("clusterSeg", async (mode) => {
@@ -501,9 +503,11 @@ function renderResults() {
       <td><input type="checkbox" data-path="${esc(r.path)}"></td>
       <td class="name" title="${esc(r.path)}">${esc(r.name)}</td><td class="muted">${esc(r.where)}</td><td>${esc(r.config)}</td><td>${esc(r.predictor || "")}</td>
       <td>${r.calls ?? ""}</td><td>${r.cold ?? ""}</td><td>${fmt(r.mean)}</td><td>${fmt(r.p50)}</td><td>${fmt(r.p95)}</td><td>${fmt(r.p99)}</td>
-      <td>${fmt(r.pod_seconds)}</td><td><a href="/api/results/zip?path=${encodeURIComponent(r.path)}" title="Download this run folder as a zip">zip</a></td></tr>`).join("") ||
-    `<tr><td colspan="13" class="muted">No runs.</td></tr>`;
+      <td>${fmt(r.pod_seconds)}</td><td><a href="/api/results/zip?path=${encodeURIComponent(r.path)}" title="Download this run folder as a zip">zip</a></td>
+      <td><a href="#" data-graf="${esc(r.path)}" title="This run's time window in the Monitoring tab (needs the cluster's Prometheus to still hold it)">Grafana</a></td></tr>`).join("") ||
+    `<tr><td colspan="14" class="muted">No runs.</td></tr>`;
   $$("#rTbl input").forEach((c) => (c.onchange = selChanged));
+  $$("#rTbl a[data-graf]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); grafanaForRun(a.dataset.graf); }));
   selChanged();
   $("#rGallery").innerHTML = RESULTS.compares.map(galleryHtml).join("") || `<div class="empty">No comparison plots yet.</div>`;
 }
@@ -600,8 +604,75 @@ function renderServices(sv) {
         `${applyPending || busyNow() ? "applied when the current episode ends" : "being applied…"}</b><br>` : "") +
       `${esc(PREDICTORS[p.model] || p.model)} · ${esc(ignored ? "θ " + p.theta : p.policy_label)} · CRDs ${esc(p.crd)}` +
       (sv.controller ? ` · controller ${sv.controller.deployment ? "(deploy/" + esc(sv.controller.deployment) + ") " : ""}${sv.controller.running ? "running" : "not running"}` : "") +
-      (h.crd && h.crd.written != null ? ` · ${h.crd.written} written` : "");
+      (h.crd && h.crd.written != null ? ` · ${h.crd.written} written` : "") +
+      (MON.figures && MON.figures.predictor_p95_ms != null
+        ? ` · <span title="Prometheus, last 2 min (NFR-4: p95 < 50 ms)" class="${MON.figures.predictor_p95_ms > 50 ? "warn-text" : ""}">p95 ${fmt(MON.figures.predictor_p95_ms, 1)} ms</span>` : "");
   }
+}
+
+// ------------------------------------------------------------------ monitoring (Prometheus + Grafana)
+let MON = {};
+let monResult = null;                       // {from, to, name}: a result run picked in the Results tab
+$("#mDash").onchange = $("#mRange").onchange = () => renderMonTab();
+$("#monInstall").onclick = async () => {
+  if (!confirm("Install Prometheus + Grafana into the current cluster (deploy/monitoring/install.sh, needs helm)?")) return;
+  try {
+    await api("/api/monitoring/install", {});
+    runAfter = 0;
+    $("#xLog").textContent = "";
+    showTab("exp");
+    toast("Installing monitoring: the log is in Run log", 5000);
+  } catch (e) { toast(e.message, 7000); }
+};
+function renderMonitoring(m) {
+  MON = m || {};
+  const knative = state.cluster && state.cluster.mode === "knative";
+  $("#monBox").classList.toggle("hidden", !knative);
+  const pill = $("#monPill");
+  pill.textContent = MON.reachable ? "monitoring on" : MON.installed === false ? "no monitoring" : "monitoring …";
+  pill.className = "pill " + (MON.reachable ? "ok" : MON.installed === false ? "" : "wait");
+  pill.title = MON.detail || "";
+  $("#monLink").classList.toggle("hidden", !MON.reachable);
+  $("#monInstall").classList.toggle("hidden", !(MON.installed === false && MON.can_install));
+  if (!$("#mDash").options.length && MON.dashboards)
+    $("#mDash").innerHTML = Object.entries(MON.dashboards).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  if ($("#tab-mon").classList.contains("on")) renderMonTab();
+}
+async function grafanaForRun(path) {
+  try {
+    const w = await api(`/api/monitoring/link?path=${encodeURIComponent(path)}`);
+    monResult = { from: w.from, to: w.to, name: path.split("/").pop() };
+    const opt = $("#mRange option[value=result]");
+    opt.disabled = false;
+    opt.textContent = "result: " + monResult.name;
+    $("#mRange").value = "result";
+    showTab("mon");
+  } catch (e) { toast(e.message); }
+}
+function monWindow() {
+  // Grafana time range: a live window follows "now"; a result run is fixed. (seconds -> ms)
+  const r = $("#mRange").value, run = state.run, s = state.session;
+  if (r === "result" && monResult) return { from: monResult.from, to: monResult.to, live: false, label: monResult.name };
+  if (r === "auto" && run && run.state === "running") return { from: Math.floor((run.started - 30) * 1000), to: "now", live: true, label: "the running experiment" };
+  if (r === "auto" && s && s.t_start && ["running", "waiting", "starting"].includes(s.state))
+    return { from: Math.floor((s.t_start - 30) * 1000), to: "now", live: true, label: "the running episode" };
+  return { from: r === "last60" ? "now-1h" : "now-15m", to: "now", live: true, label: r === "last60" ? "last hour" : "last 15 min" };
+}
+function renderMonTab() {
+  const note = $("#mNote"), frame = $("#mFrame");
+  const knative = state.cluster && state.cluster.mode === "knative";
+  const why = !knative ? "Monitoring needs the real cluster: switch the top bar to Knative. (The simulated cluster has no Prometheus.)"
+    : MON.installed === false ? "Prometheus + Grafana are not installed in this cluster: use Install in the top bar, or run " +
+      "<code>bash deploy/monitoring/install.sh</code>." : !MON.reachable ? `Grafana is not reachable yet (${esc(MON.detail || "checking")}).` : "";
+  note.innerHTML = why;
+  note.classList.toggle("hidden", !why);
+  frame.classList.toggle("hidden", !!why);
+  if (why) return;
+  const w = monWindow();
+  const src = `/grafana/d/${$("#mDash").value}?orgId=1&kiosk&from=${w.from}&to=${w.to}` + (w.live ? "&refresh=10s" : "");
+  $("#mOpen").href = src.replace("&kiosk", "");
+  $("#mOpen").title = "Showing " + w.label;
+  if (frame.getAttribute("src") !== src) frame.setAttribute("src", src);     // only reload when the window changes
 }
 const secs = (v) => (v == null ? "–" : `${Number(v).toFixed(1)} s`);
 const prewarmLabel = (s) => (s.predictor === "none" ? "none (C0)" : `${s.predictor}${s.policy ? " · " + s.policy : ""}`);
@@ -688,7 +759,10 @@ async function poll() {
     $("#ctxName").textContent = c.context ? `(${c.context.replace(/^.*@/, "")})` : "";
     $$(".sim-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "sim"));
     minScaleSeg.set(String(s.sim_min_scale));
-    $("#podSec").textContent = c.mode === "sim" ? `${fmt(s.pod_seconds)} pod-s` : (c.context || "");
+    const mf = (s.monitoring && s.monitoring.figures) || {};
+    $("#podSec").textContent = c.mode === "sim" ? `${fmt(s.pod_seconds)} pod-s`
+      : (c.context || "") + (mf.tool_pod_s_15m != null ? ` · ${fmt(mf.tool_pod_s_15m)} pod-s / 15 min (Prometheus)` : "");
+    renderMonitoring(s.monitoring);
     renderServices(s.services);
     renderPods(s.pods);
     if (s.events_n < eventsAfter) eventsAfter = 0;

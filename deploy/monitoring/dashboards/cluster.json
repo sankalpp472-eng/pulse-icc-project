@@ -1,0 +1,143 @@
+{
+ "uid": "pulse-cluster",
+ "title": "Pulse cluster",
+ "tags": [
+  "pulse"
+ ],
+ "schemaVersion": 39,
+ "editable": true,
+ "time": {
+  "from": "now-15m",
+  "to": "now"
+ },
+ "refresh": "10s",
+ "timezone": "browser",
+ "panels": [
+  {
+   "type": "timeseries",
+   "title": "Node CPU used (cores)",
+   "description": "Cold starts are CPU-bound: a busy tool node makes them slower.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (nodename) (rate(node_cpu_seconds_total{mode!=\"idle\"}[1m]) * on (instance) group_left (nodename) node_uname_info)",
+     "legendFormat": "{{nodename}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "id": 1
+  },
+  {
+   "type": "timeseries",
+   "title": "Node memory used",
+   "description": "",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (nodename) ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) * on (instance) group_left (nodename) node_uname_info)",
+     "legendFormat": "{{nodename}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes"
+    },
+    "overrides": []
+   },
+   "id": 2
+  },
+  {
+   "type": "timeseries",
+   "title": "Tool containers CPU (cores)",
+   "description": "The tools' user containers (Knative), from cAdvisor.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"default\",container=\"user-container\"}[1m]))",
+     "legendFormat": "{{pod}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "id": 3
+  },
+  {
+   "type": "timeseries",
+   "title": "Pulse pods CPU (cores)",
+   "description": "Predictors, controller, UI and run pods.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"default\",pod=~\"pulse-.*\",container!=\"\"}[1m]))",
+     "legendFormat": "{{pod}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "id": 4
+  }
+ ]
+}

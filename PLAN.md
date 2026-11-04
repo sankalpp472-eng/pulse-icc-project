@@ -30,6 +30,15 @@ UI terms used below:
 
 ## Phase 1: observability (Prometheus + Grafana in the cluster)
 
+Status: implemented on branch `observability`, but not yet installed on a cluster or tested
+end to end.
+
+Deviations from the plan:
+- **Runner metrics:** the runners didn't publish any metrics before. `w1_replay.py` now publishes
+  them through `--metrics-port`. `w1_live.py` and the UI's interactive episodes don't yet.
+- **Knative panels:** Knative's metrics are scraped, but have no panels yet. Their names still need
+  checking on a cluster.
+
 ### Cluster side
 
 1. **Install:** `deploy/monitoring/install.sh` plus Helm values for kube-prometheus-stack.

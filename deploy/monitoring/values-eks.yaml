@@ -1,0 +1,22 @@
+# EKS: Prometheus, Grafana and their helpers on the client node (pulse/role=client, eks_up.sh), next to the run
+# pods and away from the tools, so monitoring never competes with a cold start for CPU. node-exporter still runs
+# on every node (it is what measures their CPU).
+prometheus:
+  prometheusSpec:
+    nodeSelector: {pulse/role: client}
+    tolerations: [{key: pulse/role, operator: Equal, value: client, effect: NoSchedule}]
+prometheusOperator:
+  nodeSelector: {pulse/role: client}
+  tolerations: [{key: pulse/role, operator: Equal, value: client, effect: NoSchedule}]
+  admissionWebhooks:
+    patch:
+      nodeSelector: {pulse/role: client}
+      tolerations: [{key: pulse/role, operator: Equal, value: client, effect: NoSchedule}]
+kube-state-metrics:
+  nodeSelector: {pulse/role: client}
+  tolerations: [{key: pulse/role, operator: Equal, value: client, effect: NoSchedule}]
+grafana:
+  nodeSelector: {pulse/role: client}
+  tolerations: [{key: pulse/role, operator: Equal, value: client, effect: NoSchedule}]
+prometheus-node-exporter:
+  tolerations: [{operator: Exists}]

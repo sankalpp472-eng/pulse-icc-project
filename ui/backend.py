@@ -16,6 +16,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -404,6 +405,112 @@ class Services:
         return out
 
 
+# ====================================================================== monitoring (deploy/monitoring/)
+MON_NS, GRAFANA_SVC = "monitoring", "pulse-mon-grafana"
+GRAFANA_LOCAL_PORT = int(os.getenv("UI_GRAFANA_PORT", "13000"))
+DASHBOARDS = {"pulse-overview": "Pulse overview", "pulse-predictor": "Predictor", "pulse-cluster": "Cluster"}
+_READY_TOOL_PODS = ('sum(kube_pod_status_ready{namespace="default",condition="true"} * on (namespace, pod) group_left () '
+                    'kube_pod_labels{namespace="default",label_serving_knative_dev_service!=""})')
+
+
+class Monitoring:
+    """Prometheus + Grafana (deploy/monitoring/install.sh), Knative mode only. The page sees Grafana under this
+    server's /grafana/ (server.py proxies it), so one tunnel to the UI is enough in the cluster too. Grafana is
+    reached on the laptop through a kubectl port-forward kept up here, in the cluster at its Service. Prometheus
+    is queried through Grafana's data source (uid prometheus): no second tunnel."""
+
+    def __init__(self, cluster: Cluster):
+        self.cluster = cluster
+        self.installed, self.reachable, self.detail = None, False, "Knative mode only"
+        self.figures: dict = {}
+        self.pf: subprocess.Popen | None = None
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def base(self) -> str:
+        return (f"http://{GRAFANA_SVC}.{MON_NS}.svc.cluster.local" if IN_CLUSTER
+                else f"http://127.0.0.1:{GRAFANA_LOCAL_PORT}")
+
+    def _healthy(self) -> bool:
+        try:
+            with urllib.request.urlopen(self.base() + "/api/health", timeout=3) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    def _stop_pf(self):
+        if self.pf and self.pf.poll() is None:
+            self.pf.terminate()
+        self.pf = None
+
+    def check(self):
+        if self.cluster.mode != "knative" or not self.cluster.reachable:
+            self._stop_pf()
+            self.installed, self.reachable, self.detail, self.figures = None, False, "Knative mode only", {}
+            return
+        if IN_CLUSTER:
+            self.installed = self.reachable = self._healthy()
+            self.detail = "ok" if self.reachable else "not installed (deploy/monitoring/install.sh, from the laptop)"
+        else:
+            code, _ = _run(["kubectl", "get", "svc", GRAFANA_SVC, "-n", MON_NS, "-o", "name"], 8)
+            self.installed = code == 0
+            if not self.installed:
+                self._stop_pf()
+                self.reachable, self.detail, self.figures = False, "not installed", {}
+                return
+            if not (self.pf and self.pf.poll() is None):
+                self.pf = subprocess.Popen(["kubectl", "port-forward", "-n", MON_NS, f"svc/{GRAFANA_SVC}",
+                                            f"{GRAFANA_LOCAL_PORT}:80"], stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+                time.sleep(2)
+            self.reachable = self._healthy()
+            self.detail = "ok" if self.reachable else "port-forward to Grafana not answering yet"
+        if self.reachable:
+            self.figures = self._figures()
+
+    def _loop(self):
+        while True:
+            try:
+                self.check()
+            except Exception as e:                       # never let monitoring break the UI
+                self.reachable, self.detail = False, f"{type(e).__name__}: {e}"[:200]
+            time.sleep(10)
+
+    def query(self, promql: str) -> float | None:
+        """One instant Prometheus query (a single number), through Grafana's data source."""
+        url = (self.base() + "/api/datasources/proxy/uid/prometheus/api/v1/query?"
+               + urllib.parse.urlencode({"query": promql}))
+        with urllib.request.urlopen(url, timeout=5) as r:
+            res = json.loads(r.read()).get("data", {}).get("result", [])
+        return round(float(res[0]["value"][1]), 3) if res else None
+
+    def _figures(self) -> dict:
+        """The cluster-measured numbers the cards show next to the UI's own."""
+        out = {"tool_pods": self.query(_READY_TOOL_PODS),
+               "tool_pod_s_15m": self.query(f"sum_over_time(({_READY_TOOL_PODS})[15m:15s]) * 15")}
+        # the predictor this UI started: scraped as the UI pod (EKS) or from the laptop (kind); not on EKS-from-laptop
+        comp = "pulse-ui" if IN_CLUSTER else "laptop" if (self.cluster.context or "").startswith("kind-") else None
+        if comp:
+            p95 = self.query(f'histogram_quantile(0.95, sum by (le) '
+                             f'(rate(predictor_request_seconds_bucket{{component="{comp}"}}[2m])))')
+            out["predictor_p95_ms"] = round(p95 * 1000, 1) if p95 is not None and p95 == p95 else None
+        return out
+
+    def info(self) -> dict:
+        return {"installed": self.installed, "reachable": self.reachable, "detail": self.detail,
+                "url": "/grafana/", "dashboards": DASHBOARDS, "figures": self.figures,
+                "can_install": not IN_CLUSTER and bool(bash())}
+
+
+def run_window(path: str) -> tuple[float, float]:
+    """A run's start and end (epoch s) from its calls.csv, for a Grafana link covering exactly that run."""
+    import csv
+    with open(result_path(path) / "calls.csv", encoding="utf-8") as f:
+        rows = [(float(r["t_start"]), float(r.get("latency_ms") or 0) / 1000) for r in csv.DictReader(f) if r.get("t_start")]
+    if not rows:
+        raise ValueError("no calls in this run")
+    return min(t for t, _ in rows), max(t + l for t, l in rows)
+
+
 # ====================================================================== batch runs
 class BatchRun:
     """One experiment run: a few commands in order (e.g. set min-scale, then the replay), output streamed to the UI."""
@@ -437,7 +544,9 @@ class BatchRun:
                     continue
                 self._say(f"• {title}")
                 self._say("  $ " + " ".join(Path(c).name if i == 0 else c for i, c in enumerate(cmd)))
-                self.p = subprocess.Popen(cmd, cwd=ROOT, env={**os.environ, **env, "PYTHONUNBUFFERED": "1",
+                # PULSE_METRICS_PORT: the replay serves live metrics for Prometheus (deploy/monitoring)
+                self.p = subprocess.Popen(cmd, cwd=ROOT, env={"PULSE_METRICS_PORT": "9105", **os.environ, **env,
+                                                              "PYTHONUNBUFFERED": "1",
                                                               "PYTHONIOENCODING": "utf-8", "MSYS_NO_PATHCONV": "1"},
                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                           encoding="utf-8", errors="replace", creationflags=NO_WINDOW)

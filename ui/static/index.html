@@ -23,6 +23,11 @@
       <button data-mode="knative">Knative <span id="ctxName" class="muted"></span></button>
     </div>
     <button class="ghost small" id="detectBtn" title="Check the kubectl context">↻</button>
+    <span class="mon-box hidden" id="monBox">
+      <span class="pill" id="monPill" title="Prometheus + Grafana (deploy/monitoring)">monitoring</span>
+      <a id="monLink" class="hidden" href="/grafana/" target="_blank" title="Grafana, through this UI">Grafana ↗</a>
+      <button class="ghost small hidden" id="monInstall" title="bash deploy/monitoring/install.sh (needs helm)">Install</button>
+    </span>
   </div>
 </header>
 
@@ -33,6 +38,7 @@
       <button data-tab="demo" class="on">Live demo</button>
       <button data-tab="exp">Experiments</button>
       <button data-tab="results">Results</button>
+      <button data-tab="mon">Monitoring</button>
       <button data-tab="about">How it works</button>
     </nav>
 
@@ -239,7 +245,7 @@
           </div>
         </div>
         <div class="tbl-wrap"><table class="tbl" id="rTbl"><thead><tr>
-          <th></th><th>Run</th><th>Folder</th><th>Config</th><th>Predictor</th><th>Calls</th><th>Cold</th><th>Mean</th><th>p50</th><th>p95</th><th>p99</th><th>Pod-s</th><th></th></tr></thead><tbody></tbody></table></div>
+          <th></th><th>Run</th><th>Folder</th><th>Config</th><th>Predictor</th><th>Calls</th><th>Cold</th><th>Mean</th><th>p50</th><th>p95</th><th>p99</th><th>Pod-s</th><th></th><th></th></tr></thead><tbody></tbody></table></div>
         <div class="actions">
           <button class="primary" id="rCompare" disabled>Compare selected</button>
           <button id="rPlot" disabled>Make plots (plot_compare.py)</button>
@@ -253,6 +259,27 @@
       <div class="card">
         <div class="card-head"><h3>Plots</h3></div>
         <div id="rGallery" class="gallery"><div class="empty">No comparison plots yet.</div></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ MONITORING -->
+    <section id="tab-mon" class="tab">
+      <div class="card">
+        <div class="card-head">
+          <h3>Grafana</h3>
+          <div>
+            <select id="mDash"></select>
+            <select id="mRange" title="Which time window the dashboard shows">
+              <option value="auto">follow: running run / episode, else last 15 min</option>
+              <option value="last15">last 15 min</option>
+              <option value="last60">last hour</option>
+              <option value="result" disabled>a result run (Results → Grafana)</option>
+            </select>
+            <a id="mOpen" href="/grafana/" target="_blank" class="small">open in Grafana ↗</a>
+          </div>
+        </div>
+        <div class="note small hidden" id="mNote"></div>
+        <iframe id="mFrame" class="mon-frame hidden" title="Grafana dashboard"></iframe>
       </div>
     </section>
 
@@ -274,6 +301,9 @@
           <li><b>Simulated cluster:</b> pods, cold starts (measured per tool on EKS), the 60 s idle window and prewarming, all on the laptop. <b>Knative</b> uses the real cluster in your kubectl context (kind or EKS).</li>
         </ol>
         <p><b>Configurations:</b> C0 = scale to zero, no prewarming · C1 = always warm (min-scale 1) · C3 = scale to zero + predictor + controller.</p>
+        <p><b>Monitoring</b> (Knative mode): Prometheus scrapes the predictor, the prewarm controller, the replay runner,
+        the tools' pods (kube-state-metrics) and the nodes; Grafana's dashboards (<code>deploy/monitoring</code>) show
+        them live in the <i>Monitoring</i> tab, for the running episode or run, or for any finished run from <i>Results</i>.</p>
         <p class="muted">Tip for a demo: reset the cluster (side panel), run a task with <i>None (C0)</i>, reset again, run the same task with the predictor. Then compare the two rows in <i>Episodes so far</i>.</p>
       </div>
     </section>
