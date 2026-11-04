@@ -14,6 +14,6 @@ resources:
 images:
   - name: __IMAGE__
     newName: ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner
-    newTag: unset
+    newTag: 20261104-0735-c5dbbf4-dirty
 patches:
   - path: gitops/settings.yaml
