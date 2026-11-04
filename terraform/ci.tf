@@ -2,19 +2,36 @@
 # Two roles, both only for workflows of var.github_repo:
 #   pulse-ci-image  push the runner image to ECR      (.github/workflows/image.yml; main branch only)
 #   pulse-ci-plan   read-only, for `terraform plan`   (.github/workflows/terraform.yml; any branch / PR)
-# Created only when github_repo is set. The repository then needs the variables AWS_IMAGE_ROLE_ARN and
+# Created for github_repo (empty = none). The repository then needs the variables AWS_IMAGE_ROLE_ARN and
 # AWS_PLAN_ROLE_ARN (Settings -> Secrets and variables -> Actions -> Variables) = the outputs below.
+# The default is the project's repository, so a plain `terraform plan` (and CI's) keeps the applied roles.
 
 variable "github_repo" {
   description = "owner/name of the GitHub repository whose workflows may assume the CI roles (empty = none)"
   type        = string
-  default     = ""
+  default     = "sankalpp472-eng/pulse-icc-project"
+}
+
+variable "github_repo_ids" {
+  description = <<-EOT
+    owner_id/repo_id of github_repo. GitHub's OIDC subject names the repository with its immutable ids
+    (repo:<owner>@<owner_id>/<name>@<repo_id>:...), which a renamed or re-created repository can't reuse.
+    Find them in a failed attempt in CloudTrail, or: curl -s https://api.github.com/repos/<owner>/<name> (owner.id, id)
+  EOT
+  type        = string
+  default     = "328253652/1404634644"
 }
 
 locals {
+  gh     = split("/", var.github_repo)
+  gh_ids = split("/", var.github_repo_ids)
+  subjects = var.github_repo == "" ? [] : compact([
+    "repo:${var.github_repo}", # older subject form
+    var.github_repo_ids == "" ? "" : "repo:${local.gh[0]}@${local.gh_ids[0]}/${local.gh[1]}@${local.gh_ids[1]}",
+  ])
   ci = var.github_repo == "" ? {} : {
-    pulse-ci-image = "repo:${var.github_repo}:ref:refs/heads/main"
-    pulse-ci-plan  = "repo:${var.github_repo}:*"
+    pulse-ci-image = [for s in local.subjects : "${s}:ref:refs/heads/main"]
+    pulse-ci-plan  = [for s in local.subjects : "${s}:*"]
   }
 }
 
@@ -40,7 +57,7 @@ data "aws_iam_policy_document" "ci_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [each.value]
+      values   = each.value
     }
   }
 }
