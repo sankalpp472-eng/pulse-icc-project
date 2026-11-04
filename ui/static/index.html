@@ -39,6 +39,7 @@
       <button data-tab="exp">Experiments</button>
       <button data-tab="results">Results</button>
       <button data-tab="mon">Monitoring</button>
+      <button data-tab="models">Models</button>
       <button data-tab="about">How it works</button>
     </nav>
 
@@ -304,6 +305,36 @@
         </div>
         <div class="note small hidden" id="mNote"></div>
         <iframe id="mFrame" class="mon-frame hidden" title="Grafana dashboard"></iframe>
+      </div>
+    </section>
+
+    <!-- ================================================================ MODELS -->
+    <section id="tab-models" class="tab">
+      <div class="card">
+        <div class="card-head">
+          <h3>pulse-v3 models <span class="muted small mono" id="gUri"></span></h3>
+          <button class="ghost small" id="gRefresh">↻</button>
+        </div>
+        <div class="note small hidden" id="gNote"></div>
+        <div class="tbl-wrap"><table class="tbl" id="gTbl"><thead><tr>
+          <th>Version</th><th>Created</th><th title="held-out share of next-step calls warm with the top 3 prewarmed (the release gate)">warm@3</th>
+          <th>hit@1</th><th>hit@3</th><th title="the model it was compared with at training time">vs</th><th>Notes</th><th></th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Retrain</h3><span class="muted small">pulse_pred/train.py: train → evaluate on held-out tasks → publish</span></div>
+        <div class="form-grid">
+          <label>Where
+            <div class="seg" id="gWhere"><button data-v="laptop" class="on">Here</button><button data-v="cluster">Training Job (EKS)</button></div>
+          </label>
+          <label title="auto: becomes latest only if its warm@3 beats the current latest">Promote
+            <select id="gPromote"><option value="auto">auto (release gate)</option><option value="always">always</option><option value="never">never (candidate)</option></select>
+          </label>
+          <label>Notes <input id="gNotes" placeholder="what changed"></label>
+        </div>
+        <div class="actions">
+          <button class="primary" id="gRetrain">▶ Retrain</button>
+          <span class="muted" id="gVerdict"></span>
+        </div>
       </div>
     </section>
 

@@ -50,6 +50,7 @@ $("#tabs").addEventListener("click", (e) => {
   $$(".tab").forEach((t) => t.classList.toggle("on", t.id === "tab-" + b.dataset.tab));
   if (b.dataset.tab === "results") loadResults();
   if (b.dataset.tab === "mon") renderMonTab();
+  if (b.dataset.tab === "models") loadModels();
 });
 const showTab = (name) => $(`#tabs button[data-tab="${name}"]`).click();
 
@@ -478,6 +479,9 @@ $("#xStop").onclick = () => api("/api/run/stop", {});
 
 function renderRun(run) {
   if (!run) return;
+  const gate = run.lines.filter((l) => l.startsWith("GATE:")).pop();     // retraining: the release gate's verdict
+  if (gate) { $("#gVerdict").textContent = gate; loadModels(); }
+  if (run.spec && run.spec.mode === "retrain" && run.state === "failed") $("#gVerdict").textContent = "training failed: see Run log";
   if (run.lines.length) {
     const log = $("#xLog");
     log.textContent += (log.textContent && !log.textContent.endsWith("\n") ? "\n" : "") + run.lines.join("\n");
@@ -632,10 +636,58 @@ function renderServices(sv) {
       `${esc(PREDICTORS[p.model] || p.model)} · ${esc(ignored ? "θ " + p.theta : p.policy_label)} · CRDs ${esc(p.crd)}` +
       (sv.controller ? ` · controller ${sv.controller.deployment ? "(deploy/" + esc(sv.controller.deployment) + ") " : ""}${sv.controller.running ? "running" : "not running"}` : "") +
       (h.crd && h.crd.written != null ? ` · ${h.crd.written} written` : "") +
+      (p.serving_version ? ` · model ${esc(p.serving_version)}` : "") +
       (MON.figures && MON.figures.predictor_p95_ms != null
         ? ` · <span title="Prometheus, last 2 min (NFR-4: p95 < 50 ms)" class="${MON.figures.predictor_p95_ms > 50 ? "warn-text" : ""}">p95 ${fmt(MON.figures.predictor_p95_ms, 1)} ms</span>` : "");
   }
 }
+
+// ------------------------------------------------------------------ models (pulse-v3 registry on S3)
+const gWhere = seg("gWhere");
+let MODELS = { versions: [] };
+async function loadModels() {
+  $("#gNote").classList.add("hidden");
+  try { MODELS = await api("/api/models"); } catch (e) { MODELS = { versions: [], error: e.message }; }
+  renderModels();
+}
+function renderModels() {
+  const p = (state.services || {}).predictor;
+  const serving = p && p.model === "pulse_v3" && p.running ? p.serving_version : null;
+  $("#gUri").textContent = MODELS.uri || "";
+  $("#gNote").innerHTML = esc(MODELS.error || "");
+  $("#gNote").classList.toggle("hidden", !MODELS.error);
+  const m3 = (m) => ((m.metrics || {}).new || {});
+  $("#gTbl tbody").innerHTML = MODELS.versions.map((m) => {
+    const cur = (m.metrics || {}).current || {};
+    return `<tr><td class="mono">${esc(m.version)} ${m.latest ? '<span class="pill ok">latest</span>' : ""}` +
+      `${m.version === serving ? ' <span class="pill wait">serving</span>' : ""}</td>
+      <td class="muted">${esc((m.created || "").slice(0, 16).replace("T", " "))}</td>
+      <td><b>${fmt(m3(m)["warm@3"], 3)}</b></td><td>${fmt(m3(m)["hit@1"], 3)}</td><td>${fmt(m3(m)["hit@3"], 3)}</td>
+      <td class="muted small">${cur["warm@3"] != null ? `${fmt(cur["warm@3"], 3)} (${esc((m.metrics || {}).current_version || "")})` : "–"}</td>
+      <td class="small">${esc(m.notes || "")}</td>
+      <td><button class="small" data-use="${esc(m.version)}" title="Start the pulse_v3 predictor with this version">Use</button>
+        ${m.latest ? "" : `<button class="small ghost" data-promote="${esc(m.version)}" title="Make it the latest (also: roll back)">Promote</button>`}</td></tr>`;
+  }).join("") || `<tr><td colspan="8" class="muted">${MODELS.error ? "–" : "No versions yet."}</td></tr>`;
+  $$("#gTbl [data-use]").forEach((b) => (b.onclick = async () => {
+    try { await api("/api/models/use", { version: b.dataset.use }); predModel.value = "pulse_v3";
+      toast(`Starting pulse_v3 with model ${b.dataset.use} (about a minute)`); } catch (e) { toast(e.message, 6000); }
+  }));
+  $$("#gTbl [data-promote]").forEach((b) => (b.onclick = async () => {
+    if (!confirm(`Make ${b.dataset.promote} the latest model? Predictors that load "latest" pick it up when they restart.`)) return;
+    try { MODELS = await api("/api/models/promote", { version: b.dataset.promote }); renderModels(); toast("Promoted"); }
+    catch (e) { toast(e.message, 6000); }
+  }));
+}
+$("#gRefresh").onclick = loadModels;
+$("#gRetrain").onclick = async () => {
+  try {
+    await api("/api/models/retrain", { where: gWhere.get(), promote: $("#gPromote").value, notes: $("#gNotes").value.trim() });
+    runAfter = 0;
+    $("#xLog").textContent = "";
+    $("#gVerdict").textContent = "training… (log: Experiments → Run log)";
+    toast("Retraining started: the log streams in Experiments → Run log", 5000);
+  } catch (e) { toast(e.message, 7000); }
+};
 
 // ------------------------------------------------------------------ monitoring (Prometheus + Grafana)
 let MON = {};

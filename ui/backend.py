@@ -316,7 +316,9 @@ class Services:
         self.health: dict | None = None
         threading.Thread(target=self._health_loop, daemon=True).start()
 
-    def start_predictor(self, model: str, theta: float, crd: bool, policy: dict | None = None) -> dict:
+    def start_predictor(self, model: str, theta: float, crd: bool, policy: dict | None = None,
+                        model_version: str | None = None) -> dict:
+        """model_version (pulse_v3 only): serve that registry version instead of the latest (Models tab)."""
         if model not in self.MODELS:
             raise ValueError(f"unknown predictor {model}")
         self.stop("predictor")
@@ -330,12 +332,15 @@ class Services:
             app_dir = "baselines/llm_speculator"
         elif model == "pulse_v3":
             app_dir = "pulse_pred"
+            if model_version and MODEL_URI:
+                env["PULSE_MODEL_URI"] = f"{MODEL_URI.rstrip('/')}/{model_version}"
         else:
             app_dir, env["PREDICTOR_MODEL"] = "predictor", model
         cmd = [PY, "-m", "uvicorn", "service:app", "--app-dir", app_dir, "--host", "127.0.0.1",
                "--port", str(PREDICTOR_PORT), "--log-level", "warning"]
         self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
-                                                                "crd": "k8s" if crd else "off"})
+                                                                "crd": "k8s" if crd else "off",
+                                                                "model_version": model_version})
         self.health = None
         return self.status()
 
@@ -412,12 +417,65 @@ class Services:
         if "predictor" in out:
             out["predictor"]["ready"] = self.predictor_ready()
             out["predictor"]["health"] = self.health
+            out["predictor"]["serving_version"] = served_version(self.health)
             out["predictor"]["policy_label"] = policy_label(out["predictor"].get("policy"), out["predictor"].get("theta"))
             # does this predictor understand the policy settings? (/healthz reports "policy" after the latency patch)
             out["predictor"]["policy_supported"] = bool(self.health and "policy" in self.health) if self.health else None
         if IN_CLUSTER:
             out["controller"] = {"running": self.controller_running(), "deployment": CONTROLLER_DEPLOY}
         return out
+
+
+# ====================================================================== models (pulse-v3's S3 registry)
+MODEL_URI = os.getenv("PULSE_MODEL_URI", "")     # s3://<bucket>/pulse-v3 (pulse_pred/model_store.py)
+
+
+def served_version(health: dict | None) -> str | None:
+    """The registry version a pulse_v3 predictor serves: its /healthz model_file is .../models/<version>/predictor.pkl."""
+    f = (health or {}).get("model_file") or ""
+    parts = Path(f).parts
+    return parts[-2] if len(parts) >= 3 and parts[-3] == "models" else None
+
+
+def _store():
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from pulse_pred import model_store
+    return model_store
+
+
+def models_list() -> dict:
+    """Every pulse-v3 version in the registry (newest first), or why they can't be listed."""
+    if not MODEL_URI:
+        return {"uri": None, "versions": [], "error": "PULSE_MODEL_URI is not set: start the UI with "
+                "PULSE_MODEL_URI=s3://<bucket>/pulse-v3 (terraform -chdir=terraform output -raw model_uri)"}
+    try:
+        return {"uri": MODEL_URI, "versions": _store().versions(MODEL_URI), "error": None}
+    except ImportError as e:
+        return {"uri": MODEL_URI, "versions": [], "error": f"{e}: pip install -r pulse_pred/requirements.txt"}
+    except Exception as e:                       # no AWS credentials (laptop) or no IAM role (UI pod)
+        return {"uri": MODEL_URI, "versions": [], "error": f"{type(e).__name__}: {e}"[:300] +
+                (" (the UI pod has no S3 role yet: use the laptop UI)" if IN_CLUSTER else "")}
+
+
+def models_promote(version: str):
+    _store().promote(MODEL_URI, version)
+
+
+def build_retrain(spec: dict) -> list[tuple[str, list[str], dict]]:
+    """Retraining (pulse_pred/train.py): on this machine, or as the training Job in the cluster."""
+    if not MODEL_URI:
+        raise ValueError("PULSE_MODEL_URI is not set (see the Models tab)")
+    promote, notes = spec.get("promote", "auto"), str(spec.get("notes") or "")
+    if spec.get("where") == "cluster":
+        b = bash()
+        if IN_CLUSTER or not b:
+            raise ValueError("the training Job is started from the laptop (deploy/training/run_training.sh)")
+        return [("retrain pulse-v3 as a Job in the cluster (deploy/training/run_training.sh)",
+                 [b, "deploy/training/run_training.sh"],
+                 {"PULSE_MODEL_URI": MODEL_URI, "PROMOTE": promote, "NOTES": notes})]
+    return [("retrain pulse-v3 here (pulse_pred/train.py)",
+             [PY, "pulse_pred/train.py", "--uri", MODEL_URI, "--promote", promote, "--notes", notes], {})]
 
 
 # ====================================================================== monitoring (deploy/monitoring/)

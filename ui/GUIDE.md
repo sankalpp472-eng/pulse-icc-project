@@ -334,6 +334,26 @@ The tests are described in [loadtest/README.md](../loadtest/README.md). Install 
 starting an episode. N extra agents replay recorded episodes on the same tools while yours plays, and
 they stop when it ends.
 
+### Recipe 9: pulse-v3 model versions and retraining (Models tab)
+
+Start the UI with the registry address, e.g. `PULSE_MODEL_URI=s3://pulse-models-<account>/pulse-v3`,
+and AWS credentials on the laptop. The UI pod in EKS has no S3 role yet.
+
+1. **Models tab:** lists every version, newest first, with its held-out **warm@3** (the release-gate
+   metric), hit@1, hit@3 and the model it was compared with. **latest** marks what predictors load
+   by default, and **serving** marks what the running pulse_v3 predictor uses. The Predictor card
+   also shows the served version.
+2. **Use:** starts the pulse_v3 predictor with exactly that version.
+3. **Promote:** makes a version the latest. Promoting an older version is a rollback.
+4. **Retrain:**
+   - **Where:** **Here** runs `pulse_pred/train.py`, which needs the embedding server for new texts.
+     **Training Job (EKS)** runs `deploy/training/run_training.sh`.
+   - **Promote:** **auto** applies the release gate; **always** or **never** override it.
+   - The log streams in Experiments → Run log. The verdict (`GATE: promoted …` or
+     `GATE: candidate …`) appears next to the button, and the table refreshes.
+
+Details: [pulse_pred/README.md](../pulse_pred/README.md#retraining-mlops).
+
 ### Recipe 7: watch it live in Grafana (Prometheus monitoring)
 
 Knative mode only. The simulated cluster has no Prometheus.

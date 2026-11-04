@@ -6,6 +6,7 @@ with `eksctl` (`EKS_deployment/`).
 | File | What |
 |---|---|
 | `model_store.tf` | The `pulse-models-<account id>` S3 bucket: private, versioned, encrypted, TLS only, with old object versions expiring after 90 days. Also two IAM policies: `pulse-model-reader` (the predictor) and `pulse-model-publisher` (training / CI). |
+| `training.tf` | The IRSA role `pulse-trainer` for the retraining Job (`deploy/training/`), with the publisher policy. It's created only when `-var eks_oidc_provider_arn=<arn>` is given, because the eksctl-made cluster changes with every bring-up. |
 | `versions.tf` | The AWS provider (region `ap-south-1`, default tags) and a commented S3 backend for shared state. |
 | `variables.tf`, `outputs.tf` | Settings, plus the bucket name, `model_uri` and the policy ARNs. |
 

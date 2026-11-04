@@ -127,7 +127,11 @@ export PULSE_MODEL_URI=s3://pulse-models-<account id>/pulse-v3   # = terraform -
 "$PY" ui/server.py                                               # the UI passes it on to the predictor it starts
 ```
 
-- **Publishing a retrained model:** `python pulse_pred/model_store.py publish <file> "$PULSE_MODEL_URI" --version <v>`.
+- **Retraining (MLOps):** `python pulse_pred/train.py --uri "$PULSE_MODEL_URI"` (or the Kubernetes Job
+  `deploy/training/run_training.sh`). It trains, evaluates on held-out tasks, and publishes a new
+  version, which becomes `latest` only if its warm@3 beats the current model's. In the UI, the
+  **Models** tab lists versions and their metrics, and has **Use**, **Promote** (rollback) and
+  **Retrain**. See [pulse_pred/README.md](pulse_pred/README.md#retraining-mlops).
 - **Embedding server:** pulse-v3 is more accurate with its local embedding server
   (llama.cpp + nomic-embed-text on port 8091). Without it, it runs with a zero embedding.
 
@@ -203,6 +207,7 @@ Each run writes one folder:
 | `deploy/knative/`, `deploy/prewarm/` | Knative services for the tools; the `PrewarmRequest` CRD and contract |
 | `deploy/monitoring/` | Prometheus + Grafana: Helm values, scrape configs, dashboards as code, `install.sh` |
 | `loadtest/` | Load tests: Locust (predictor, tools, episodes), asyncio open-loop generator, `plot_load.py` |
+| `deploy/training/` | pulse-v3 retraining as a Kubernetes Job (with an embedding sidecar), `run_training.sh` |
 | `EKS_deployment/` | EKS cluster scripts, in-cluster runner image and services |
 | `terraform/` | Infrastructure as code (S3 model registry) |
 | `test/test_knative/` | kind setup, C0/C1/C3 runners, plots |

@@ -153,6 +153,19 @@ right shape for an SLO check.
 
 ## Phase 3: retraining (MLOps)
 
+Status: implemented on branch `retraining`, which builds on `loadtest`. Not yet run.
+
+Deviations from the plan:
+- **Training data:** it lives in the registry under `pulse-v3/_data/` (tau-bench trajectories, schemas,
+  embedding cache), so the existing reader and publisher policies already cover it.
+- **Run traces:** the team's run traces aren't uploaded or converted into training data yet; that's
+  a follow-up.
+- **Training Job permissions:** the Job's IAM role comes from `eksctl create iamserviceaccount`
+  today. `terraform/training.tf` creates it when given the cluster's OIDC provider ARN; it isn't
+  applied.
+- **Held-out test split:** the deployed model now trains on 70% of tasks, plus 10% for validation,
+  so that it has held-out tasks for the gate. Before, it trained on 90%.
+
 ### Pipeline
 
 1. **Training and the gate:** `pulse_pred/train.py` trains, evaluates on held-out tasks (hit@1/3,

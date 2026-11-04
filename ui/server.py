@@ -287,6 +287,46 @@ def run_stop():
     return {"ok": True}
 
 
+# ---------------------------------------------------------------- models (pulse-v3 registry on S3)
+@app.get("/api/models")
+def models():
+    return backend.models_list()
+
+
+@app.post("/api/models/use")
+def models_use(body: dict):
+    """Serve one registry version with pulse_v3 (keeps the card's θ / policy; CRDs if in Knative mode)."""
+    v = str(body.get("version") or "")
+    if not v:
+        raise HTTPException(400, "which version?")
+    cur = services.procs.get("predictor")
+    info = cur.info if cur else {}
+    return services.start_predictor("pulse_v3", float(info.get("theta", 0.3)), cluster.mode == "knative",
+                                    info.get("policy"), model_version=v)
+
+
+@app.post("/api/models/promote")
+def models_promote(body: dict):
+    try:
+        backend.models_promote(str(body.get("version") or ""))
+    except Exception as e:
+        raise HTTPException(400, f"{type(e).__name__}: {e}")
+    return backend.models_list()
+
+
+@app.post("/api/models/retrain")
+def models_retrain(spec: dict):
+    """pulse_pred/train.py here, or the training Job in the cluster; its log streams in the Experiments tab."""
+    if busy():
+        raise HTTPException(409, busy())
+    try:
+        steps = backend.build_retrain(spec)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    S["run"] = backend.BatchRun({"mode": "retrain", **spec}, steps, services)
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------- monitoring (Prometheus + Grafana)
 @app.post("/api/monitoring/install")
 def monitoring_install():

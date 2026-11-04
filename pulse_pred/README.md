@@ -55,18 +55,62 @@ pulse-v3 follows one session per `episode_id`:
 Hints without `history` (e.g. `agent/hints.py`) still work from the tool names alone, with lower
 accuracy.
 
+## Retraining (MLOps)
+
+`train.py` runs the whole pipeline: data → train → evaluate → gate → publish.
+
+```bash
+python pulse_pred/model_store.py data push "$PULSE_MODEL_URI"       # once: training data -> <uri>/_data/
+python pulse_pred/train.py --uri "$PULSE_MODEL_URI"                  # here (needs the embedding server for new texts)
+PULSE_MODEL_URI=... bash deploy/training/run_training.sh             # or as a Kubernetes Job on EKS
+python pulse_pred/model_store.py list "$PULSE_MODEL_URI"              # versions + metrics; * = latest
+python pulse_pred/model_store.py promote "$PULSE_MODEL_URI" <version> # also: roll back
+```
+
+1. **Data:** pulls `<uri>/_data/` into `pulse_pred/data/`: tau-bench trajectories, tool schemas and the
+   embedding cache.
+2. **Split:** by task (seed 252) into train, val (temperature) and test. The test tasks are held out,
+   so the model has never seen them.
+3. **Train:** the tool graph, then the V3 model.
+4. **Evaluate:** hit@1, hit@3 and warm@1..3 on the held-out hints, for both the new model and the
+   current `latest`. Each uses its own tool graph, on the same hints.
+5. **Release gate:** with `--promote auto`, the new model becomes `latest` only if its **warm@3**
+   beats the current one's. warm@3 is the share of next-step calls that would find a warm pod if
+   the top 3 tools were prewarmed. Otherwise it's published as a candidate. `always` / `never`
+   override the gate.
+6. **Publish:** uploads a new version with the metrics in its manifest. New embeddings go back to
+   `_data/` for the next training.
+
+- **Training Job** (`deploy/training/`): runs on the client node, with an embedding-server sidecar
+  (llama.cpp + nomic-embed-text). Its service account `pulse-trainer` gets the
+  `pulse-model-publisher` policy through IRSA: run `eksctl create iamserviceaccount` (the script
+  prints it), or Terraform `terraform/training.tf`.
+- **In the UI, Models tab:**
+  - **Versions:** every version with its held-out metrics, which one is `latest` and which one the
+    predictor serves.
+  - **Use:** serves that version.
+  - **Promote:** makes it the latest, or rolls back.
+  - **Retrain:** runs here or as the EKS Job. The log streams in Experiments → Run log, and the
+    gate's verdict appears in the tab.
+- **Rollout:** a predictor loads `latest` when it starts. To pin a version, point `PULSE_MODEL_URI`
+  at `.../pulse-v3/<version>`; this is what the UI's **Use** button does.
+- **Current limitation:** retraining uses the tau-bench trajectories (airline + retail). The team's
+  own run traces aren't converted into training data yet.
+
 ## Layout
 
 | Path | What |
 |---|---|
 | `service.py` | The `/predict` + `/healthz` API (see above) |
-| `model_store.py` | The S3 model registry: `fetch` (cached, sha256-checked) and `publish` (a new version, never overwritten) |
+| `train.py` | Retraining: data from S3, train, evaluate on held-out tasks, release gate, publish |
+| `model_store.py` | The S3 model registry: `fetch` (cached, sha256-checked), `publish` (a new version, never overwritten), `list`, `promote`, `data push/pull` |
 | `contract/` | `Hint` / `End` (session events) and `Prediction` (next-step probabilities per tool) |
 | `predictors/base.py` | The session-predictor interface pulse-v3 implements |
-| `predictors/pulse_v3/` | `predictor.py` (`PulseV3Predictor`, bundle loader), `models.py`, `graph.py`, `state.py`, `embed.py`, `online.py` |
+| `predictors/pulse_v3/` | `predictor.py` (`PulseV3Predictor`, bundle loader), `models.py`, `graph.py`, `state.py`, `embed.py`, `online.py`, `features.py` (training / evaluation features and metrics) |
 | `tools.py` | Tool catalog (domain-prefixed names, e.g. `airline.get_user_details`) and class space |
 | `traces/tau.py` | `Episode` / `Step`, the session representation the features are built from |
 | `data/` (gitignored) | Downloaded models and the embedding cache. The bundle is 19 MB and needs scikit-learn 1.9.1, as pinned in `EKS_deployment/cloud/requirements.txt`; each version's manifest records the scikit-learn version it was trained with. |
 
-Not done yet: an in-cluster deployment. `run_cloud.sh` and `cloud_up.sh` deploy only the gbt
-predictor and the speculator.
+Not done yet: an in-cluster deployment of the pulse-v3 predictor. `run_cloud.sh` and `cloud_up.sh`
+deploy only the gbt predictor and the speculator. The runner image now contains `pulse_pred/`, for
+the UI pod and the training Job.
