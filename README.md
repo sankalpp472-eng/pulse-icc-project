@@ -2,6 +2,11 @@
 
 DS252 Introduction to Cloud Computing, IISc (Aug 2026).
 
+> **Documentation:** **[docs/DOCUMENTATION.md](docs/DOCUMENTATION.md)** covers the architecture,
+> components, cloud concepts and design decisions. **[docs/RUNNING.md](docs/RUNNING.md)** is the
+> step-by-step guide to running everything: the demo UI, kind, AWS EKS, pulse-v3 and retraining,
+> and IaC / CI / GitOps.
+
 An LLM agent calls tools one step after another. When those tools are serverless and scaled to zero,
 every first call waits for a cold start of 1–5 s, and the waits add up over an episode. Pulse
 predicts the agent's next tool call and wakes that tool's pod before the call arrives.
@@ -235,6 +240,8 @@ Each run writes one folder:
 
 ## More documentation
 
+- [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md): the project documentation.
+- [docs/RUNNING.md](docs/RUNNING.md): how to run everything, step by step.
 - [RUN_EXPERIMENTS.md](RUN_EXPERIMENTS.md): every experiment step by step, on EKS or kind.
 - [ui/GUIDE.md](ui/GUIDE.md): the demo UI.
 - [deploy/prewarm/README.md](deploy/prewarm/README.md): the predictor ↔ controller contract.
