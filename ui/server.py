@@ -79,6 +79,8 @@ def state(session_after: int = 0, run_after: int = 0, events_after: int = 0):
     if s and not s.is_alive() and s.events and s.events[-1]["type"] == "end" and not getattr(s, "_recorded", False):
         s._recorded = True
         S["history"].insert(0, s.events[-1]["summary"])
+    if "bgload" in services.procs and not (s and s.is_alive()):     # background load ends with its episode
+        services.stop("bgload")
     pods = sim.snapshot() if cluster.mode == "sim" else cluster.pods
     events = sim.events if cluster.mode == "sim" else cluster.events
     return {"cluster": cluster.info(), "services": services.status(),
@@ -156,9 +158,14 @@ def session_start(cfg: dict):
         cfg["policy_label"] = backend.policy_label(info.get("policy"), info["theta"])
     if cluster.mode == "sim" and cfg.get("fresh", True):
         sim.set_min_scale(sim.min_scale)
+    agents = int(cfg.get("bg_agents") or 0)
+    if agents and cluster.mode != "knative":
+        raise HTTPException(400, "Background load needs the real cluster: switch to Knative (top bar), or set it to 0")
     s = Session(cfg, cluster, sim if cluster.mode == "sim" else None, pred, record_dir=RECORDINGS)
     S["session"] = s
     s.start()
+    if agents:                     # N more agents on the same tools while this episode runs (loadtest/)
+        services.start_bgload(agents, pred)
     return {"ok": True}
 
 
@@ -262,7 +269,8 @@ def tasks():
 def run_start(spec: dict):
     if busy():
         raise HTTPException(409, busy())
-    if cluster.mode != "knative":
+    predictor_load = spec.get("mode") == "load" and spec.get("target") == "predictor"   # needs no cluster
+    if cluster.mode != "knative" and not predictor_load:
         raise HTTPException(400, "Experiment runs need a real cluster: switch to Knative (top bar) first")
     try:
         steps = backend.build_run(spec, cluster, services)

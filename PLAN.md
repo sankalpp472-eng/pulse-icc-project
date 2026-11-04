@@ -98,6 +98,15 @@ Deviations from the plan:
 
 ## Phase 2: load testing (Locust + asyncio)
 
+Status: implemented on branch `loadtest`, which builds on `observability`. Not yet run.
+
+Deviations from the plan:
+- **Load test location:** in EKS the load tests run inside the UI pod (on the client node), not in
+  separate run pods. `run_cloud.sh` doesn't start them.
+- **Locust web UI:** the interactive option is available on the laptop only.
+- **Phase 1 fix:** `build_image.sh` now also copies `pulse_metrics.py`. Phase 1's `w1_replay.py`
+  imports it, so in-cluster runs needed it.
+
 Locust runs closed-loop tests: a set number of users, ramped over time. asyncio runs open-loop
 tests: requests arrive at an exact rate whether or not earlier ones have finished, which is the
 right shape for an SLO check.

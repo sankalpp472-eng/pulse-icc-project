@@ -31,9 +31,11 @@ CONTROLLER_DEPLOY = "pulse-controller"           # in the cluster: the controlle
 # Where new runs and plots go: the pod's own folder in the cluster (fetch with ui_cloud.sh fetch), else results/
 WRITE_DIR = Path(os.environ["UI_RESULTS_DIR"]) if os.getenv("UI_RESULTS_DIR") else None
 RESULT_DIRS = {"local": ROOT / "results" / "local_runs", "cloud": ROOT / "results" / "cloud_runs",
-               "legacy": ROOT / "test" / "test_knative" / "results"}
+               "load": ROOT / "results" / "load_runs", "legacy": ROOT / "test" / "test_knative" / "results"}
+# load tests (loadtest/) write here: the pod's own folder in the cluster, else results/load_runs
+LOAD_WRITE_DIR = WRITE_DIR.parent / "load_runs" if WRITE_DIR else None
 if WRITE_DIR:
-    RESULT_DIRS = {"this pod": WRITE_DIR, **RESULT_DIRS}
+    RESULT_DIRS = {"this pod": WRITE_DIR, "this pod (load)": LOAD_WRITE_DIR, **RESULT_DIRS}
 TOOL_NAMES = ["book_reservation", "calculate", "cancel_reservation", "get_reservation_details", "get_user_details",
               "list_all_airports", "search_direct_flight", "search_onestop_flight", "send_certificate", "think",
               "transfer_to_human_agents", "update_reservation_baggages", "update_reservation_flights",
@@ -354,6 +356,19 @@ class Services:
                                         {"context": self.cluster.context})
         return self.status()
 
+    def start_bgload(self, agents: int, predictor_url: str | None) -> dict:
+        """Live demo, 'background load': N more agents replaying recorded episodes (loadtest/locust_episodes.py)
+        while the demo episode runs, sending hints too when the demo uses the predictor. Stopped with the episode."""
+        self.stop("bgload")
+        env = {**self.cluster.tool_env(), **({"PULSE_LOAD_DIR": str(LOAD_WRITE_DIR)} if LOAD_WRITE_DIR else {})}
+        cmd = [PY, "-m", "locust", "-f", "loadtest/locust_episodes.py", "--headless", "--only-summary",
+               "--stages", f"{agents}:7200:{agents}", "--pulse-config", "C3" if predictor_url else "C0",
+               "--label", "ui-background", "--loglevel", "WARNING"]
+        if predictor_url:
+            cmd += ["--predictor-url", predictor_url]
+        self.procs["bgload"] = Proc("bgload", cmd, env, {"agents": agents})
+        return self.status()
+
     def stop(self, name: str | None = None) -> dict:
         for n in ([name] if name else list(self.procs)):
             p = self.procs.pop(n, None)
@@ -504,7 +519,8 @@ class Monitoring:
 def run_window(path: str) -> tuple[float, float]:
     """A run's start and end (epoch s) from its calls.csv, for a Grafana link covering exactly that run."""
     import csv
-    with open(result_path(path) / "calls.csv", encoding="utf-8") as f:
+    d = result_path(path)
+    with open(d / "calls.csv" if (d / "calls.csv").exists() else d / "requests.csv", encoding="utf-8") as f:   # load runs
         rows = [(float(r["t_start"]), float(r.get("latency_ms") or 0) / 1000) for r in csv.DictReader(f) if r.get("t_start")]
     if not rows:
         raise ValueError("no calls in this run")
@@ -595,6 +611,8 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     mode, config, where = spec["mode"], spec["config"], spec.get("where", "laptop")
     pred = spec.get("predictor", "gbt")
     tasks = [str(int(t)) for t in spec.get("tasks") or []]
+    if mode == "load":
+        return build_load(spec, cluster, services, tasks)
     steps: list[tuple[str, list[str], dict]] = []
     env = cluster.tool_env()
 
@@ -664,6 +682,70 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     return steps
 
 
+def ensure_predictor(spec: dict, services: Services, crd: bool) -> str:
+    """Start the predictor the spec asks for, unless exactly that one already runs; returns its model name."""
+    pred, theta, policy = spec.get("predictor", "gbt"), float(spec.get("theta", 0.3)), norm_policy(spec.get("policy"))
+    cur = services.procs.get("predictor")
+    if not (cur and cur.alive() and cur.info.get("model") == pred and cur.info.get("crd") == ("k8s" if crd else "off")
+            and abs(cur.info.get("theta", -1) - theta) < 1e-9 and cur.info.get("policy") == policy):
+        services.start_predictor(pred, theta, crd=crd, policy=policy)
+    if crd and not services.controller_running():
+        services.start_controller()
+    return pred
+
+
+def build_load(spec: dict, cluster: Cluster, services: Services, tasks: list[str]) -> list[tuple[str, list[str], dict]]:
+    """A load test (loadtest/): Locust (closed loop, users ramp through --stages) or asyncio (open loop: exact
+    hints/s, or tool bursts). The predictor test needs no cluster; tools and episodes need Knative."""
+    target, engine, config = spec.get("target", "predictor"), spec.get("engine", "locust"), spec.get("config", "C0")
+    if target not in ("predictor", "tools", "episodes"):
+        raise ValueError(f"unknown load target {target}")
+    if engine == "asyncio" and target == "episodes":
+        raise ValueError("whole episodes are a Locust test (asyncio does the predictor and tool bursts)")
+    knative = cluster.mode == "knative"
+    if target != "predictor" and not knative:
+        raise ValueError("the tools and episodes load tests need the real cluster: switch to Knative (top bar)")
+    steps: list[tuple] = []
+    env = {**(cluster.tool_env() if knative else {}), "PULSE_RUNNER": "pulse-ui pod" if IN_CLUSTER else "laptop"}
+    if LOAD_WRITE_DIR:
+        env["PULSE_LOAD_DIR"] = str(LOAD_WRITE_DIR)
+    label = spec.get("label") or ("ui-eks" if IN_CLUSTER else "ui")
+    if target != "predictor":
+        want = 1 if config == "C1" else 0
+        if cluster.min_scale != want:
+            steps.append((f"set the tools to min-scale {want} ({'always warm' if want else 'scale to zero'})",
+                          lambda say: cluster.set_min_scale(want, say), {}))
+    url = None
+    if target == "predictor" or config == "C3":
+        label += "-" + ensure_predictor(spec, services, crd=knative and config == "C3")
+        steps.append(("__predictor__", [], {}))
+        url = PREDICTOR_URL
+    shared = ["--seed", str(spec.get("seed") or 252)] + (["--tasks", " ".join(tasks)] if tasks else [])
+    if engine == "locust":
+        cmd = [PY, "-m", "locust", "-f", f"loadtest/locust_{target}.py", "--pulse-config", config, "--label", label,
+               *shared, "--loglevel", "WARNING"]
+        if spec.get("stages"):
+            cmd += ["--stages", str(spec["stages"]).replace(" ", "")]
+        if target == "predictor":
+            cmd += ["--host", url]
+        elif target == "episodes" and url:
+            cmd += ["--predictor-url", url]
+        web = bool(spec.get("interactive")) and not IN_CLUSTER
+        cmd += ["--autostart", "--autoquit", "5", "--web-host", "127.0.0.1", "--web-port", "8089"] if web \
+            else ["--headless", "--only-summary"]
+        title = f"Locust load test: {target} {config}" + (" (live web UI: http://127.0.0.1:8089)" if web else "")
+    else:
+        cmd = [PY, "loadtest/async_load.py", target, "--config", config, "--label", label, *shared]
+        if target == "predictor":
+            cmd += ["--url", url, "--rates", *str(spec.get("rates") or "1 5 10 20").split(),
+                    "--duration", str(spec.get("duration") or 60)]
+        else:
+            cmd += ["--burst", *str(spec.get("burst") or "1 5 10").split(), "--pause", str(spec.get("pause") or 0)]
+        title = f"asyncio load test: {target} {config}"
+    steps.append((title, cmd, env))
+    return steps
+
+
 # ====================================================================== results
 def summarize(d: Path) -> dict | None:
     try:
@@ -675,6 +757,14 @@ def summarize(d: Path) -> dict | None:
     except (OSError, ValueError):
         cfg = {}
     lat = (s.get("latency_ms") or {}).get("all") or {}
+    if s.get("kind") == "load":                 # a load test (loadtest/): requests instead of tool calls
+        return {"name": d.name, "path": rel(d), "where": d.parent.name, "kind": "load", "config": s.get("config"),
+                "mode": f"load: {s.get('target')}", "target": s.get("target"), "engine": s.get("engine"),
+                "predictor": (s.get("params") or {}).get("predictor"), "calls": s.get("requests"),
+                "failures": s.get("failures"), "rps": s.get("rps"), "peak_load": s.get("peak_load"),
+                "cold": None, "cold_share": s.get("cold_share"), "p50": lat.get("p50"), "p95": lat.get("p95"),
+                "p99": lat.get("p99"), "mean": lat.get("mean"), "pod_seconds": None,
+                "files": sorted(p.name for p in d.iterdir())}
     pred = ((cfg.get("prewarm") or {}).get("predictor") or {}).get("model")
     return {"name": d.name, "path": rel(d),
             "where": d.parent.name, "config": s.get("config") or cfg.get("config"),
@@ -725,8 +815,15 @@ def make_plots(paths: list[str]) -> dict:
     # next to the first run, unless that folder is read-only (the results baked into the image): the pod's folder
     base = WRITE_DIR if WRITE_DIR else dirs[0].parent
     base.mkdir(parents=True, exist_ok=True)
+    load = [json.loads((d / "summary.json").read_text(encoding="utf-8")).get("kind") == "load" for d in dirs]
+    if any(load) and not all(load):
+        raise ValueError("pick either experiment runs or load runs, not both")
+    if all(load):                               # load runs: latency / throughput / failures against load
+        base = LOAD_WRITE_DIR if LOAD_WRITE_DIR else dirs[0].parent
+        base.mkdir(parents=True, exist_ok=True)
+    script = "loadtest/plot_load.py" if all(load) else "test/test_knative/plot_compare.py"
     out = base / f"compare_{time.strftime('%Y-%m-%d_%H%M%S')}_ui_{len(dirs)}runs"
-    p = subprocess.run([plot_python(), "test/test_knative/plot_compare.py", *map(str, dirs), "--out", str(out)],
+    p = subprocess.run([plot_python(), script, *map(str, dirs), "--out", str(out)],
                        cwd=ROOT, capture_output=True, text=True, timeout=180, creationflags=NO_WINDOW,
                        env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     if p.returncode != 0:

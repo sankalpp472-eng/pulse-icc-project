@@ -1,0 +1,4 @@
+# load tests (loadtest/): install into the project venv next to agent/ and predictor/ requirements
+locust>=2.20      # closed-loop users, stages, web UI (locust_*.py)
+httpx             # asyncio open-loop generator (async_load.py)
+matplotlib        # plot_load.py (the UI uses PLOT_PYTHON, a Python with matplotlib)

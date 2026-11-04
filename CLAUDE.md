@@ -52,6 +52,7 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 | `controller/` | Prewarm controller and its action logs |
 | `deploy/knative/` | Knative Services for the tools, Redis, `deploy.sh`, per-tool cold/warm check |
 | `deploy/prewarm/` | `PrewarmRequest` CRD and the predictor ↔ controller contract |
+| `loadtest/` | Load tests: Locust (predictor API, tools, episodes) and asyncio open-loop (`async_load.py`); results in `results/load_runs/`; UI: Experiments → Load test |
 | `deploy/monitoring/` | Prometheus + Grafana (kube-prometheus-stack): values, PodMonitors, dashboards as code, `install.sh`; shown in the UI's Monitoring tab |
 | `test/test_knative/` | Local cluster setup, C0/C1/C3 runners, plots, `results/` |
 | `test/test_cold_start/` | The OpenFaaS CE tests that led to the move to Knative |

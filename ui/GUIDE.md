@@ -304,6 +304,36 @@ Only one thing runs at a time: an experiment run and a demo episode share the to
    - plus `comparison.json`, the numbers behind them.
 5. Click an image to open it full size. The **zip** link on a run row downloads that whole run folder.
 
+### Recipe 8: load tests (Locust + asyncio)
+
+The tests are described in [loadtest/README.md](../loadtest/README.md). Install their packages once:
+`"$PY" -m pip install -r loadtest/requirements.txt`.
+
+1. **Experiments tab → Mode: Load test.**
+2. **Target:**
+   - **Predictor API:** works in simulated mode too, because it needs no cluster.
+   - **Tool services:** read-only MCP calls; needs Knative.
+   - **Whole agent episodes:** needs Knative.
+3. **Engine:**
+   - **Locust:** users ramp through **Stages** (`users:seconds[:spawn rate]`, empty = the default).
+     Tick **Locust web UI** for Locust's own live page on http://127.0.0.1:8089 (laptop only).
+   - **asyncio:** an exact rate, **Hints per second**, for the predictor; or **Burst sizes** of
+     simultaneous calls per tool. A **pause** of 90 s or more lets each burst start cold.
+4. **Configuration and predictor:**
+   - **C0 / C1 / C3:** sets the tools' min-scale. For C3 it starts the controller and sends hints.
+   - **Predictor:** used by the predictor test and by C3.
+   - Then **▶ Start load test**. The log streams in Run log; the summary shows requests, failed
+     requests, requests/s, peak load and p50/p95/p99.
+5. **Monitoring tab:** follows the running test, with pods, prewarms and predictor p95 live.
+6. **Results tab:** load runs show `load: <target> · <engine>` next to their configuration.
+   - **Columns:** Calls = requests, Cold = failed requests, the last column = requests/s at peak load.
+   - **Compare** and **Make plots** (`loadtest/plot_load.py`: latency, throughput and failures/cold
+     against load) work on load runs. Don't mix them with experiment runs.
+
+**Live demo with background load:** in Knative mode, set **Background load (agents)** to N before
+starting an episode. N extra agents replay recorded episodes on the same tools while yours plays, and
+they stop when it ends.
+
 ### Recipe 7: watch it live in Grafana (Prometheus monitoring)
 
 Knative mode only. The simulated cluster has no Prometheus.

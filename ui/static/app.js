@@ -206,6 +206,7 @@ const demoCfg = (predictorOn) => kindSeg.get() === "recorded" ? {
 async function startEpisode(cfg) {
   if (cfg.kind === "live" && cfg.user === "ai" && !cfg.task_id) throw new Error("The AI customer needs a task");
   if (cfg.kind === "recorded" && !cfg.recording) throw new Error("Record a live run first (Live agent → Start episode)");
+  cfg.bg_agents = state.cluster && state.cluster.mode === "knative" ? Number($("#bgAgents").value || 0) : 0;
   if (cfg.predictor && !predictorMatchesCard()) {        // C3 always runs what the Predictor card shows
     await api("/api/predictor/start", cardPredictor());
     toast("Starting the predictor with the card's settings first (about a minute)…");
@@ -418,10 +419,19 @@ $("#xTasksPreset").onchange = () => {
   else if (v === "heldout" || v === "fanout") $("#xFanout").checked = true;
 };
 function expForm() {
-  const live = xMode.get() === "live";
-  $$(".replay-x").forEach((e) => e.classList.toggle("hidden", live));
+  const mode = xMode.get(), live = mode === "live", load = mode === "load";
+  const target = $("#lTarget").value, engine = $("#lEngine").value;
+  if (load && target === "episodes" && engine === "asyncio") $("#lEngine").value = "locust";   // a Locust-only test
+  $$(".replay-x").forEach((e) => e.classList.toggle("hidden", mode !== "replay"));
   $$(".live-x").forEach((e) => e.classList.toggle("hidden", !live));
-  const c3 = xConfig.get() === "C3";
+  $$(".not-load").forEach((e) => e.classList.toggle("hidden", load));
+  $$(".load-x").forEach((e) => e.classList.toggle("hidden", !load));
+  $$(".l-locust").forEach((e) => e.classList.toggle("hidden", !load || $("#lEngine").value !== "locust"));
+  $$(".l-async-pred").forEach((e) => e.classList.toggle("hidden", !load || $("#lEngine").value !== "asyncio" || target !== "predictor"));
+  $$(".l-async-tools").forEach((e) => e.classList.toggle("hidden", !load || $("#lEngine").value !== "asyncio" || target !== "tools"));
+  $("#xStart").textContent = load ? "▶ Start load test" : "▶ Start run";
+  // the predictor test always runs a predictor (C0/C1 then only label the cluster state)
+  const c3 = xConfig.get() === "C3" || (load && target === "predictor");
   $$(".c3-only").forEach((e) => e.classList.toggle("hidden", !c3));
   $$(".x-theta").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xPolicy").value !== "theta"));
   $$(".x-topk").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xPolicy").value !== "topk"));
@@ -429,6 +439,7 @@ function expForm() {
 }
 $("#xPolicy").onchange = () => expForm();
 $("#xLook").onchange = () => expForm();
+$("#lTarget").onchange = $("#lEngine").onchange = () => expForm();
 function expTasks() {
   const v = $("#xTasksPreset").value;
   if (v === "heldout" || v === "heldout-seq") return HELDOUT;
@@ -449,6 +460,10 @@ $("#xStart").onclick = async () => {
     user_delay_median: live ? $("#xUserDelay").value : null,
     policy: { policy: $("#xPolicy").value, top_k: Number($("#xTopK").value), p_min: Number($("#xPMin").value),
               lookahead: $("#xLook").checked, theta_next: Number($("#xThetaNext").value) },
+    // load tests (loadtest/)
+    target: $("#lTarget").value, engine: $("#lEngine").value, stages: $("#lStages").value.trim(),
+    interactive: $("#lWeb").checked, rates: $("#lRates").value, duration: Number($("#lDuration").value),
+    burst: $("#lBurst").value, pause: Number($("#lPause").value),
   };
   if (live && !spec.tasks.length) return toast("Pick tasks for a live run");
   try {
@@ -474,7 +489,14 @@ function renderRun(run) {
   $("#xStop").classList.toggle("hidden", !running);
   const secs = Math.round((run.ended || state.now) - run.started);
   $("#xState").textContent = `${run.state} · ${Math.floor(secs / 60)}m ${secs % 60}s` + (run.exit_code != null ? ` · exit ${run.exit_code}` : "");
-  if (run.summary) {
+  if (run.summary && run.summary.kind === "load") {
+    const s = run.summary;
+    $("#xSummaryCard").classList.remove("hidden");
+    $("#xResultDir").textContent = run.result_dir || "";
+    $("#xStats").innerHTML = stat(s.calls, "requests") + stat(s.failures, "failed") + stat(fmt(s.rps, 1), "requests/s") +
+      stat(s.peak_load, "peak load") + stat(fmt(s.p50), "p50 ms") + stat(fmt(s.p95), "p95 ms") + stat(fmt(s.p99), "p99 ms") +
+      (s.cold_share != null ? stat(fmt(s.cold_share * 100, 1) + "%", "cold (> 1 s)") : "");
+  } else if (run.summary) {
     const s = run.summary;
     $("#xSummaryCard").classList.remove("hidden");
     $("#xResultDir").textContent = run.result_dir || "";
@@ -501,9 +523,10 @@ function renderResults() {
   $("#rWhere").innerHTML = `<option value="">all folders</option>` + wheres.map((x) => `<option ${x === w ? "selected" : ""}>${esc(x)}</option>`).join("");
   $("#rTbl tbody").innerHTML = runs.map((r) => `<tr>
       <td><input type="checkbox" data-path="${esc(r.path)}"></td>
-      <td class="name" title="${esc(r.path)}">${esc(r.name)}</td><td class="muted">${esc(r.where)}</td><td>${esc(r.config)}</td><td>${esc(r.predictor || "")}</td>
-      <td>${r.calls ?? ""}</td><td>${r.cold ?? ""}</td><td>${fmt(r.mean)}</td><td>${fmt(r.p50)}</td><td>${fmt(r.p95)}</td><td>${fmt(r.p99)}</td>
-      <td>${fmt(r.pod_seconds)}</td><td><a href="/api/results/zip?path=${encodeURIComponent(r.path)}" title="Download this run folder as a zip">zip</a></td>
+      <td class="name" title="${esc(r.path)}">${esc(r.name)}</td><td class="muted">${esc(r.where)}</td>
+      <td>${esc(r.config)}${r.kind === "load" ? ` <span class="pill">${esc(r.mode)} · ${esc(r.engine)}</span>` : ""}</td><td>${esc(r.predictor || "")}</td>
+      <td>${r.calls ?? ""}</td><td>${r.kind === "load" ? (r.failures ?? "") : (r.cold ?? "")}</td><td>${fmt(r.mean)}</td><td>${fmt(r.p50)}</td><td>${fmt(r.p95)}</td><td>${fmt(r.p99)}</td>
+      <td>${r.kind === "load" ? `${fmt(r.rps, 1)}/s @ ${r.peak_load ?? "–"}` : fmt(r.pod_seconds)}</td><td><a href="/api/results/zip?path=${encodeURIComponent(r.path)}" title="Download this run folder as a zip">zip</a></td>
       <td><a href="#" data-graf="${esc(r.path)}" title="This run's time window in the Monitoring tab (needs the cluster's Prometheus to still hold it)">Grafana</a></td></tr>`).join("") ||
     `<tr><td colspan="14" class="muted">No runs.</td></tr>`;
   $$("#rTbl input").forEach((c) => (c.onchange = selChanged));
@@ -529,8 +552,12 @@ $("#rCompare").onclick = () => {
       ? CONFIG_COLOR[r.config] || EXTRA[0] : EXTRA[Object.keys(used).length % EXTRA.length];
     return used[k];
   };
-  const label = (r) => `${r.config}${r.predictor ? " " + r.predictor : ""}`;
-  const metrics = [["cold", "Cold calls"], ["mean", "Mean latency (ms)"], ["p95", "p95 (ms)"], ["p99", "p99 (ms)"], ["pod_seconds", "Pod-seconds"]];
+  const load = runs.every((r) => r.kind === "load");
+  if (!load && runs.some((r) => r.kind === "load")) return toast("Compare either experiment runs or load runs, not both");
+  const label = (r) => `${r.config}${r.predictor ? " " + r.predictor : ""}${load ? ` · ${r.target} · ${r.engine}` : ""}`;
+  const metrics = load
+    ? [["failures", "Failed requests"], ["mean", "Mean latency (ms)"], ["p95", "p95 (ms)"], ["p99", "p99 (ms)"], ["rps", "Requests/s"]]
+    : [["cold", "Cold calls"], ["mean", "Mean latency (ms)"], ["p95", "p95 (ms)"], ["p99", "p99 (ms)"], ["pod_seconds", "Pod-seconds"]];
   $("#rBars").innerHTML = metrics.map(([k, title]) => {
     const max = Math.max(...runs.map((r) => r[k] || 0), 1);
     return `<div class="bar-group"><h4>${title}</h4>` + runs.map((r) => `<div class="bar-row" title="${esc(r.name)}">
@@ -758,6 +785,7 @@ async function poll() {
     }
     $("#ctxName").textContent = c.context ? `(${c.context.replace(/^.*@/, "")})` : "";
     $$(".sim-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "sim"));
+    $$(".knative-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "knative"));
     minScaleSeg.set(String(s.sim_min_scale));
     const mf = (s.monitoring && s.monitoring.figures) || {};
     $("#podSec").textContent = c.mode === "sim" ? `${fmt(s.pod_seconds)} pod-s`

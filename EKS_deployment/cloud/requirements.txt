@@ -16,3 +16,4 @@ uvicorn==0.54.0
 prometheus_client==0.26.0
 kubernetes==37.0.1
 matplotlib==3.10.9          # plots in the pulse-ui pod (test/test_knative/plot_compare.py)
+locust>=2.20                # load tests in the pulse-ui pod (loadtest/); not a model dependency, so not pinned

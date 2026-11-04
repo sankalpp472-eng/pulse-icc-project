@@ -149,6 +149,25 @@ bash deploy/monitoring/install.sh      # into the current kubectl context (kind 
 - **On EKS** it runs on the client node, away from the tools.
 - **Details:** [deploy/monitoring/README.md](deploy/monitoring/README.md).
 
+## Load testing (Locust + asyncio)
+
+```bash
+"$PY" -m pip install -r loadtest/requirements.txt
+"$PY" -m locust -f loadtest/locust_predictor.py --headless --host http://127.0.0.1:8000   # NFR-4 under rising load
+"$PY" loadtest/async_load.py tools --burst 1 5 10 --pause 90                               # cold-start storms
+```
+
+There are three Locust tests and an asyncio open-loop generator, all built on the replay's recorded
+episodes:
+- **predictor API:** hints with history, so any predictor can be tested;
+- **tool services:** read-only MCP calls;
+- **whole agent episodes:** with hints, so C0 can be compared with C3 under concurrency.
+
+Results go to `results/load_runs/`, and `loadtest/plot_load.py` plots them.
+- **In the UI:** Experiments → **Load test**, load runs in Results (Compare, Make plots, Grafana), and
+  **Background load** in the Live demo.
+- **Details:** [loadtest/README.md](loadtest/README.md).
+
 ## Infrastructure as code
 
 `terraform/` holds the AWS resources managed with Terraform. So far that's the model registry:
@@ -183,6 +202,7 @@ Each run writes one folder:
 | `controller/` | Prewarm controller |
 | `deploy/knative/`, `deploy/prewarm/` | Knative services for the tools; the `PrewarmRequest` CRD and contract |
 | `deploy/monitoring/` | Prometheus + Grafana: Helm values, scrape configs, dashboards as code, `install.sh` |
+| `loadtest/` | Load tests: Locust (predictor, tools, episodes), asyncio open-loop generator, `plot_load.py` |
 | `EKS_deployment/` | EKS cluster scripts, in-cluster runner image and services |
 | `terraform/` | Infrastructure as code (S3 model registry) |
 | `test/test_knative/` | kind setup, C0/C1/C3 runners, plots |
@@ -196,6 +216,7 @@ Each run writes one folder:
 - [ui/GUIDE.md](ui/GUIDE.md): the demo UI.
 - [deploy/prewarm/README.md](deploy/prewarm/README.md): the predictor ↔ controller contract.
 - [deploy/monitoring/README.md](deploy/monitoring/README.md): Prometheus and Grafana.
+- [loadtest/README.md](loadtest/README.md): load testing.
 - [EKS_deployment/README.md](EKS_deployment/README.md): the older laptop-driven EKS scripts.
 - [NEXT_EXPERIMENTS.md](NEXT_EXPERIMENTS.md): planned experiments.
 - [pulse_pred/README.md](pulse_pred/README.md): the pulse-v3 predictor.
