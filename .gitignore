@@ -8,6 +8,8 @@ EKS_deployment/logs/
 baselines/*/data/
 pulse_pred/data/
 predictor/data/models/
+# tau-bench conversations, downloaded (not committed): locally and by CI's image build, whose tag would
+# otherwise say "-dirty" (build_image.sh checks git status)
 predictor/data/tau-bench/
 terraform/**/.terraform/
 terraform/**/*.tfstate*
