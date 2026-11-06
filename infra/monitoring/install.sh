@@ -27,7 +27,16 @@ fi
 
 FILES=(-f "$DIR/values.yaml")
 if [[ "$CTX" == kind-* ]]; then
-  FILES+=(-f "$DIR/values-kind.yaml")
+  # The laptop's processes are scraped at host.docker.internal (Docker Desktop). Native Docker (Linux, WSL)
+  # has no such name: use the kind network's gateway, which is the host.
+  KIND_VALUES=$DIR/values-kind.yaml
+  if ! docker exec "${CTX#kind-}-control-plane" getent hosts host.docker.internal >/dev/null 2>&1; then
+    GW=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Gateway}} {{end}}' | tr ' ' '\n' | grep -m1 '\.')
+    KIND_VALUES=$(mktemp)
+    sed "s/host\.docker\.internal/$GW/g" "$DIR/values-kind.yaml" > "$KIND_VALUES"
+    echo "no host.docker.internal: scraping the laptop at $GW"
+  fi
+  FILES+=(-f "$KIND_VALUES")
 elif [ -n "$(kubectl get nodes -l pulse/role=client -o name)" ]; then
   FILES+=(-f "$DIR/values-eks.yaml")
 fi

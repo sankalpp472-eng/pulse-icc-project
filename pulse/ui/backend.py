@@ -294,7 +294,8 @@ class Services:
             model_version = model_version or os.getenv("ACTION_MODEL_VERSION") or None  # pinned by GitOps (pulse-config)
             if ACTION_URI:
                 env.update(ACTION_MODEL_URI=ACTION_URI, ACTION_MODEL_VERSION=model_version or "")
-        cmd = [PY, "-m", "uvicorn", "pulse.predictor.service:app", "--host", "127.0.0.1",
+        # 0.0.0.0 (like the controller's metrics): Prometheus in kind scrapes it from the Docker network
+        cmd = [PY, "-m", "uvicorn", "pulse.predictor.service:app", "--host", "0.0.0.0",
                "--port", str(PREDICTOR_PORT), "--log-level", "warning"]
         self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
                                                                 "crd": "k8s" if crd else "off",
