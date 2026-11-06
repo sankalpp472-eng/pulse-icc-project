@@ -7,6 +7,8 @@ __pycache__/
 EKS_deployment/logs/
 baselines/*/data/
 pulse_pred/data/
+predictor/data/models/
+predictor/data/tau-bench/
 terraform/**/.terraform/
 terraform/**/*.tfstate*
 terraform/**/tfplan

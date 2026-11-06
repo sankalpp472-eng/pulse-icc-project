@@ -198,7 +198,7 @@ def main():
         return P, lat
 
     results = []
-    for name in ("ngram", "lr", "gbt"):
+    for name in [m for m in ("ngram", "lr", "gbt") if m in pred.models]:   # lr: older pickles only
         P, lat = model_preds(name, keys)
         results.append({"method": name, **score(P, [rows.loc[k, "target"] for k in keys], lat, a.lead_s, a.cold_s),
                         "_P": P, "_lat": lat})

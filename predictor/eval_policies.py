@@ -17,7 +17,8 @@ import pandas as pd
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from models import NO_PREWARM, prewarm_select  # noqa: E402
+from contract import NO_PREWARM  # noqa: E402
+from policy import prewarm_select  # noqa: E402
 from train_action import RESPOND, predict_rows  # noqa: E402
 
 pred = pickle.load(open(HERE / "data" / "action_model.pkl", "rb"))

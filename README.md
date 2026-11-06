@@ -35,22 +35,25 @@ The design and its decisions are described in [CLAUDE.md](CLAUDE.md) and `docs/`
 
 ## Prerequisites
 
-Commands are for **Git Bash** (Windows), run from the repository root.
+Commands are for **Git Bash** (Windows) or a Linux / macOS shell, run from the repository root.
+After cloning, one command sets everything up:
+
+```bash
+bash scripts/setup.sh        # Python 3.11+ venv with all requirements, tau-bench data, agent/.env from the example
+export PY="$PWD/agent/.venv/Scripts/python"            # in each new terminal (Linux/macOS: agent/.venv/bin/python)
+```
 
 | What | Needed for |
 |---|---|
-| Python venv: `python -m venv agent/.venv`, then `agent/.venv/Scripts/python -m pip install -r agent/requirements.txt -r predictor/requirements.txt` | everything |
-| `agent/.env` with `GROQ_API_KEY_1=...` (up to `_4`). Never commit it | live runs, the AI customer, the LLM speculator |
-| tau-bench conversations in `predictor/data/tau-bench/historical_trajectories/` (`gpt-4o-airline.json`, `sonnet-35-new-airline.json`) | replays |
+| `scripts/setup.sh` (above) | everything |
+| LLM keys in `agent/.env` (`GROQ_API_KEY=...`, or a local server via `SPEC_BASE_URL`). Never commit it | live runs, the AI customer, the speculator predictor |
+| The pulse-v3 model: `bash scripts/embed_server.sh` (Docker), then `"$PY" scripts/train_models.py pulse_v3` | the pulse_v3 predictor (lightgbm and markov ship trained) |
 | Docker Desktop, kubectl, kind | the local cluster |
 | AWS CLI (logged in), eksctl | EKS |
-| Terraform ≥ 1.6, AWS credentials | `terraform/`, and the pulse-v3 model from S3 |
+| Terraform ≥ 1.6, AWS credentials | `terraform/`, the S3 model registry |
 
-In each new terminal:
-
-```bash
-export PY="$PWD/agent/.venv/Scripts/python"
-```
+All data and models can be rebuilt from the clone: `scripts/download_data.py` (public tau-bench data)
+and `scripts/train_models.py action|pulse_v3|all`. Details: [docs/RUNNING.md](docs/RUNNING.md), section 1.
 
 ## 1. Quick start: the demo UI, no cluster (free)
 
@@ -82,8 +85,8 @@ kubectl apply -f deploy/prewarm/prewarmrequest-crd.yaml
 **C3 replay**, using three terminals:
 ```bash
 KUBE_CONTEXT=kind-pulse-kn "$PY" controller/prewarm_controller.py                                   # 1: controller
-CRD_MODE=k8s KUBE_CONTEXT=kind-pulse-kn PREDICTOR_MODEL=gbt "$PY" -m uvicorn service:app --app-dir predictor --port 8000   # 2: predictor
-"$PY" test/test_knative/w1_replay.py --tasks 6 20 22 26 30 --fanout --predictor-url http://127.0.0.1:8000 --label kind-gbt   # 3: replay
+CRD_MODE=k8s KUBE_CONTEXT=kind-pulse-kn PREDICTOR=lightgbm "$PY" -m uvicorn service:app --app-dir predictor --port 8000   # 2: predictor
+"$PY" test/test_knative/w1_replay.py --tasks 6 20 22 26 30 --fanout --predictor-url http://127.0.0.1:8000 --label kind-lightgbm   # 3: replay
 ```
 
 Results go to `results/local_runs/`. For C1, live runs and troubleshooting, see
@@ -96,9 +99,9 @@ Creating the cluster costs money until it's torn down, so always finish with `ek
 ```bash
 bash EKS_deployment/cloud/build_image.sh               # runner image -> ECR (~5 min)
 PYTHON="$PY" bash EKS_deployment/eks_up.sh             # cluster, Knative, tools (~25 min)
-bash EKS_deployment/cloud/cloud_up.sh                  # predictor, speculator, controller pods
+bash EKS_deployment/cloud/cloud_up.sh                  # predictor and controller pods
 CONFIG=C0 bash EKS_deployment/cloud/run_cloud.sh --fanout
-CONFIG=C3 PREDICTOR=gbt bash EKS_deployment/cloud/run_cloud.sh --fanout
+CONFIG=C3 PREDICTOR=lightgbm bash EKS_deployment/cloud/run_cloud.sh --fanout   # or markov / speculator / pulse_v3
 bash EKS_deployment/eks_down.sh                        # tear down (~10 min)
 ```
 
@@ -109,17 +112,24 @@ Results go to `results/cloud_runs/`.
 
 ## Predictors
 
-All predictors serve the same `POST /predict` API, so the controller, replay and UI work with any of them.
+One service, four predictors: `PREDICTOR=<name> uvicorn service:app --app-dir predictor`.
+Every predictor takes a `PredictRequest` and returns ranked next actions plus the tools to prewarm
+([predictor/contract.py](predictor/contract.py)). `GET /info` says which inputs it reads. The agent, the replay
+and the UI read `/info` and send only those inputs, so the conversation text leaves the agent only for
+predictors that need it.
 
-| Predictor | Start (for C3) | What it uses |
+| `PREDICTOR` | Reads | What it is |
 |---|---|---|
-| `gbt` (main) | `PREDICTOR_MODEL=gbt uvicorn service:app --app-dir predictor` | LightGBM next action from the trajectory and agent-side signals (no raw text), plus fan-out k |
-| `lr_action`, `ngram_action`, `ensemble` | `PREDICTOR_MODEL=<name> ...` (same command) | Baselines; see `predictor/` |
-| LLM speculator | `uvicorn service:app --app-dir baselines/llm_speculator` | An LLM reads the conversation (Groq); the replay needs `--hint-context` |
-| `pulse_v3` | `uvicorn service:app --app-dir pulse_pred` | Conversation text, a tool graph from the schemas, state flags, and an online adapter; the replay needs `--hint-context`. See [pulse_pred/README.md](pulse_pred/README.md) |
+| `lightgbm` (main, default) | trajectory + signals | LightGBM next action from the last two tools and agent-side signals (numbers only, no raw text), plus fan-out k and lookahead. Without signals it answers with `markov` |
+| `markov` | trajectory | Order-2 Markov chain over actions with back-off, P(next \| last two tools); lookahead |
+| `speculator` | trajectory + history | An LLM reads the last 10 messages (Groq keys, or any OpenAI-compatible server via `SPEC_BASE_URL`) |
+| `pulse_v3` | trajectory + history | Conversation text, a tool graph from the schemas, state flags, and an online adapter. See [pulse_pred/README.md](pulse_pred/README.md) |
 
-Common settings: `THETA` (0.3), `PREWARM_POLICY` theta | topk, `TOP_K`, `P_MIN`, `TTL_S`, and
-`CRD_MODE` off | dryrun | k8s. In the UI, pick the predictor on the Predictor card.
+The code lives in [predictor/predictors/](predictor/predictors/), one file per predictor. `lightgbm` and
+`markov` share `predictor/data/action_model.pkl` (`train_action.py`).
+Common settings: `THETA` (0.3), `PREWARM_POLICY` theta | topk, `TOP_K`, `P_MIN`, `LOOKAHEAD`, `TTL_S`, and
+`CRD_MODE` off | dryrun | k8s. In the UI, pick the predictor on the Predictor card. On EKS, one
+`pulse-predictor` Deployment runs whichever predictor `PREDICTOR` names (`run_cloud.sh` switches it).
 
 ### pulse-v3 and its model on S3
 
@@ -137,6 +147,10 @@ export PULSE_MODEL_URI=s3://pulse-models-<account id>/pulse-v3   # = terraform -
   version, which becomes `latest` only if its warm@3 beats the current model's. In the UI, the
   **Models** tab lists versions and their metrics, and has **Use**, **Promote** (rollback) and
   **Retrain**. See [pulse_pred/README.md](pulse_pred/README.md#retraining-mlops).
+- **lightgbm + markov** have the same pipeline for their shared `action_model.pkl`
+  (`ACTION_MODEL_URI=s3://.../action-model`, `predictor/train_action.py --uri`, gate on lightgbm's
+  held-out top-1, `MODEL=action deploy/training/run_training.sh`, Models tab → lightgbm + markov). See
+  [docs/RUNNING.md](docs/RUNNING.md) section 5.4.
 - **Embedding server:** pulse-v3 is more accurate with its local embedding server
   (llama.cpp + nomic-embed-text on port 8091). Without it, it runs with a zero embedding.
 
@@ -222,14 +236,15 @@ Each run writes one folder:
 | Path | What |
 |---|---|
 | `agent/` | ReAct agent, LLM client, simulated customer, MCP tool servers, hints, airline tools and data |
-| `predictor/` | Main predictor: trace export, graphs, models, training, evaluation, API, CRD writer |
-| `baselines/llm_speculator/` | LLM speculator baseline |
-| `pulse_pred/` | pulse-v3 predictor and its S3 model store |
+| `predictor/` | The prediction service and its four predictors (`predictors/`), contract, prewarm policy, training data + training for lightgbm/markov, CRD writer |
+| `baselines/llm_speculator/` | The speculator's prompt and LLM calls, plus its offline evaluation |
+| `pulse_pred/` | pulse-v3 model code, its S3 model store and retraining |
+| `scripts/` | Setup from a fresh clone: `setup.sh`, `download_data.py`, `train_models.py`, `embed_server.sh` |
 | `controller/` | Prewarm controller |
 | `deploy/knative/`, `deploy/prewarm/` | Knative services for the tools; the `PrewarmRequest` CRD and contract |
 | `deploy/monitoring/` | Prometheus + Grafana: Helm values, scrape configs, dashboards as code, `install.sh` |
 | `loadtest/` | Load tests: Locust (predictor, tools, episodes), asyncio open-loop generator, `plot_load.py` |
-| `deploy/training/` | pulse-v3 retraining as a Kubernetes Job (with an embedding sidecar), `run_training.sh` |
+| `deploy/training/` | Retraining Jobs: pulse-v3 (with an embedding sidecar) and lightgbm + markov, `run_training.sh` |
 | `EKS_deployment/` | EKS cluster scripts, in-cluster runner image and services |
 | `terraform/` | Infrastructure as code: state bucket (`bootstrap/`), model registry + ECR + CI roles, EKS cluster (`eks/`) |
 | `deploy/gitops/`, `.github/workflows/` | Argo CD applications and install script; CI (tests, image build, terraform plan) |

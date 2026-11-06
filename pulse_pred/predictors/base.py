@@ -2,7 +2,7 @@
 The interface of a session-based next-tool predictor (pulse-v3 implements it).
 
 A predictor turns a session's hints into Predictions. It owns its per-session state and any learning;
-it does not decide what to warm or write PrewarmRequests (pulse_pred/service.py does).
+it does not decide what to warm or write PrewarmRequests (predictor/service.py does, through predictor/predictors/pulse_v3.py).
 
   hint(h)  -> Prediction    one per hint; raise BadHint / OutOfOrder for hints it cannot use
   end(e)   -> dict          the session finished (learn from it, drop its state); raise UnknownSession

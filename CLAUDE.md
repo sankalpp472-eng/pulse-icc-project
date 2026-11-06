@@ -12,9 +12,9 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 
 ## System Architecture
 
-1. **Agent** (`agent/`) — A custom ReAct agent (reason → act → observe, one tool call at a time) on tau-bench's airline domain, with an LLM-simulated customer. LLMs via Groq / OpenRouter / Ollama. Sends a prediction hint (workflow ID, episode, trajectory so far) to the predictor before every LLM step.
+1. **Agent** (`agent/`) — A custom ReAct agent (reason → act → observe, one tool call at a time) on tau-bench's airline domain, with an LLM-simulated customer. LLMs via Groq / OpenRouter / Ollama. Sends a prediction hint (episode, trajectory so far, plus whatever the running predictor's `GET /info` says it reads: signals and/or recent messages) to the predictor before every LLM step (`agent/hints.py`, `predictor/client.py`).
 
-2. **Prediction Service** (`predictor/`, Python + scikit-learn + LightGBM + FastAPI) — Two families. Tool-only models (graph / history / trajectory / ensemble / lr) rank the next tool from the trajectory. Next-action models (`gbt` = LightGBM gradient-boosted trees, main; `lr_action`; `ngram_action` baseline; `action_model.py`, `train_action.py`) predict the next LLM step among the 14 tools + RESPOND from the trajectory plus agent-side signals (numbers/flags only, `signals.py`), and a fan-out width k (pending-ID rule) that becomes `desiredReplicas`. Tools with P ≥ θ become `PrewarmRequest` objects (CRD); RESPOND/END are never prewarmed. Target: p95 < 50 ms at 10 hints/s.
+2. **Prediction Service** (`predictor/service.py`, FastAPI) — One service, four predictors, picked by `PREDICTOR`: `lightgbm` (main; LightGBM next action from the last two tools + agent-side signals, numbers/flags only, `signals.py`), `markov` (order-2 Markov chain with back-off), `speculator` (an LLM reads the last 10 messages; prompt in `baselines/llm_speculator/`), `pulse_v3` (conversation text + tool graph + state flags, model code in `pulse_pred/`, model in S3). One file each in `predictor/predictors/`; contract in `predictor/contract.py`, shared prewarm policy in `predictor/policy.py`. `lightgbm` and `markov` share `predictor/data/action_model.pkl` (`train_action.py`) and give a fan-out width k (pending-ID rule) that becomes `desiredReplicas`. Tools with P ≥ θ (or top-k) become `PrewarmRequest` objects (CRD); RESPOND/END are never prewarmed. Target: p95 < 50 ms at 10 hints/s.
 
 3. **Prewarm Controller** (`controller/prewarm_controller.py`, Python) — Watches `PrewarmRequest` objects and sends the tool one MCP `ping`, which makes Knative start a pod if the tool is at zero. TTL = the tools' Knative idle window (`autoscaling.knative.dev/window`, 60 s); Knative scales unused tools back to zero, and the controller marks them `Evicted`. Contract and status fields: `deploy/prewarm/README.md`.
 
@@ -24,7 +24,7 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 
 | From → To | Data |
 |---|---|
-| Agent → Predictor | Workflow ID, current tool, trajectory, graph ID, timestamp |
+| Agent → Predictor | Workflow ID, episode, trajectory, timestamp; plus signals (lightgbm) or recent messages (speculator, pulse_v3) |
 | Predictor → Controller | Tool ID, probability, threshold θ, TTL, desired replicas (via the `PrewarmRequest` CRD) |
 | Knative tool → Agent | Tool result + latency |
 | Any → Trace store | Tool/timing/resource/prediction fields (no raw prompts or credentials) |
@@ -47,12 +47,12 @@ The PRD (`docs/PRD.docx`) was written for OpenFaaS. The project moved to **Knati
 | Path | What |
 |---|---|
 | `agent/` | ReAct agent, LLM client, simulated user, MCP tool servers, hints, `tau_airline/` (tools, data, tasks) |
-| `predictor/` | Steps 1–9: trace export, graphs, models, training, evaluation, API, load test, CRD writer |
-| `pulse_pred/` | pulse-v3 predictor (conversation text + tool graph + state flags, online adapter) behind the same `/predict` API; UI choice `pulse_v3` (see `pulse_pred/README.md`) |
+| `predictor/` | The prediction service (`service.py`, `PREDICTOR=lightgbm|markov|speculator|pulse_v3`), its predictors (`predictors/`), contract, prewarm policy, hint client, trace export, training data + training for lightgbm/markov, CRD writer |
+| `pulse_pred/` | pulse-v3 model code, S3 model store and retraining (served by `predictor/service.py` with `PREDICTOR=pulse_v3`; see `pulse_pred/README.md`) |
 | `controller/` | Prewarm controller and its action logs |
 | `deploy/knative/` | Knative Services for the tools, Redis, `deploy.sh`, per-tool cold/warm check |
 | `deploy/prewarm/` | `PrewarmRequest` CRD and the predictor ↔ controller contract |
-| `deploy/training/` | pulse-v3 retraining Job (`pulse_pred/train.py`: S3 data → train → held-out gate → publish); UI: Models tab |
+| `deploy/training/` | Retraining Jobs: pulse-v3 (`pulse_pred/train.py`) and lightgbm + markov (`predictor/train_action.py --uri`): S3 data → train → held-out gate → publish (`run_training.sh`, `MODEL=action` for the latter); UI: Models tab |
 | `loadtest/` | Load tests: Locust (predictor API, tools, episodes) and asyncio open-loop (`async_load.py`); results in `results/load_runs/`; UI: Experiments → Load test |
 | `deploy/monitoring/` | Prometheus + Grafana (kube-prometheus-stack): values, PodMonitors, dashboards as code, `install.sh`; shown in the UI's Monitoring tab |
 | `test/test_knative/` | Local cluster setup, C0/C1/C3 runners, plots, `results/` |

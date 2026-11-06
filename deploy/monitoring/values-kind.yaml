@@ -7,7 +7,7 @@ prometheus:
       requests: {cpu: 100m, memory: 256Mi}
       limits: {memory: 768Mi}
     additionalScrapeConfigs:
-      - job_name: laptop-predictor          # predictor/service.py, pulse_pred/service.py (port 8000, the UI's default)
+      - job_name: laptop-predictor          # predictor/service.py, any predictor (port 8000, the UI's default)
         metrics_path: /metrics/
         static_configs: [{targets: ["host.docker.internal:8000"], labels: {component: laptop}}]
       - job_name: laptop-controller         # controller/prewarm_controller.py (CONTROLLER_METRICS_PORT)

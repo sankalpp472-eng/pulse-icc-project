@@ -33,29 +33,38 @@ Paths B–D build on the one-time setup in section 1.
 
 Use an IAM user or IAM Identity Center login for the AWS CLI, **not the account's root user**.
 
-### 1.2 Python environment
+### 1.2 Python environment and data (one command)
 
 ```bash
-python -m venv agent/.venv
-agent/.venv/Scripts/python -m pip install -r agent/requirements.txt -r predictor/requirements.txt \
-  -r pulse_pred/requirements.txt -r loadtest/requirements.txt
+bash scripts/setup.sh                                 # venv + requirements + tau-bench data + agent/.env
 export PY="$PWD/agent/.venv/Scripts/python"          # in every new terminal (Linux/macOS: agent/.venv/bin/python)
 ```
 
+`scripts/setup.sh` does three things:
+- It creates `agent/.venv` and installs every requirement.
+- It runs `scripts/download_data.py`. That downloads tau-bench's public, MIT-licensed recorded conversations
+  (airline and retail) into `predictor/data/tau-bench/` and `pulse_pred/data/tau_bench/`, and writes pulse-v3's
+  tool schemas from `agent/tau_*/tools/`.
+- It copies `agent/.env.example` to `agent/.env`.
+
 The plots need a Python with matplotlib. Set `PLOT_PYTHON` if it isn't `C:\Python311\python.exe`.
 
-### 1.3 Keys and data
+### 1.3 Keys
 
-- **LLM keys (live runs, the AI customer, the LLM speculator):** create `agent/.env` with
-  `GROQ_API_KEY_1=...` (up to `_4`). **Never commit it.**
-- **tau-bench conversations (replays and the predictor's signals):** they're MIT-licensed, from
-  sierra-research/tau-bench.
-  ```bash
-  d=predictor/data/tau-bench/historical_trajectories; mkdir -p $d
-  for f in gpt-4o-airline.json sonnet-35-new-airline.json; do
-    curl -fsSL -o $d/$f https://raw.githubusercontent.com/sierra-research/tau-bench/main/historical_trajectories/$f
-  done
-  ```
+- **LLM keys (live runs, the AI customer, the speculator predictor):** put them in `agent/.env`,
+  either `GROQ_API_KEY=...` or `GROQ_API_KEY_1=...` up to `_4`. The speculator can also use a local
+  OpenAI-compatible server instead (`SPEC_BASE_URL`, see the file). **Never commit `agent/.env`.**
+
+### 1.4 Models
+
+| Predictor | Model | From a fresh clone |
+|---|---|---|
+| `lightgbm`, `markov` | `predictor/data/action_model.pkl` | In git, ready. To reproduce it: `"$PY" scripts/train_models.py action` (~1 min) |
+| `pulse_v3` | `pulse_pred/data/predictor.pkl` | Train it: `bash scripts/embed_server.sh` (Docker), then `"$PY" scripts/train_models.py pulse_v3` (~15–30 min). Or set `PULSE_MODEL_URI` to an S3 registry (section 5) |
+| `speculator` | none (an LLM) | Needs keys or `SPEC_BASE_URL` in `agent/.env` |
+
+`scripts/embed_server.sh` runs llama.cpp with nomic-embed-text on port 8091, the same image as the
+cluster. pulse_v3 uses it for training and, for full accuracy, while serving too.
 
 ## 2. Path A: the demo UI on the simulated cluster
 
@@ -110,9 +119,12 @@ laptop.
 "$PY" test/test_knative/w1_replay.py --tasks 6 20 22 26 30 --fanout --label kind                 # C0
 # C3, three terminals:
 KUBE_CONTEXT=kind-pulse-kn "$PY" controller/prewarm_controller.py
-CRD_MODE=k8s KUBE_CONTEXT=kind-pulse-kn PREDICTOR_MODEL=gbt "$PY" -m uvicorn service:app --app-dir predictor --port 8000
-"$PY" test/test_knative/w1_replay.py --tasks 6 20 22 26 30 --fanout --predictor-url http://127.0.0.1:8000 --label kind-gbt
+CRD_MODE=k8s KUBE_CONTEXT=kind-pulse-kn PREDICTOR=lightgbm "$PY" -m uvicorn service:app --app-dir predictor --port 8000
+"$PY" test/test_knative/w1_replay.py --tasks 6 20 22 26 30 --fanout --predictor-url http://127.0.0.1:8000 --label kind-lightgbm
 ```
+
+`PREDICTOR` is one of `lightgbm` (main), `markov`, `speculator` or `pulse_v3`. The replay reads the
+predictor's `/info` and sends the inputs it needs. For `speculator` and `pulse_v3` add `--hint-timeout 10`.
 
 C1 (always warm): `SKIP_BUILD=1 bash deploy/knative/deploy.sh 1`, run the replay, then go back with
 `... deploy.sh 0`. Results go to `results/local_runs/`. Every option is in
@@ -166,7 +178,7 @@ OK**.
 ### 4.3 Pulse's services
 
 ```bash
-bash EKS_deployment/cloud/cloud_up.sh             # Secret from agent/.env, pulse-predictor (gbt), pulse-speculator, pulse-controller
+bash EKS_deployment/cloud/cloud_up.sh             # Secret from agent/.env, pulse-predictor (lightgbm), pulse-embed, pulse-controller
 bash deploy/monitoring/install.sh                 # optional: Prometheus + Grafana on the client node
 ```
 
@@ -178,9 +190,16 @@ GitOps setup in section 6 is done. `cloud_up.sh` is still needed once, for the S
 ```bash
 CONFIG=C0                      bash EKS_deployment/cloud/run_cloud.sh --fanout
 CONFIG=C1                      bash EKS_deployment/cloud/run_cloud.sh --fanout
-CONFIG=C3 PREDICTOR=gbt        bash EKS_deployment/cloud/run_cloud.sh --fanout
+CONFIG=C3 PREDICTOR=lightgbm   bash EKS_deployment/cloud/run_cloud.sh --fanout
+CONFIG=C3 PREDICTOR=markov     bash EKS_deployment/cloud/run_cloud.sh --fanout
 CONFIG=C3 PREDICTOR=speculator bash EKS_deployment/cloud/run_cloud.sh --fanout
+CONFIG=C3 PREDICTOR=pulse_v3   bash EKS_deployment/cloud/run_cloud.sh --fanout   # needs PULSE_MODEL_URI + IRSA
 ```
+
+There is one `pulse-predictor` Deployment. `run_cloud.sh` switches it to the run's predictor
+(`kubectl set env deploy/pulse-predictor PREDICTOR=...`). `pulse_v3` gets its sentence embeddings from
+the `pulse-embed` Deployment (llama.cpp + nomic-embed-text, on the client node). Check it with
+`kubectl logs deploy/pulse-embed`; the predictor's `/healthz` shows `"embedding": "ok"` once it is used.
 
 Results go to `results/cloud_runs/`. For trials (three per configuration), live runs and plots, see
 [RUN_EXPERIMENTS.md](../RUN_EXPERIMENTS.md), Path A.
@@ -231,8 +250,8 @@ terraform -chdir=terraform apply
 export PULSE_MODEL_URI="$(terraform -chdir=terraform output -raw model_uri)"     # s3://pulse-models-<account>/pulse-v3
 ```
 
-In account 234612058031 this is already done: the bucket exists, and version `2026-11-03` is
-published and `latest`.
+In the team's own AWS account this is already done. In your account, train pulse-v3 locally first
+(section 1.4), then publish that file in 5.2.
 
 ### 5.2 Publish a model and use pulse_v3
 
@@ -252,11 +271,9 @@ nomic-embed-text-v1.5 on port 8091; the command is in
 
 ### 5.3 Retrain
 
-The training data is tau-bench's historical trajectories for airline **and** retail: the files
-`gpt-4o-airline.json`, `gpt-4o-retail.json`, `sonnet-35-new-airline.json` and
-`sonnet-35-new-retail.json`, plus the `schemas/` folder. They go in `pulse_pred/data/tau_bench/`
-once, before the first push. The original pulse repository has them, together with
-`data/embed_cache.npz`.
+The training data is tau-bench's historical trajectories for airline **and** retail, plus the tools'
+`schemas/`. `scripts/download_data.py` (run by `setup.sh`) puts them in `pulse_pred/data/tau_bench/`.
+`embed_cache.npz` is built by the first training run, with the embedding server running.
 
 ```bash
 "$PY" pulse_pred/model_store.py data push "$PULSE_MODEL_URI"        # once: pulse_pred/data/{tau_bench,embed_cache.npz} -> S3
@@ -269,6 +286,29 @@ PULSE_MODEL_URI=... bash deploy/training/run_training.sh             # or as a J
   verdict (`GATE: promoted …` or `GATE: candidate …`).
 - **From the UI:** Models tab → **Retrain**. **Promote** (or roll back) any version from the same
   tab.
+
+### 5.4 lightgbm + markov in the registry
+
+lightgbm and markov share one model file, `action_model.pkl`, published under its own prefix with
+the same layout, gate and UI. After `terraform apply` (which gives both prefixes to the reader and
+publisher policies):
+
+```bash
+export ACTION_MODEL_URI="$(terraform -chdir=terraform output -raw action_model_uri)"   # s3://pulse-models-<account>/action-model
+"$PY" pulse_pred/model_store.py data push "$ACTION_MODEL_URI" --local predictor/data --files action_rows.csv   # once
+"$PY" pulse_pred/model_store.py publish predictor/data/action_model.pkl "$ACTION_MODEL_URI" --version 2026-11-06 --notes "first model"   # once: the current model
+"$PY" predictor/train_action.py --uri "$ACTION_MODEL_URI"                 # retrain here (~1 min)
+MODEL=action ACTION_MODEL_URI=... bash deploy/training/run_training.sh     # or as a Job on EKS
+```
+
+- **Gate:** the new version becomes `latest` only if lightgbm's held-out top-1 is higher than the
+  current latest's on the same 10 held-out tasks.
+- **Serving:** with `ACTION_MODEL_URI` set, the `lightgbm` and `markov` predictors load the registry's
+  latest version (or `ACTION_MODEL_VERSION`). Without it, or if S3 can't be read, they use
+  `predictor/data/action_model.pkl` from git / the image, and `/healthz` shows `model_source`.
+- **New data:** rebuild `action_rows.csv` (`predictor/build_action_data.py`), `data push` it, then
+  retrain.
+- **UI:** Models tab → **lightgbm + markov**: the same Use, Promote, Pin in Git and Retrain buttons.
 
 ## 6. One-time setup for infrastructure as code, CI and GitOps
 

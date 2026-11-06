@@ -7,8 +7,8 @@ One interactive demo episode, run in a thread and shown step by step in the UI.
   replay  a recorded tau-bench conversation's tool calls, with seeded think / customer-reply gaps and
           fair hints (one per LLM step), like test/test_knative/w1_replay.py, but one episode, on screen
 
-Before every LLM step it sends the predictor a hint (trajectory + signals, as agent/hints.py does) and shows
-the answer. The tools run either on the real cluster (MCP, Knative: the controller prewarms) or on the
+Before every LLM step it sends the predictor a hint (the inputs that predictor reads, as agent/hints.py does)
+and shows the answer. The tools run either on the real cluster (MCP, Knative: the controller prewarms) or on the
 simulated cluster (ui/sim_cluster.py: the session itself applies the predictor's prewarm list).
 """
 
@@ -28,28 +28,14 @@ for p in ("agent", "predictor", "test/test_knative"):
     if str(ROOT / p) not in sys.path:
         sys.path.insert(0, str(ROOT / p))
 
+import client  # noqa: E402  (predictor/client.py: the predictor's inputs, compact messages)
+
 COLD_LATENCY_S = 1.0        # on the real cluster a call slower than this counts as cold (as the runners do)
-HISTORY_N = 10              # messages the LLM speculator reads
+compact = client.compact    # the conversation as speculator / pulse_v3 read it
 
 
 class Stopped(Exception):
     pass
-
-
-def compact(messages: list[dict]) -> list[dict]:
-    """The conversation as the LLM speculator reads it (baselines/llm_speculator/steps.py format)."""
-    out = []
-    for m in messages:
-        role = m.get("role")
-        if role not in ("user", "assistant", "tool"):
-            continue
-        cm = {"role": role, "content": str(m.get("content") or "")[:600]}
-        if role == "tool":
-            cm["name"] = m.get("name", "")
-        if role == "assistant" and m.get("tool_calls"):
-            cm["calls"] = [[tc["function"]["name"], tc["function"].get("arguments")] for tc in m["tool_calls"]]
-        out.append(cm)
-    return out[-HISTORY_N:]
 
 
 # ====================================================================== tool backends
@@ -148,12 +134,9 @@ class Session(threading.Thread):
         """Send one hint (in the background, the agent never waits) and show the predictor's answer."""
         if not self.predictor_url:
             return
-        hint = {"workflow_id": "W1", "episode_id": self.episode_id, "trajectory": list(trajectory)[-8:],
-                "current_tool": trajectory[-1] if trajectory else "START", "ts": time.time()}
-        if signals is not None:
-            hint["signals"] = signals
-        if history is not None and self.cfg.get("predictor") in ("speculator", "pulse_v3"):
-            hint["history"] = history
+        # only the inputs this predictor reads (its GET /info): the conversation goes only to text readers
+        hint = client.make_hint(client.inputs(self.predictor_url), self.episode_id, trajectory, "W1",
+                                signals=signals, history=history)
         self.hints["sent"] += 1
         self.emit("hint", step=step, kind=kind)
 

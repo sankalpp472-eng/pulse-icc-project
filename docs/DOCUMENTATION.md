@@ -26,11 +26,11 @@ LLM-simulated customer.
                          ┌──────────────────────────── Kubernetes (kind or AWS EKS) ───────────────────────────┐
  agent / replay / UI     │                                                                                     │
  ──hint (trajectory,──▶  predictor  ──P ≥ θ──▶  PrewarmRequest (CRD)  ◀──watch──  prewarm controller            │
-    signals, history)    (gbt | lr | n-gram |                                          │ MCP ping                 │
+    signals, history)    (lightgbm | markov |                                          │ MCP ping                 │
                          speculator | pulse_v3)                                         ▼                          │
  ──tool call (MCP)──────────────────────────────────────────────────▶  Kourier ──▶  Knative tool pods (14, scale-to-zero)
                          │                                                          shared Redis (airline DB)     │
-                         │  Prometheus + Grafana · Argo CD · training Job · UI pod (EKS)                         │
+                         │  embedding server · Prometheus + Grafana · Argo CD · training Job · UI pod (EKS)       │
                          └─────────────────────────────────────────────────────────────────────────────────────┘
  AWS: S3 (model registry, Terraform state) · ECR (runner image) · IAM (IRSA, GitHub OIDC) · EKS · VPC
  GitHub: Actions (CI, image build, terraform plan)
@@ -38,7 +38,8 @@ LLM-simulated customer.
 
 **Request path:** each step runs through these stages in order.
 1. **Hint:** before every LLM step the agent sends a **hint** to the predictor. The hint carries the
-   tools called so far, numeric signals about the conversation, and optionally recent messages.
+   tools called so far, plus what that predictor reads (its `GET /info`): numeric signals about the
+   conversation, or the recent messages.
 2. **Prediction:** the predictor ranks the next action (a tool, RESPOND or END). Each tool with
    probability ≥ θ, or the top-k under the top-k policy, becomes a `PrewarmRequest` object. The
    request also carries a fan-out width k, the number of parallel calls expected.
@@ -72,16 +73,23 @@ be under 50 ms at 10 hints/s.
 - **Hints:** sent by `hints.py`, never blocking the agent. If the predictor is slow or down, the
   call simply happens cold (the reactive fallback).
 
-### 3.2 Predictors (all serve the same `POST /predict` API)
+### 3.2 Predictors (one service, `PREDICTOR=<name>`)
 
-| Predictor | Where | Idea |
+`predictor/service.py` serves every predictor behind one contract (`predictor/contract.py`):
+a `PredictRequest` (trajectory, plus signals and/or history) in; ranked next actions (the domain's
+tools, RESPOND, END) and the tools to prewarm, each with k pods, out. `GET /info` lists the inputs a
+predictor reads. The agent (`agent/hints.py`), the replay and the UI read it and send only those
+(`predictor/client.py`). The prewarm policy (`predictor/policy.py`), the PrewarmRequests, the metrics and
+the audit log are shared. Each predictor is one file in `predictor/predictors/`.
+
+| `PREDICTOR` | Reads | Idea |
 |---|---|---|
-| `gbt` (main) | `predictor/` | LightGBM next-action model over the trajectory plus agent-side signals (numbers and flags only, no raw text), with a fan-out width k. Siblings: `lr_action`, `ngram_action`, `ensemble` |
-| LLM speculator | `baselines/llm_speculator/` | An LLM (Groq gpt-oss-20b) reads the recent conversation and guesses the next action: the speculative-actions baseline |
-| `pulse_v3` | `pulse_pred/` | Reads the conversation text (TF-IDF plus a sentence embedding), a tool graph derived from the tool schemas (which IDs are known, so which tools are ready), and environment-state flags. An online adapter learns per agent model. `pulse_pred/service.py` replays the hints into a per-episode session |
+| `lightgbm` (main) | trajectory + signals | LightGBM next-action model over the last two tools plus agent-side signals (numbers and flags only, no raw text), with a fan-out width k and a lookahead model. Without signals it answers with `markov` |
+| `markov` | trajectory | Order-2 Markov chain over actions, backing off to the last tool, then to the action frequencies. Same pickle as `lightgbm` (`predictor/data/action_model.pkl`) |
+| `speculator` | trajectory + history | An LLM (Groq gpt-oss-20b by default, or a local OpenAI-compatible server via `SPEC_BASE_URL`) reads the last 10 messages and lists likely next actions: the speculative-actions baseline (prompt in `baselines/llm_speculator/`) |
+| `pulse_v3` | trajectory + history | Reads the conversation text (TF-IDF plus a sentence embedding), a tool graph derived from the tool schemas (which IDs are known, so which tools are ready), and environment-state flags. An online adapter learns per agent model. The adapter replays the hints into a per-episode session (model code in `pulse_pred/`) |
 
-Because they share one API, the replay runner, the UI and the controller work with any of them.
-Prewarm policies are θ-threshold or top-k, optionally with lookahead.
+Prewarm policies are θ-threshold or top-k, optionally with lookahead (lightgbm and markov).
 
 ### 3.3 Prewarm controller (`controller/prewarm_controller.py`, `deploy/prewarm/`)
 - **Contract:** the `PrewarmRequest` CRD (`pulse.iisc.ac.in/v1alpha1`). Predictors write `.spec`;
@@ -110,7 +118,7 @@ A browser UI at http://127.0.0.1:8765. It runs on the laptop, or inside EKS as t
 | Experiments | Replay, live and **load test** runs, with the log streamed and a summary |
 | Results | Every run folder, Compare, Make plots, zip download, and a Grafana link per run |
 | Monitoring | Embedded Grafana dashboards that follow the running run or episode |
-| Models | pulse-v3 registry versions with held-out metrics: Use, Promote, Pin in Git, Retrain |
+| Models | Registry versions of pulse-v3 and of lightgbm + markov, with held-out metrics: Use, Promote, Pin in Git, Retrain |
 | Side panel / top bar | Predictor card (model, θ, p95), tool pods and pod-seconds, prewarm activity, monitoring and GitOps status |
 
 ### 3.6 Monitoring (`deploy/monitoring/`)
@@ -144,6 +152,11 @@ A browser UI at http://127.0.0.1:8765. It runs on the laptop, or inside EKS as t
   share of next-step calls that would find a warm pod if the top 3 tools were prewarmed.
 - **Where it runs:** locally, or as a **Kubernetes Job** with an embedding-server sidecar and an IRSA
   role.
+- **lightgbm + markov:** the same pipeline for their shared `action_model.pkl`, under the prefix
+  `action-model/`: `predictor/train_action.py --uri` (data `action_rows.csv` from `_data/`), a gate on
+  lightgbm's held-out top-1, the Job `deploy/training/train-action-job.yaml` (no sidecar), and
+  `ACTION_MODEL_URI` / `ACTION_MODEL_VERSION` for serving and GitOps pins. If the registry can't be
+  read, the predictors fall back to the model file in the image.
 
 ### 3.9 Infrastructure as code (`terraform/`)
 
@@ -187,8 +200,8 @@ A browser UI at http://127.0.0.1:8765. It runs on the laptop, or inside EKS as t
 | Path | What |
 |---|---|
 | `agent/` | ReAct agent, LLM client, simulated customer, MCP tool servers, hints, airline tools and data |
-| `predictor/` | Main predictor (gbt and others): data, training, evaluation, API, CRD writer, load test |
-| `baselines/llm_speculator/` | LLM speculator baseline |
+| `predictor/` | The prediction service and its four predictors (`predictors/`), the contract, the prewarm policy, training data and training for lightgbm/markov, CRD writer |
+| `baselines/llm_speculator/` | The speculator's prompt and LLM calls, plus its offline evaluation |
 | `pulse_pred/` | pulse-v3 predictor, S3 model store, retraining (`train.py`) |
 | `controller/` | Prewarm controller |
 | `deploy/knative/` | Knative services for the tools, Redis, `deploy.sh`, cold/warm check |

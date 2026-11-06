@@ -2,13 +2,12 @@
 Next-ACTION models: before every LLM step, predict what the step will do (one of the 14 tools or
 RESPOND) and, for a tool, its fan-out width k (= desired replicas in the PrewarmRequest).
 
-  gbt    main model: gradient-boosted trees (LightGBM), ~0.1 ms per prediction
-  lr     second model: logistic regression on the same features (interpretable)
-  ngram  internal baseline: counts of the next action after the last two tools (back-off to one)
+  gbt    the lightgbm predictor: gradient-boosted trees (LightGBM), ~0.1 ms per prediction
+  ngram  the markov predictor: order-2 Markov chain, P(next | last two tools), backing off to the last tool
   k      pending-ID rule: k = number of pending IDs for tools that consume them, else 1
 
-All three classifiers see the same input (workflow, last tool, last two tools + signals) and
-return probabilities over the same 15 actions that sum to 1 (FR-4).
+Both return probabilities over the same 15 actions that sum to 1 (FR-4). gbt also reads the signals.
+LRModel is no longer trained; the class stays only so pickles trained before Nov 2026 still load.
 Trained by predictor/train_action.py, saved to predictor/data/action_model.pkl.
 """
 

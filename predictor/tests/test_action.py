@@ -1,17 +1,15 @@
 """
-Checks for the next-action predictor (14 tools + RESPOND, fan-out k) and its signals.
+Checks for the signals, the lightgbm / markov predictors (action_model.pkl) and the one prediction API.
 From the repo root:
 
     python -m pytest predictor/tests -q
 
 Model checks need predictor/data/action_model.pkl (build_action_data.py + train_action.py) and
-are skipped without it. The signal checks always run.
+are skipped without it. The signal and policy checks always run.
 """
 
 import importlib
 import json
-import os
-import pickle
 import sys
 import time
 from pathlib import Path
@@ -21,6 +19,8 @@ import pytest
 HERE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE))
 
+from contract import PredictRequest  # noqa: E402
+from policy import prewarm_select, prewarm_set  # noqa: E402
 from signals import SIGNAL_KEYS, compute_signals, events_from_messages  # noqa: E402
 
 USER = json.dumps({"membership": "gold", "reservations": ["NO6JO3", "AIXC49", "HKEG34"]})
@@ -80,72 +80,83 @@ def test_agent_and_langgraph_messages_give_same_signals():
     assert compute_signals(events_from_messages(lc)) == s
 
 
-# ----------------------------------------------------------------- models
+# ----------------------------------------------------------------- policy
+
+def test_policy_never_prewarms_respond_or_end():
+    ranked = [("RESPOND", 0.5), ("a", 0.3), ("END", 0.15), ("b", 0.05)]
+    assert prewarm_set(ranked, 0.0) == ["a", "b"]
+    assert prewarm_select(ranked, "topk", top_k=1) == ["a"]
+    assert prewarm_select(ranked, "topk", top_k=2, p_min=0.1) == ["a"]
+
+
+# ----------------------------------------------------------------- lightgbm / markov
 
 @pytest.fixture(scope="module")
-def pred():
-    path = HERE / "data" / "action_model.pkl"
-    if not path.exists():
+def loaded():
+    if not (HERE / "data" / "action_model.pkl").exists():
         pytest.skip("no action_model.pkl yet")
-    with open(HERE / "data" / "model.pkl", "rb") as f:
-        p = pickle.load(f)
-    with open(path, "rb") as f:
-        p.action = pickle.load(f)
-    return p
+    import predictors
+    return {n: predictors.load(n) for n in ("lightgbm", "markov")}
 
 
-@pytest.mark.parametrize("model", ["gbt", "lr_action", "ngram_action", "lgbm"])
-def test_action_probabilities(pred, model):                # FR-4 + RESPOND is a class
+def req(traj, signals=None, **kw):
+    return PredictRequest(workflow_id="W1", trajectory=traj, signals=signals, **kw)
+
+
+@pytest.mark.parametrize("name", ["lightgbm", "markov"])
+def test_action_probabilities(loaded, name):               # FR-4 + RESPOND is a class
     sig = compute_signals(conversation())
     for traj in ([], ["get_user_details"], ["get_user_details", "get_reservation_details"]):
-        p = pred.proba("W1", traj, model, sig)
+        p = loaded[name].predict(req(traj, sig))
         assert abs(sum(p.values()) - 1) <= 0.01 and min(p.values()) >= 0
         assert "RESPOND" in p and len(p) == 15
 
 
-def test_respond_is_never_prewarmed(pred):
-    from models import prewarm_set
-    ranked = pred.rank("W1", ["get_user_details"], "gbt", compute_signals(conversation()))
-    assert "RESPOND" not in prewarm_set(ranked, 0.0)
+def test_markov_ignores_signals(loaded):
+    m = loaded["markov"]
+    assert m.predict(req(["get_user_details"])) == m.predict(req(["get_user_details"], compute_signals(conversation())))
 
 
-def test_no_signals_falls_back_to_ensemble(pred):
-    assert pred.proba("W1", ["get_user_details"], "gbt", None) == pred.proba("W1", ["get_user_details"], "ensemble")
+def test_lightgbm_without_signals_falls_back_to_markov(loaded):
+    assert loaded["lightgbm"].predict(req(["get_user_details"])) == loaded["markov"].predict(req(["get_user_details"]))
 
 
-def test_fanout_rule(pred):
-    rule = pred.action.fanout
-    assert "get_reservation_details" in rule.id_tools
-    assert rule.k("get_reservation_details", {"pending_ids": 3}) == 3
-    assert rule.k("get_reservation_details", {"pending_ids": 0}) == 1
-    assert rule.k("get_reservation_details", {"pending_ids": 40}) == 5          # CRD maximum
-    assert rule.k("search_direct_flight", {"pending_ids": 3}) == 1
+def test_fanout_rule(loaded):
+    g = loaded["lightgbm"]
+    assert g.fanout("get_reservation_details", req([], {"pending_ids": 3})) == 3
+    assert g.fanout("get_reservation_details", req([], {"pending_ids": 0})) == 1
+    assert g.fanout("get_reservation_details", req([], {"pending_ids": 40})) == 5          # CRD maximum
+    assert g.fanout("search_direct_flight", req([], {"pending_ids": 3})) == 1
 
 
-def test_gbt_is_fast(pred):                                 # spec: well under 1 ms
-    sig = compute_signals(conversation())
-    pred.proba("W1", ["get_user_details"], "gbt", sig)
+def test_lightgbm_is_fast(loaded):                          # spec: well under 1 ms
+    g, r = loaded["lightgbm"], req(["get_user_details", "get_reservation_details"], compute_signals(conversation()))
+    g.predict(r)
     ts = []
     for _ in range(200):
         t0 = time.perf_counter()
-        pred.proba("W1", ["get_user_details", "get_reservation_details"], "gbt", sig)
+        g.predict(r)
         ts.append(time.perf_counter() - t0)
     assert sorted(ts)[100] < 0.001
 
 
-def test_api_returns_k(pred, monkeypatch):
+# ----------------------------------------------------------------- the API, for each local predictor
+
+@pytest.mark.parametrize("name,inputs", [("lightgbm", ["trajectory", "signals"]), ("markov", ["trajectory"])])
+def test_api(loaded, monkeypatch, name, inputs):
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
-    monkeypatch.setenv("PREDICTOR_MODEL", "gbt")
+    monkeypatch.setenv("PREDICTOR", name)
     monkeypatch.setenv("THETA", "0.2")
     sys.modules.pop("service", None)
     service = importlib.import_module("service")
-    r = TestClient(service.app).post("/predict", json={
-        "workflow_id": "W1", "trajectory": ["get_user_details"],
-        "signals": {**compute_signals(conversation()[:3]), "pending_ids": 3}}).json()
-    assert r["model"] == "gbt"
-    assert all(x["tool"] != "RESPOND" and x["k"] >= 1 for x in r["prewarm"])
+    c = TestClient(service.app)
+    info = c.get("/info").json()
+    assert info["name"] == name and info["inputs"] == inputs and "fanout" in info["supports"]
+    r = c.post("/predict", json={"workflow_id": "W1", "trajectory": ["get_user_details"],
+                                 "signals": {**compute_signals(conversation()[:3]), "pending_ids": 3}}).json()
+    assert r["model"] == name and r["inputs_used"] == inputs
+    assert all(x["tool"] not in ("RESPOND", "END") and x["k"] >= 1 for x in r["prewarm"])
     grd = [x for x in r["prewarm"] if x["tool"] == "get_reservation_details"]
-    assert not grd or grd[0]["k"] == 3
+    assert not grd or grd[0]["k"] == (3 if name == "lightgbm" else 1)
     sys.modules.pop("service", None)
-    os.environ.pop("PREDICTOR_MODEL", None)

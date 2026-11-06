@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Deploy Pulse's own components into the current cluster (after eks_up.sh, or on kind for a test):
-# the Groq-key Secret, RBAC, pulse-predictor, pulse-speculator and pulse-controller.
+# the Groq-key Secret, RBAC, pulse-predictor (any of the four predictors), pulse-embed (pulse_v3's embedding
+# server; its first start downloads the model, ~1 min) and pulse-controller.
 #
-#   bash EKS_deployment/cloud/cloud_up.sh                 # EKS, image from build_image.sh
-#   TARGET=kind bash EKS_deployment/cloud/cloud_up.sh     # local kind cluster
-#   THETA=0.5 bash EKS_deployment/cloud/cloud_up.sh       # another prewarm threshold
+#   bash EKS_deployment/cloud/cloud_up.sh                     # EKS, image from build_image.sh
+#   TARGET=kind bash EKS_deployment/cloud/cloud_up.sh         # local kind cluster
+#   THETA=0.5 bash EKS_deployment/cloud/cloud_up.sh           # another prewarm threshold
+#   PREDICTOR=markov bash EKS_deployment/cloud/cloud_up.sh    # lightgbm (default) | markov | speculator | pulse_v3
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
@@ -20,7 +22,7 @@ kubectl apply -f deploy/prewarm/prewarmrequest-crd.yaml
 if [ -f agent/.env ]; then
   TMP=$(mktemp)
   trap 'rm -f "$TMP"' EXIT
-  grep -E '^(GROQ_API_KEY(_[0-9]+)?|OPEN_ROUTER_API_KEY|LLM_BACKEND)=' agent/.env | tr -d '\r' > "$TMP"
+  grep -E '^(GROQ_API_KEY(_[0-9]+)?|OPEN_ROUTER_API_KEY|LLM_BACKEND|SPEC_BASE_URL|SPEC_API_KEY|SPEC_MODEL)=' agent/.env | tr -d '\r' > "$TMP"
   echo "Secret pulse-llm-keys: $(wc -l < "$TMP") keys/settings from agent/.env"
   kubectl create secret generic pulse-llm-keys --from-env-file="$TMP" --dry-run=client -o yaml | kubectl apply -f -
   rm -f "$TMP"
@@ -28,7 +30,8 @@ else
   echo "No agent/.env: the speculator and live runs will have no Groq keys"
 fi
 
-sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__THETA__|${THETA:-0.3}|g" "$HERE/pulse-cloud.yaml" | kubectl apply -f -
-kubectl rollout status deploy/pulse-predictor deploy/pulse-speculator deploy/pulse-controller --timeout=600s 2>/dev/null || {
-  for d in pulse-predictor pulse-speculator pulse-controller; do kubectl rollout status deploy/$d --timeout=600s; done; }
+sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__THETA__|${THETA:-0.3}|g" -e "s|value: lightgbm}|value: ${PREDICTOR:-lightgbm}}|" \
+  "$HERE/pulse-cloud.yaml" | kubectl apply -f -
+kubectl delete deploy/pulse-speculator svc/pulse-speculator --ignore-not-found >/dev/null   # replaced by PREDICTOR=speculator
+for d in pulse-predictor pulse-controller pulse-embed; do kubectl rollout status deploy/$d --timeout=600s; done
 kubectl get pods -l pulse/role=system -o wide

@@ -11,9 +11,13 @@ Settings (environment variables, e.g. in agent/.env):
   WORKFLOW_ID     e.g. W1 or W2                (unset -> predictor uses the pooled airline model)
   HINT_TIMEOUT_S  default 0.2
   HINT_LOG        default runs/hints.jsonl     (one line per hint + the predictor's answer)
-  HINT_SIGNALS    default 1: add "signals" (numbers and yes/no flags about tool results and the
-                  customer's requests, from predictor/signals.py) for PREDICTOR_MODEL=lgbm.
-                  No raw text is ever sent. 0 = send tool names only.
+  HINT_SIGNALS    default 1: 0 = never send signals or history (tool names only)
+
+What a hint carries depends on the predictor (its GET /info "inputs", predictor/client.py):
+  trajectory  always
+  signals     numbers and yes/no flags about tool results and the customer's requests (predictor/signals.py),
+              no raw text: lightgbm
+  history     the last 10 conversation messages, compacted: speculator, pulse_v3 (they read text)
 """
 
 import json
@@ -37,10 +41,11 @@ _log_lock = threading.Lock()
 # The SAME signal code the LightGBM model was trained with (predictor/signals.py)
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "predictor"))
+    import client
     from signals import compute_signals, events_from_messages
 except ImportError:          # predictor folder missing -> names-only hints
-    compute_signals = events_from_messages = None
-USE_SIGNALS = os.getenv("HINT_SIGNALS", "1") != "0" and compute_signals is not None
+    client = compute_signals = events_from_messages = None
+USE_CONTEXT = os.getenv("HINT_SIGNALS", "1") != "0" and client is not None
 
 
 def _post(hint: dict) -> None:
@@ -65,16 +70,29 @@ def _post(hint: dict) -> None:
 
 
 def send_hint(episode_id: str, trajectory: list[str], messages: list[dict] | None = None) -> None:
-    """messages = the agent's conversation so far (OpenAI-style dicts), for the signals."""
+    """messages = the agent's conversation so far (OpenAI-style dicts), for the signals / history."""
     if not PREDICTOR_URL:
         return
-    hint = {"workflow_id": WORKFLOW_ID, "episode_id": episode_id,
-            "trajectory": list(trajectory)[-8:],     # recent trajectory is enough
-            "current_tool": trajectory[-1] if trajectory else "START",
-            "ts": time.time()}
-    if USE_SIGNALS and messages is not None:
+    threading.Thread(target=_send, args=(episode_id, list(trajectory), list(messages) if messages is not None else None),
+                     daemon=True).start()
+
+
+def _send(episode_id, trajectory, messages):
+    """Background: build the hint with the inputs this predictor reads, then post it."""
+    signals = history = None
+    wanted = {"trajectory"}
+    if USE_CONTEXT and messages is not None:
+        wanted = client.inputs(PREDICTOR_URL)          # GET /info once, cached
         try:
-            hint["signals"] = compute_signals(events_from_messages(messages, trajectory))
+            if "signals" in wanted:
+                signals = compute_signals(events_from_messages(messages, trajectory))
+            if "history" in wanted:
+                history = client.compact(messages)
         except Exception:    # never let a signal bug affect the agent
             pass
-    threading.Thread(target=_post, args=(hint,), daemon=True).start()
+    if client is None:
+        hint = {"workflow_id": WORKFLOW_ID, "episode_id": episode_id, "trajectory": trajectory[-8:],
+                "current_tool": trajectory[-1] if trajectory else "START", "ts": time.time()}
+    else:
+        hint = client.make_hint(wanted, episode_id, trajectory, WORKFLOW_ID, signals=signals, history=history)
+    _post(hint)

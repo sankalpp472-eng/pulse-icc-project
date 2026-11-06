@@ -303,12 +303,12 @@ class Proc:
 
 
 class Services:
-    """The predictor (or the LLM speculator) and the prewarm controller, run on the laptop."""
+    """The predictor (predictor/service.py with PREDICTOR=<name>) and the prewarm controller, run on the laptop."""
 
-    MODELS = {"gbt": "LightGBM next-action (main)", "lr_action": "Logistic regression (next action)",
-              "ngram_action": "n-gram baseline", "ensemble": "Trajectory-only ensemble (older)",
-              "speculator": "LLM speculator (Groq gpt-oss-20b)",
-              "pulse_v3": "pulse-v3 text + tool graph (pulse_pred/)"}
+    # the four predictors (predictor/predictors/); each one's inputs come from its GET /info once it runs
+    MODELS = {"lightgbm": "LightGBM next-action (main)", "markov": "Markov chain (order 2)",
+              "speculator": "LLM speculator", "pulse_v3": "pulse-v3 text + tool graph"}
+    ALIASES = {"gbt": "lightgbm", "lgbm": "lightgbm", "ngram_action": "markov"}   # names in older runs
 
     def __init__(self, cluster: Cluster):
         self.cluster = cluster
@@ -319,6 +319,7 @@ class Services:
     def start_predictor(self, model: str, theta: float, crd: bool, policy: dict | None = None,
                         model_version: str | None = None) -> dict:
         """model_version (pulse_v3 only): serve that registry version instead of the latest (Models tab)."""
+        model = self.ALIASES.get(model, model)
         if model not in self.MODELS:
             raise ValueError(f"unknown predictor {model}")
         self.stop("predictor")
@@ -328,16 +329,16 @@ class Services:
                **policy_env(policy)}
         if crd and not IN_CLUSTER:          # in the cluster crd_writer.py uses the pod's service account
             env["KUBE_CONTEXT"] = self.cluster.context or ""
-        if model == "speculator":
-            app_dir = "baselines/llm_speculator"
-        elif model == "pulse_v3":
-            app_dir = "pulse_pred"
+        env["PREDICTOR"] = model
+        if model == "pulse_v3":
             model_version = model_version or os.getenv("PULSE_MODEL_VERSION") or None   # pinned by GitOps (pulse-config)
             if model_version and MODEL_URI:
-                env["PULSE_MODEL_URI"] = f"{MODEL_URI.rstrip('/')}/{model_version}"
-        else:
-            app_dir, env["PREDICTOR_MODEL"] = "predictor", model
-        cmd = [PY, "-m", "uvicorn", "service:app", "--app-dir", app_dir, "--host", "127.0.0.1",
+                env.update(PULSE_MODEL_URI=MODEL_URI, PULSE_MODEL_VERSION=model_version)
+        elif model in ("lightgbm", "markov"):
+            model_version = model_version or os.getenv("ACTION_MODEL_VERSION") or None  # pinned by GitOps (pulse-config)
+            if ACTION_URI:
+                env.update(ACTION_MODEL_URI=ACTION_URI, ACTION_MODEL_VERSION=model_version or "")
+        cmd = [PY, "-m", "uvicorn", "service:app", "--app-dir", "predictor", "--host", "127.0.0.1",
                "--port", str(PREDICTOR_PORT), "--log-level", "warning"]
         self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
                                                                 "crd": "k8s" if crd else "off",
@@ -391,6 +392,10 @@ class Services:
                 try:
                     with urllib.request.urlopen(PREDICTOR_URL + "/healthz", timeout=3) as r:
                         self.health, self.health_at = json.loads(r.read()), time.time()
+                    if p.info.get("inputs") is None:   # what this predictor reads (shown as badges in the UI)
+                        with urllib.request.urlopen(PREDICTOR_URL + "/info", timeout=3) as r:
+                            i = json.loads(r.read())
+                        p.info.update(inputs=i.get("inputs"), supports=i.get("supports"), domains=i.get("domains"))
                 except Exception:
                     pass                     # keep the last answer; ready() looks at its age
             time.sleep(2)
@@ -420,22 +425,45 @@ class Services:
             out["predictor"]["health"] = self.health
             out["predictor"]["serving_version"] = served_version(self.health)
             out["predictor"]["policy_label"] = policy_label(out["predictor"].get("policy"), out["predictor"].get("theta"))
-            # does this predictor understand the policy settings? (/healthz reports "policy" after the latency patch)
-            out["predictor"]["policy_supported"] = bool(self.health and "policy" in self.health) if self.health else None
+            # every predictor runs the policy; lookahead only where /info says it is supported
+            sup = out["predictor"].get("supports")
+            out["predictor"]["policy_supported"] = True
+            out["predictor"]["lookahead_supported"] = bool(sup and sup.get("lookahead")) if sup else None
         if IN_CLUSTER:
             out["controller"] = {"running": self.controller_running(), "deployment": CONTROLLER_DEPLOY}
         return out
 
 
-# ====================================================================== models (pulse-v3's S3 registry)
+# ====================================================================== models (the S3 model registry)
 MODEL_URI = os.getenv("PULSE_MODEL_URI", "")     # s3://<bucket>/pulse-v3 (pulse_pred/model_store.py)
+ACTION_URI = os.getenv("ACTION_MODEL_URI", "")   # s3://<bucket>/action-model: lightgbm + markov (train_action.py)
+
+# the model families in the registry: what serves them, how they are trained, which number gates a release
+FAMILIES = {
+    "pulse_v3": {"label": "pulse-v3", "uri": lambda: MODEL_URI, "env": "PULSE_MODEL_URI", "pin": "PULSE_MODEL_VERSION",
+                 "predictors": ["pulse_v3"], "terraform": "model_uri",
+                 "train": lambda uri, p, n: [PY, "pulse_pred/train.py", "--uri", uri, "--promote", p, "--notes", n],
+                 "job": {"MODEL": "pulse_v3", "PULSE_MODEL_URI": None}},
+    "action": {"label": "lightgbm + markov", "uri": lambda: ACTION_URI, "env": "ACTION_MODEL_URI",
+               "pin": "ACTION_MODEL_VERSION", "predictors": ["lightgbm", "markov"], "terraform": "action_model_uri",
+               "train": lambda uri, p, n: [PY, "predictor/train_action.py", "--uri", uri, "--promote", p, "--notes", n],
+               "job": {"MODEL": "action", "ACTION_MODEL_URI": None}},
+}
+
+
+def family(name: str | None) -> dict:
+    f = FAMILIES.get(name or "pulse_v3")
+    if not f:
+        raise ValueError(f"unknown model family {name!r}; use one of {list(FAMILIES)}")
+    return f
 
 
 def served_version(health: dict | None) -> str | None:
-    """The registry version a pulse_v3 predictor serves: its /healthz model_file is .../models/<version>/predictor.pkl."""
+    """The registry version a predictor serves: its /healthz model_file is .../models/<version>/<file>
+    (pulse_v3: predictor.pkl; lightgbm / markov: action_model.pkl, in .../action-models/ on the pods)."""
     f = (health or {}).get("model_file") or ""
     parts = Path(f).parts
-    return parts[-2] if len(parts) >= 3 and parts[-3] == "models" else None
+    return parts[-2] if len(parts) >= 3 and parts[-3].endswith("models") else None
 
 
 def _store():
@@ -445,56 +473,61 @@ def _store():
     return model_store
 
 
-def models_list() -> dict:
-    """Every pulse-v3 version in the registry (newest first), or why they can't be listed."""
-    if not MODEL_URI:
-        return {"uri": None, "versions": [], "error": "PULSE_MODEL_URI is not set: start the UI with "
-                "PULSE_MODEL_URI=s3://<bucket>/pulse-v3 (terraform -chdir=terraform output -raw model_uri)"}
+def models_list(fam: str | None = None) -> dict:
+    """Every version of one model family in the registry (newest first), or why they can't be listed."""
+    f = family(fam)
+    uri, base = f["uri"](), {"family": fam or "pulse_v3", "predictors": f["predictors"]}
+    if not uri:
+        return {**base, "uri": None, "versions": [], "error": f"{f['env']} is not set: start the UI with "
+                f"{f['env']}=s3://<bucket>/... (terraform -chdir=terraform output -raw {f['terraform']})"}
     try:
-        return {"uri": MODEL_URI, "versions": _store().versions(MODEL_URI), "error": None}
+        return {**base, "uri": uri, "versions": _store().versions(uri), "error": None}
     except ImportError as e:
-        return {"uri": MODEL_URI, "versions": [], "error": f"{e}: pip install -r pulse_pred/requirements.txt"}
+        return {**base, "uri": uri, "versions": [], "error": f"{e}: pip install -r pulse_pred/requirements.txt"}
     except Exception as e:                       # no AWS credentials (laptop) or no IAM role (UI pod)
-        return {"uri": MODEL_URI, "versions": [], "error": f"{type(e).__name__}: {e}"[:300] +
+        return {**base, "uri": uri, "versions": [], "error": f"{type(e).__name__}: {e}"[:300] +
                 (" (the UI pod has no S3 role yet: use the laptop UI)" if IN_CLUSTER else "")}
 
 
-def models_promote(version: str):
-    _store().promote(MODEL_URI, version)
+def models_promote(version: str, fam: str | None = None):
+    _store().promote(family(fam)["uri"](), version)
 
 
 def build_retrain(spec: dict) -> list[tuple[str, list[str], dict]]:
-    """Retraining (pulse_pred/train.py): on this machine, or as the training Job in the cluster."""
-    if not MODEL_URI:
-        raise ValueError("PULSE_MODEL_URI is not set (see the Models tab)")
+    """Retraining a model family: on this machine, or as its training Job in the cluster."""
+    f = family(spec.get("family"))
+    uri = f["uri"]()
+    if not uri:
+        raise ValueError(f"{f['env']} is not set (see the Models tab)")
     promote, notes = spec.get("promote", "auto"), str(spec.get("notes") or "")
     if spec.get("where") == "cluster":
         b = bash()
         if IN_CLUSTER or not b:
             raise ValueError("the training Job is started from the laptop (deploy/training/run_training.sh)")
-        return [("retrain pulse-v3 as a Job in the cluster (deploy/training/run_training.sh)",
-                 [b, "deploy/training/run_training.sh"],
-                 {"PULSE_MODEL_URI": MODEL_URI, "PROMOTE": promote, "NOTES": notes})]
-    return [("retrain pulse-v3 here (pulse_pred/train.py)",
-             [PY, "pulse_pred/train.py", "--uri", MODEL_URI, "--promote", promote, "--notes", notes], {})]
+        env = {k: (uri if v is None else v) for k, v in f["job"].items()}
+        return [(f"retrain {f['label']} as a Job in the cluster (deploy/training/run_training.sh)",
+                 [b, "deploy/training/run_training.sh"], {**env, "PROMOTE": promote, "NOTES": notes})]
+    cmd = f["train"](uri, promote, notes)
+    return [(f"retrain {f['label']} here ({cmd[1]})", cmd, {})]
 
 
 GITOPS_CONFIG = ROOT / "EKS_deployment" / "cloud" / "gitops" / "config.yaml"
 
 
-def models_pin_in_git(version: str) -> dict:
-    """GitOps: pin the production pulse-v3 version by editing pulse-config (EKS_deployment/cloud/gitops/config.yaml)
-    in this checkout. Nothing is committed: the change goes in through a reviewed commit / pull request, and Argo CD
-    rolls it out."""
+def models_pin_in_git(version: str, fam: str | None = None) -> dict:
+    """GitOps: pin the production version of a model family by editing pulse-config
+    (EKS_deployment/cloud/gitops/config.yaml) in this checkout. Nothing is committed: the change goes in through a
+    reviewed commit / pull request, and Argo CD rolls it out."""
+    f = family(fam)
     if IN_CLUSTER or not GITOPS_CONFIG.exists():
         raise ValueError("pinning in Git needs the repository checkout (the laptop UI)")
     import re
     text = GITOPS_CONFIG.read_text(encoding="utf-8")
-    new = re.sub(r'(PULSE_MODEL_VERSION:).*', rf'\1 "{version}"', text)
+    new = re.sub(rf'({f["pin"]}:).*', rf'\1 "{version}"', text)
     GITOPS_CONFIG.write_text(new, encoding="utf-8")
     rel_path = GITOPS_CONFIG.relative_to(ROOT).as_posix()
     return {"file": rel_path, "changed": new != text,
-            "next": f'git commit -m "models: pin pulse-v3 {version}" {rel_path}  then push and open a pull request'}
+            "next": f'git commit -m "models: pin {f["label"]} {version}" {rel_path}  then push and open a pull request'}
 
 
 # ====================================================================== deployment (CI image, GitOps / Argo CD)
@@ -742,7 +775,7 @@ class BatchRun:
 def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[str, list[str], dict]]:
     """The commands for one batch run, from the form in the Experiments tab."""
     mode, config, where = spec["mode"], spec["config"], spec.get("where", "laptop")
-    pred = spec.get("predictor", "gbt")
+    pred = Services.ALIASES.get(spec.get("predictor") or "lightgbm", spec.get("predictor") or "lightgbm")
     tasks = [str(int(t)) for t in spec.get("tasks") or []]
     if mode == "load":
         return build_load(spec, cluster, services, tasks)
@@ -772,9 +805,7 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
         b = bash()
         if not b:
             raise ValueError("Git Bash not found (needed for run_cloud.sh)")
-        if pred not in ("gbt", "speculator") and config == "C3":
-            raise ValueError("in-cluster runs support the gbt and speculator predictors (cloud_up.sh deploys those)")
-        pol = norm_policy(spec.get("policy"))
+        pol = norm_policy(spec.get("policy"))   # run_cloud.sh switches the pulse-predictor Deployment to `pred`
         if config == "C3" and (pol["policy"] != "theta" or pol["lookahead"]):
             raise ValueError("run_cloud.sh uses the cluster's pulse-predictor, so set its policy there: kubectl set env "
                              "deploy/pulse-predictor PREWARM_POLICY=topk TOP_K=2 P_MIN=0.1 LOOKAHEAD=0 (then pick θ here)")
@@ -804,8 +835,8 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
             services.start_controller()
         steps.append(("__predictor__", [], {}))
         args += ["--predictor-url", PREDICTOR_URL]
-        if pred in ("speculator", "pulse_v3") and mode == "replay":
-            args += ["--hint-context", "--hint-timeout", "10"]
+        if pred in ("speculator", "pulse_v3") and mode == "replay":   # slower answers (an LLM / embeddings)
+            args += ["--hint-timeout", "10"]
         tag = ("-top%d" % policy["top_k"] if policy["policy"] == "topk" else "") + ("-look" if policy["lookahead"] else "")
         label = f"{label}-{pred}{tag}"
     script = "test/test_knative/w1_replay.py" if mode == "replay" else "test/test_knative/w1_live.py"
@@ -817,7 +848,8 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
 
 def ensure_predictor(spec: dict, services: Services, crd: bool) -> str:
     """Start the predictor the spec asks for, unless exactly that one already runs; returns its model name."""
-    pred, theta, policy = spec.get("predictor", "gbt"), float(spec.get("theta", 0.3)), norm_policy(spec.get("policy"))
+    pred = Services.ALIASES.get(spec.get("predictor") or "lightgbm", spec.get("predictor") or "lightgbm")
+    theta, policy = float(spec.get("theta", 0.3)), norm_policy(spec.get("policy"))
     cur = services.procs.get("predictor")
     if not (cur and cur.alive() and cur.info.get("model") == pred and cur.info.get("crd") == ("k8s" if crd else "off")
             and abs(cur.info.get("theta", -1) - theta) < 1e-9 and cur.info.get("policy") == policy):

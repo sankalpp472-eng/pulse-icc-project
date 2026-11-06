@@ -3,8 +3,8 @@ Action model, step 2: train and evaluate the next-action predictor.
 
   Target 1  next action = one of the 14 tools or RESPOND (one prediction per LLM step)
   Target 2  fan-out k for the predicted tool (pending-ID rule) -> desiredReplicas in the CRD
-  Models    gbt (LightGBM gradient-boosted trees, main) · lr (logistic regression, interpretable)
-            · ngram (counting baseline)
+  Models    gbt (LightGBM gradient-boosted trees: the lightgbm predictor) · ngram (order-2 Markov chain with
+            back-off: the markov predictor)
 
     python predictor/train_action.py                  # from the repo root: train on the 40 training tasks,
                                                       # score on the 10 held-out tasks, save the model
@@ -15,11 +15,26 @@ Action model, step 2: train and evaluate the next-action predictor.
 Reads  predictor/data/action_rows.csv (build_action_data.py; retail: retail_action_rows.csv)
 Writes predictor/data/action_model.pkl (retail: action_model_retail.pkl),
        predictor/results/action_eval_<time>.json (retail: action_eval_retail_<time>.json)
+
+With the S3 model registry (MLOps; airline, default split only):
+
+    python predictor/train_action.py --uri s3://<bucket>/action-model                  # gate decides
+    python predictor/train_action.py --uri s3://<bucket>/action-model --promote never --notes "..."
+
+  1. data     pull <uri>/_data/action_rows.csv into predictor/data/ (push it once:
+              python pulse_pred/model_store.py data push <uri> --local predictor/data --files action_rows.csv)
+  2. train    as above; held-out = the same 10 unseen tasks
+  3. evaluate the new model AND the registry's current latest on the same held-out steps
+  4. gate     --promote auto: the new model becomes latest only if lightgbm's top-1 beats the current one's;
+              otherwise it is published as a candidate. always / never override.
+  5. publish  a new version (predictor/data/models/<version>/action_model.pkl) with the metrics in its manifest;
+              the predictors load it with ACTION_MODEL_URI (predictor/predictors/action.py)
 """
 
 import argparse
 import json
 import math
+import os
 import pickle
 import random
 import statistics as st
@@ -30,11 +45,12 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from action_model import (CATS, NUMERIC, RESPOND, ActionPredictor, Encoder, FanoutRule, GBTModel, LRModel,
-                          NGramModel)
+from action_model import CATS, NUMERIC, RESPOND, ActionPredictor, Encoder, FanoutRule, GBTModel, NGramModel
 
 HERE = Path(__file__).resolve().parent
-DATA, RESULTS = HERE / "data", HERE / "results"
+# overridable for the training Job, whose image folders are read-only (deploy/training/train-action-job.yaml)
+DATA = Path(os.getenv("ACTION_DATA_DIR", HERE / "data"))
+RESULTS = Path(os.getenv("ACTION_RESULTS_DIR", HERE / "results"))
 NO_WARM = {RESPOND, "END"}
 GBT_PARAMS = dict(objective="multiclass", learning_rate=0.05, num_leaves=15, min_data_in_leaf=20,
                   feature_fraction=0.9, bagging_fraction=0.9, bagging_freq=1, lambda_l2=1.0,
@@ -59,9 +75,7 @@ def fit_all(train, seed=252):
                       valid_sets=[lgb.Dataset(X[val], y[val], categorical_feature=cat_idx)],
                       callbacks=[lgb.early_stopping(50, verbose=False)])
     booster = lgb.train(params, lgb.Dataset(X, y, categorical_feature=cat_idx), max(20, probe.best_iteration))
-    models = {"gbt": GBTModel(booster, classes),
-              "lr": LRModel().fit(X, train.target.to_numpy()),
-              "ngram": NGramModel().fit(train)}
+    models = {"gbt": GBTModel(booster, classes), "ngram": NGramModel().fit(train)}
     importance = dict(zip(enc.columns, (booster.feature_importance("gain")).round(1).tolist()))
     return ActionPredictor(enc, models, FanoutRule.fit(train), importance)
 
@@ -162,8 +176,8 @@ def speed(pred, name, df, n=500):
     return {"p50_ms": ts[n // 2], "p95_ms": ts[int(n * 0.95)]}
 
 
-MODEL_ORDER = ["ngram", "lr", "gbt"]
-LABEL = {"ngram": "n-gram baseline", "lr": "Logistic regression", "gbt": "LightGBM GBT (main)"}
+MODEL_ORDER = ["ngram", "gbt"]
+LABEL = {"ngram": "Markov chain (markov)", "gbt": "LightGBM GBT (lightgbm, main)"}
 
 
 def table(res, thetas, speeds=None):
@@ -196,6 +210,11 @@ def main():
     ap.add_argument("--split", choices=["steps_csv", "speculator"], default="steps_csv",
                     help="airline only: speculator = the LLM speculator's held-out tasks "
                          "(build_action_data.py --split speculator), saved as *_airline_specsplit")
+    ap.add_argument("--uri", help="model registry, e.g. s3://pulse-models-<account>/action-model: pull the data, "
+                                  "gate against the current latest, publish a new version")
+    ap.add_argument("--version", default=time.strftime("%Y-%m-%d_%H%M"))
+    ap.add_argument("--promote", choices=["auto", "always", "never"], default="auto")
+    ap.add_argument("--notes", default="")
     a = ap.parse_args()
     if a.domain == "retail":
         tag, rows_file = "_retail", "retail_action_rows.csv"
@@ -203,6 +222,15 @@ def main():
         tag, rows_file = "_airline_specsplit", "airline_specsplit_action_rows.csv"
     else:                                                     # airline keeps the original file names
         tag, rows_file = "", "action_rows.csv"
+    store = None
+    if a.uri:
+        if tag:
+            raise SystemExit("--uri: the registry holds the airline model with the default split only")
+        store = registry()
+        print(f"data: {len(store.data('pull', a.uri, local=DATA))} file(s) downloaded from {a.uri}/_data/")
+        if not (DATA / rows_file).exists():
+            raise SystemExit(f"no {DATA / rows_file}: push it once (python pulse_pred/model_store.py data push "
+                             f"{a.uri} --local predictor/data --files {rows_file})")
 
     rows = pd.read_csv(DATA / rows_file)
     train, test = rows[rows.split == "train"], rows[rows.split == "test"]
@@ -228,7 +256,6 @@ def main():
                f"{fan['missing_replicas_per_tool_step']:.2f} too few per tool step",
                "", "GBT feature importance (gain, top 10): " + ", ".join(
                    f"{k}" for k, _ in sorted(pred.feature_importance.items(), key=lambda kv: -kv[1])[:10]),
-               "LR: what pushes towards RESPOND: " + ", ".join(f"{n} {w:+}" for n, w in pred.models['lr'].top_weights(pred.encoder, RESPOND, 5)),
                "", f"Lookahead (gbt, trained on {len(nxt_train)} reply steps): on the {len(nxt_tools)} held-out reply steps "
                    f"that are followed by a tool call, the next tool is top-1 {look['top1']:.3f} / top-3 {look['top3']:.3f}; "
                    "prewarmed at " + ", ".join(f"θ={t}: {look[f'hit@{t}']:.2f} (wasted {look[f'wasted@{t}']:.2f}/step)"
@@ -258,15 +285,75 @@ def main():
                     f"{st.mean(x['k1_mae'] for x in fans):.2f}"]
 
     print("\n".join(out_txt))
-    model_path = DATA / f"action_model{tag}.pkl"
+    gate = None
+    if store:
+        model_path = DATA / "models" / a.version / f"action_model{tag}.pkl"
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        gate = gate_and_metrics(store, a, res, look, test, nxt_tools)
+    else:
+        model_path = DATA / f"action_model{tag}.pkl"
     with open(model_path, "wb") as f:
         pickle.dump(pred, f)
     RESULTS.mkdir(exist_ok=True)
     out = RESULTS / f"action_eval{tag}_{time.strftime('%Y%m%d-%H%M%S')}.json"
     out.write_text(json.dumps({"domain": a.domain, "test_tasks": sorted(test.task_id.unique()),
                                "heldout": res, "lookahead": look, "speed": speeds, "fanout": fan, "cv": cv_out,
-                               "thetas": a.thetas, "importance": pred.feature_importance}, indent=2))
+                               "thetas": a.thetas, "importance": pred.feature_importance,
+                               **({"registry": gate} if gate else {})}, indent=2))
     print(f"\n-> {model_path}\n-> {out}")
+    if store:
+        print(f"publishing version {a.version}" + (" as latest" if gate["promoted"] else " as a candidate"))
+        store.publish(model_path, a.uri, a.version, a.notes, latest=gate["promoted"], metrics=gate)
+        print(f"GATE: {'promoted' if gate['promoted'] else 'candidate'} {a.version} ({gate['why']})")
+
+
+# ----------------------------------------------------------------- model registry (MLOps)
+
+GATE_METRIC = "lightgbm_top1"
+
+
+def registry():
+    """pulse_pred/model_store.py: the S3 model registry, shared with pulse-v3."""
+    import sys
+    root = str(HERE.parent)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from pulse_pred import model_store
+    return model_store
+
+
+def summary(res, look):
+    """The numbers a version is judged and listed by (one flat dict, stored in its manifest)."""
+    g, m = res["gbt"], res["ngram"]
+    return {"lightgbm_top1": round(g["top1"], 4), "lightgbm_top3": round(g["top3"], 4),
+            "lightgbm_hit@0.3": round(g["hit@0.3"], 4) if "hit@0.3" in g else None,
+            "lightgbm_log_loss": round(g["log_loss"], 4), "markov_top1": round(m["top1"], 4),
+            "lookahead_top1": round(look["top1"], 4) if look else None}
+
+
+def gate_and_metrics(store, a, res, look, test, nxt_tools):
+    """Score the registry's current latest on the same held-out steps and decide whether the new one replaces it."""
+    new, current, current_version = summary(res, look), None, None
+    try:
+        _, _, current_version = store.resolve(a.uri)
+        with open(store.fetch(a.uri, dest=DATA / "models"), "rb") as f:
+            cur = pickle.load(f)
+        cur_res = {m: score(cur, m, test, [0.3])[0] for m in ("gbt", "ngram")}
+        cur_look = score(cur.lookahead, "gbt", nxt_tools, [0.3])[0] if getattr(cur, "lookahead", None) else None
+        current = summary(cur_res, cur_look)
+    except Exception as e:                                    # an empty registry: nothing to beat
+        print(f"no current model in {a.uri} ({type(e).__name__}: {str(e)[:120]})")
+    if a.promote == "always" or current is None:
+        promoted, why = a.promote != "never", "no current model" if current is None else "--promote always"
+    elif a.promote == "never":
+        promoted, why = False, "--promote never"
+    else:
+        promoted = new[GATE_METRIC] > current[GATE_METRIC]
+        why = (f"{GATE_METRIC} {new[GATE_METRIC]} {'>' if promoted else '<='} {current[GATE_METRIC]} "
+               f"({current_version})")
+    print(f"gate: {'promote' if promoted else 'keep as candidate'}: {why}")
+    return {"gate_metric": GATE_METRIC, "new": new, "current": current, "current_version": current_version,
+            "promoted": promoted, "why": why, "test_tasks": int(test.task_id.nunique()), "test_steps": len(test)}
 
 
 if __name__ == "__main__":

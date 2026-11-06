@@ -1,57 +1,47 @@
 """
-Step 6: the prediction API.
+The prediction API: one service, any of the four predictors (predictor/predictors/), picked by PREDICTOR.
 
-    uvicorn service:app --app-dir predictor --port 8000          # run from the repo root
+    PREDICTOR=lightgbm uvicorn service:app --app-dir predictor --port 8000          # run from the repo root
 
-  POST /predict   hint in  -> ranked next actions + the tools to prewarm (P >= theta), each with k replicas
-  GET  /healthz   "ok" once the model is loaded
+  POST /predict   a PredictRequest (contract.py) -> ranked next actions + the tools to prewarm, each with k pods
+  GET  /info      the predictor's name, the inputs it reads (trajectory / signals / history), what it supports
+                  (fan-out, lookahead), its domains, and the prewarm policy. Hint senders read it to send exactly
+                  those inputs (agent/hints.py, ui/session.py, test/test_knative/w1_replay.py).
+  GET  /healthz   "ok" once the predictor is loaded, plus its own state
   GET  /metrics   Prometheus metrics (FR-11)
   GET  /docs      interactive test page (FastAPI)
 
 Settings (environment variables):
-  PREDICTOR_MODEL  tool-only models: ensemble | trajectory | history | graph | lr   (default ensemble)
-                   next-action models (14 tools + RESPOND, fan-out k): gbt (main; lgbm = alias) |
-                   lr_action | ngram_action. They need predictor/data/action_model.pkl
-                   (build_action_data.py + train_action.py) and hints that carry "signals"
-                   (agent/hints.py); a hint without signals is answered by the ensemble
-  ACTION_MODEL_PATH  default predictor/data/action_model.pkl
+  PREDICTOR        lightgbm (default) | markov | speculator | pulse_v3   (old names gbt, ngram_action also work;
+                   PREDICTOR_MODEL is read if PREDICTOR is unset). Each predictor's own settings are in its file.
   THETA            confidence threshold for prewarming             (default 0.3)
   PREWARM_POLICY   theta (every tool with P >= THETA) | topk (the TOP_K most likely tools, each with P >= P_MIN)
   TOP_K, P_MIN     for topk                                         (default 2, 0.1)
   LOOKAHEAD        1 = on a step that is most likely a reply (P(RESPOND) >= LOOKAHEAD_MIN_RESPOND, default 0.5),
-                   also prewarm the tool the agent calls after the customer's reply (P >= THETA_NEXT, default 0.4;
-                   needs an action_model.pkl trained with the lookahead model, train_action.py)
+                   also prewarm the tool the agent calls after the customer's reply (P >= THETA_NEXT, default 0.4).
+                   Only predictors that support it (lightgbm, markov with a lookahead model in action_model.pkl)
   TTL_S            TTL the controller should give a prewarmed pod  (default 60)
-  MODEL_PATH       default predictor/data/model.pkl
   AUDIT_LOG        optional file: one JSON line per prewarm decision (FR-12)
-  CRD_MODE         off | dryrun | k8s : write PrewarmRequest objects for the controller
-                   (see crd_writer.py; default off)
+  CRD_MODE         off | dryrun | k8s : write PrewarmRequest objects for the controller (crd_writer.py; default off)
 
-Example hint:
-  {"workflow_id": "W1", "episode_id": "task1-123", "trajectory": ["get_user_details"], "ts": 1792149162.1}
+Example request:
+  {"workflow_id": "W1", "episode_id": "task1-123", "trajectory": ["get_user_details"], "signals": {...}}
 """
 
 import json
 import os
-import pickle
 import time
-from pathlib import Path
-from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
-from prometheus_client import Counter, Histogram, make_asgi_app
-from pydantic import BaseModel, Field
+from prometheus_client import CollectorRegistry, Counter, Histogram, make_asgi_app
 
-import action_model  # noqa: F401  (needed so pickle can find the action-model classes)
-import models  # noqa: F401  (needed so pickle can find the model classes)
+import predictors
+from contract import NO_PREWARM, RESPOND, ActionP, PredictionOut, PredictRequest
 from crd_writer import CRDWriter
-from models import ACTION_MODELS, MODEL_NAMES, NO_PREWARM, POOLED, prewarm_select
+from policy import prewarm_select
 
-HERE = Path(__file__).resolve().parent
-RESPOND = "RESPOND"
-MODEL_PATH = Path(os.getenv("MODEL_PATH", HERE / "data" / "model.pkl"))
-MODEL_NAME = os.getenv("PREDICTOR_MODEL", "ensemble")
+NAME = predictors.canonical(os.getenv("PREDICTOR") or os.getenv("PREDICTOR_MODEL") or predictors.DEFAULT)
 THETA = float(os.getenv("THETA", "0.3"))
 PREWARM_POLICY = os.getenv("PREWARM_POLICY", "theta")       # theta | topk
 TOP_K = int(os.getenv("TOP_K", "2"))
@@ -62,60 +52,26 @@ LOOKAHEAD_MIN_RESPOND = float(os.getenv("LOOKAHEAD_MIN_RESPOND", "0.5"))
 TTL_S = int(os.getenv("TTL_S", "60"))
 AUDIT_LOG = os.getenv("AUDIT_LOG")
 
-with open(MODEL_PATH, "rb") as f:
-    PRED = pickle.load(f)
-
-if MODEL_NAME not in MODEL_NAMES and MODEL_NAME not in ACTION_MODELS:
-    raise SystemExit(f"Unknown PREDICTOR_MODEL={MODEL_NAME}; use one of {list(MODEL_NAMES) + list(ACTION_MODELS)}")
-ACTION_PATH = Path(os.getenv("ACTION_MODEL_PATH", HERE / "data" / "action_model.pkl"))
-PRED.action = None
-if MODEL_NAME in ACTION_MODELS:
-    if not ACTION_PATH.exists():
-        raise SystemExit(f"PREDICTOR_MODEL={MODEL_NAME} needs {ACTION_PATH}: run predictor/build_action_data.py "
-                         "and predictor/train_action.py")
-    with open(ACTION_PATH, "rb") as f:
-        PRED.action = pickle.load(f)
-
+PRED = predictors.load(NAME)
 WRITER = CRDWriter()   # CRD_MODE=off|dryrun|k8s
 
-# ---- Prometheus metrics
+# ---- Prometheus metrics (the same names for every predictor: deploy/monitoring dashboards)
+#      own registry, so tests can import the service once per predictor in one process
+REGISTRY = CollectorRegistry()
 LATENCY = Histogram("predictor_request_seconds", "Time to answer one /predict call",
-                    buckets=(0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25))
-HINTS = Counter("predictor_hints_total", "Hints received", ["workflow_id"])
-PREWARMS = Counter("predictor_prewarm_candidates_total", "Tools at or above theta", ["tool"])
+                    buckets=(0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5),
+                    registry=REGISTRY)
+HINTS = Counter("predictor_hints_total", "Hints received", ["workflow_id"], registry=REGISTRY)
+PREWARMS = Counter("predictor_prewarm_candidates_total", "Tools chosen for prewarming", ["tool"], registry=REGISTRY)
+
+app = FastAPI(title=f"Pulse next-tool predictor ({NAME})")
+app.mount("/metrics", make_asgi_app(registry=REGISTRY))
 
 
-class Hint(BaseModel):
-    workflow_id: Optional[str] = Field(None, description="W1, W2 ... (unknown/missing -> pooled model)")
-    episode_id: str = ""
-    trajectory: list[str] = Field(default_factory=list, description="tools called so far, in order")
-    current_tool: Optional[str] = Field(None, description="optional; used if trajectory is empty")
-    ts: Optional[float] = None
-    signals: Optional[dict[str, float]] = Field(
-        None, description="numbers / yes-no flags from predictor/signals.py (no raw text); "
-                          "used by the next-action models")
-
-
-class ToolProb(BaseModel):
-    tool: str                 # a tool, or RESPOND / END
-    p: float
-    k: Optional[int] = None   # prewarm list only: fan-out width = desiredReplicas in the PrewarmRequest
-
-
-class Prediction(BaseModel):
-    workflow_id: str          # the model actually used
-    episode_id: str
-    model: str
-    ranked: list[ToolProb]
-    prewarm: list[ToolProb]   # tools to prewarm (never END or RESPOND), with k: PREWARM_POLICY + lookahead
-    lookahead: list[ToolProb] = []   # the part of `prewarm` chosen by the lookahead model (LOOKAHEAD=1)
-    theta: float
-    ttl_s: int
-    latency_ms: float
-
-
-app = FastAPI(title="Pulse next-tool predictor")
-app.mount("/metrics", make_asgi_app())
+def policy():
+    return {"name": PREWARM_POLICY, "theta": THETA, "top_k": TOP_K, "p_min": P_MIN, "ttl_s": TTL_S,
+            "lookahead": {"on": LOOKAHEAD and PRED.supports_lookahead, "theta_next": THETA_NEXT,
+                          "min_respond": LOOKAHEAD_MIN_RESPOND}}
 
 
 @app.get("/", include_in_schema=False)
@@ -123,60 +79,58 @@ async def root():
     return RedirectResponse("/docs")
 
 
+@app.get("/info")
+async def info():
+    return {**PRED.info(), "policy": policy()}
+
+
 @app.get("/healthz")
 async def healthz():
-    return {"status": "ok", "model": MODEL_NAME, "workflows": sorted(PRED.models),
-            "action_models": PRED.action.names if PRED.action else [],
-            "theta": THETA, "ttl_s": TTL_S,
-            "policy": {"name": PREWARM_POLICY, "top_k": TOP_K, "p_min": P_MIN},
-            "lookahead": {"on": LOOKAHEAD, "available": getattr(PRED.action, "lookahead", None) is not None,
-                          "theta_next": THETA_NEXT, "min_respond": LOOKAHEAD_MIN_RESPOND},
+    return {"status": "ok", "predictor": NAME, **PRED.health(), "policy": policy(),
             "crd": {"mode": WRITER.mode, **WRITER.stats, "last_error": WRITER.last_error}}
 
 
-@app.post("/predict", response_model=Prediction)
-async def predict(h: Hint):
+@app.post("/predict", response_model=PredictionOut)
+def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread pool (the speculator waits on an LLM)
     t0 = time.perf_counter()
-    traj = h.trajectory or ([h.current_tool] if h.current_tool else [])
-    wf = h.workflow_id if h.workflow_id in PRED.models else POOLED
+    probs = PRED.predict(req)
+    ranked = sorted(probs.items(), key=lambda kv: -kv[1])
+    warm = prewarm_select(ranked, PREWARM_POLICY, THETA, TOP_K, P_MIN)
+    k = {t: PRED.fanout(t, req) if PRED.supports_fanout else 1 for t in warm}
 
-    ranked = PRED.rank(wf, traj, MODEL_NAME, h.signals)
-    warm = set(prewarm_select(ranked, PREWARM_POLICY, THETA, TOP_K, P_MIN))
-    action_used = MODEL_NAME in ACTION_MODELS and PRED.action is not None and h.signals is not None
-    # fan-out width k per prewarmed tool: pending-ID rule (action models), else 1
-    k = {t: (PRED.action.fanout.k(t, h.signals) if action_used else 1) for t in warm}
-    probs = dict(ranked)
     # Lookahead: this step is most likely a reply to the customer, so also prewarm the tool the agent will call
     # AFTER the customer answers (customer reply + think time = seconds of lead, enough for a whole cold start)
     ahead = {}
-    look = getattr(PRED.action, "lookahead", None) if action_used else None
-    if LOOKAHEAD and look is not None and probs.get(RESPOND, 0.0) >= LOOKAHEAD_MIN_RESPOND:
-        nxt = look.proba(ACTION_MODELS[MODEL_NAME], PRED.model_for(wf).workflow_id, traj, h.signals)
-        ahead = {t: p for t, p in nxt.items() if p >= THETA_NEXT and t not in NO_PREWARM and t not in warm}
-        for t in ahead:
-            k[t] = 1
-    pw = [(t, p) for t, p in ranked if t in warm] + sorted(ahead.items(), key=lambda kv: -kv[1])
-    warm |= set(ahead)
+    if LOOKAHEAD and PRED.supports_lookahead and probs.get(RESPOND, 0.0) >= LOOKAHEAD_MIN_RESPOND:
+        ahead = {t: p for t, p in PRED.lookahead(req, probs).items()
+                 if p >= THETA_NEXT and t not in NO_PREWARM and t not in k}
+        k.update({t: 1 for t in ahead})
+    pw = [(t, probs[t]) for t in warm] + sorted(ahead.items(), key=lambda kv: -kv[1])
     latency = time.perf_counter() - t0
 
+    wf = req.workflow_id or req.domain
     LATENCY.observe(latency)
     HINTS.labels(wf).inc()
-    for t in warm:
+    for t, _ in pw:
         PREWARMS.labels(t).inc()
-    if AUDIT_LOG and warm:
+    if AUDIT_LOG and pw:
         with open(AUDIT_LOG, "a", encoding="utf-8") as f:
             for t, p in pw:
-                f.write(json.dumps({"time": time.time(), "tool": t, "probability": round(p, 4),
+                f.write(json.dumps({"time": time.time(), "predictor": NAME, "tool": t, "probability": round(p, 4),
                                     "action": "prewarm-lookahead" if t in ahead else "prewarm",
                                     "replicas": k[t], "ttl_s": TTL_S}) + "\n")
 
-    # Step 9: hand the prewarm list to the controller (background thread, returns at once)
-    WRITER.submit([(t, p, k[t]) for t, p in pw], THETA, TTL_S, episode_id=h.episode_id, workflow_id=wf)
+    # hand the prewarm list to the controller (background thread, returns at once)
+    WRITER.submit([(t, p, k[t]) for t, p in pw], THETA, TTL_S, episode_id=req.episode_id, workflow_id=wf)
 
-    used = MODEL_NAME if MODEL_NAME not in ACTION_MODELS or action_used else "ensemble (no signals in hint)"
-    return Prediction(
-        workflow_id=wf, episode_id=h.episode_id, model=used,
-        ranked=[ToolProb(tool=t, p=round(p, 6)) for t, p in ranked],
-        prewarm=[ToolProb(tool=t, p=round(p, 6), k=k[t]) for t, p in pw],
-        lookahead=[ToolProb(tool=t, p=round(p, 6), k=1) for t, p in ahead.items()],
-        theta=THETA, ttl_s=TTL_S, latency_ms=round(latency * 1000, 3))
+    used = [i for i in PRED.inputs if (i == "trajectory") or (i == "signals" and req.signals is not None)
+            or (i == "history" and req.history)]
+    note = PRED.note
+    if "signals" in PRED.inputs and req.signals is None:
+        note = "no signals in the request: answered by the Markov chain"
+    return PredictionOut(
+        workflow_id=wf, episode_id=req.episode_id, model=NAME,
+        ranked=[ActionP(tool=t, p=round(p, 6)) for t, p in ranked],
+        prewarm=[ActionP(tool=t, p=round(p, 6), k=k[t]) for t, p in pw],
+        lookahead=[ActionP(tool=t, p=round(p, 6), k=1) for t, p in ahead.items()],
+        theta=THETA, ttl_s=TTL_S, latency_ms=round(latency * 1000, 3), inputs_used=used, note=note)

@@ -8,5 +8,5 @@ pulse-v3: next-tool predictor from the conversation text, the tool graph and the
   embed.py      sentence embeddings from the local llama.cpp server
   online.py     per-agent-model online adapter on top of the frozen model
 
-Served by pulse_pred/service.py. Training code and experiments live in the original pulse repository.
+Served by predictor/service.py with PREDICTOR=pulse_v3 (adapter: predictor/predictors/pulse_v3.py). Training code and experiments live in the original pulse repository.
 """

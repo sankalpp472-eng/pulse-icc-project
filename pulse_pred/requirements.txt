@@ -1,4 +1,4 @@
-# pulse_pred/service.py (pulse-v3); the model loads only with the scikit-learn it was trained with
+# pulse-v3 (predictor/service.py with PREDICTOR=pulse_v3); the model loads only with the scikit-learn it was trained with
 numpy
 scipy
 scikit-learn==1.9.1

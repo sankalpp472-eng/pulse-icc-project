@@ -3,8 +3,13 @@ output "model_bucket" {
 }
 
 output "model_uri" {
-  description = "PULSE_MODEL_URI for pulse_pred/service.py (loads latest.json)"
+  description = "PULSE_MODEL_URI for the pulse_v3 predictor (loads latest.json)"
   value       = "s3://${aws_s3_bucket.models.bucket}/${var.model_prefix}"
+}
+
+output "action_model_uri" {
+  description = "ACTION_MODEL_URI for the lightgbm and markov predictors (loads latest.json)"
+  value       = "s3://${aws_s3_bucket.models.bucket}/${var.action_model_prefix}"
 }
 
 output "model_reader_policy_arn" {

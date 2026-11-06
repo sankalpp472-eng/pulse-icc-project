@@ -22,6 +22,12 @@ variable "model_prefix" {
   default     = "pulse-v3"
 }
 
+variable "action_model_prefix" {
+  description = "Key prefix of the lightgbm + markov models (action_model.pkl) in the bucket"
+  type        = string
+  default     = "action-model"
+}
+
 variable "noncurrent_version_days" {
   description = "Days an overwritten or deleted model object is kept before it expires"
   type        = number

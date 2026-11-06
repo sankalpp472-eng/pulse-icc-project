@@ -134,6 +134,7 @@ aside label { margin-bottom: 10px; }
 .badge.cold { background: var(--bad-soft); color: var(--bad); }
 .badge.hit { background: var(--blue-soft); color: var(--blue); }
 .badge.par { background: var(--warn-soft); color: var(--warn); }
+.badge:not(.warm):not(.cold):not(.hit):not(.par) { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
 .legend { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; color: var(--ink2); }
 .thinking { font-size: 12px; color: var(--ink2); align-self: flex-end; }
 .thinking.cust { align-self: flex-start; }

@@ -1,6 +1,6 @@
-# Settings Pulse's pods read (envFrom, optional): the model registry and the pinned pulse-v3 version.
-# Changing the model in production = a pull request changing PULSE_MODEL_VERSION (the UI's Models tab writes it:
-# "Pin in Git"); empty = the registry's latest.
+# Settings Pulse's pods read (envFrom, optional): the model registry and the pinned model versions.
+# Changing a model in production = a pull request changing PULSE_MODEL_VERSION (pulse-v3) or ACTION_MODEL_VERSION
+# (lightgbm + markov); the UI's Models tab writes them ("Pin in Git"). Empty = the registry's latest.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -8,3 +8,5 @@ metadata:
 data:
   PULSE_MODEL_URI: s3://pulse-models-ACCOUNT_ID/pulse-v3
   PULSE_MODEL_VERSION: ""
+  ACTION_MODEL_URI: s3://pulse-models-ACCOUNT_ID/action-model
+  ACTION_MODEL_VERSION: ""

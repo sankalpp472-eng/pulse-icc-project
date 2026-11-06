@@ -77,11 +77,16 @@ resource "aws_s3_bucket_policy" "models" {
   depends_on = [aws_s3_bucket_public_access_block.models]
 }
 
-# Predictor: read the models under the prefix (attach to its pod's IAM role once EKS is in Terraform)
+# The model families in the bucket: pulse-v3, and lightgbm + markov (one action_model.pkl)
+locals {
+  model_prefixes = [var.model_prefix, var.action_model_prefix]
+}
+
+# Predictor: read the models under the prefixes (attach to its pod's IAM role once EKS is in Terraform)
 data "aws_iam_policy_document" "model_reader" {
   statement {
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.models.arn}/${var.model_prefix}/*"]
+    resources = [for p in local.model_prefixes : "${aws_s3_bucket.models.arn}/${p}/*"]
   }
   statement {
     actions   = ["s3:ListBucket"]
@@ -89,7 +94,7 @@ data "aws_iam_policy_document" "model_reader" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["${var.model_prefix}/*"]
+      values   = [for p in local.model_prefixes : "${p}/*"]
     }
   }
 }
@@ -105,7 +110,7 @@ data "aws_iam_policy_document" "model_publisher" {
   source_policy_documents = [data.aws_iam_policy_document.model_reader.json]
   statement {
     actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.models.arn}/${var.model_prefix}/*"]
+    resources = [for p in local.model_prefixes : "${aws_s3_bucket.models.arn}/${p}/*"]
   }
 }
 

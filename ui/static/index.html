@@ -317,21 +317,20 @@
     <section id="tab-models" class="tab">
       <div class="card">
         <div class="card-head">
-          <h3>pulse-v3 models <span class="muted small mono" id="gUri"></span></h3>
+          <h3>Models <span class="muted small mono" id="gUri"></span></h3>
+          <div class="seg small" id="gFamily"><button data-v="pulse_v3" class="on">pulse-v3</button><button data-v="action">lightgbm + markov</button></div>
           <button class="ghost small" id="gRefresh">↻</button>
         </div>
         <div class="note small hidden" id="gNote"></div>
-        <div class="tbl-wrap"><table class="tbl" id="gTbl"><thead><tr>
-          <th>Version</th><th>Created</th><th title="held-out share of next-step calls warm with the top 3 prewarmed (the release gate)">warm@3</th>
-          <th>hit@1</th><th>hit@3</th><th title="the model it was compared with at training time">vs</th><th>Notes</th><th></th></tr></thead><tbody></tbody></table></div>
+        <div class="tbl-wrap"><table class="tbl" id="gTbl"><thead><tr></tr></thead><tbody></tbody></table></div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Retrain</h3><span class="muted small">pulse_pred/train.py: train → evaluate on held-out tasks → publish</span></div>
+        <div class="card-head"><h3>Retrain</h3><span class="muted small" id="gHow"></span></div>
         <div class="form-grid">
           <label>Where
             <div class="seg" id="gWhere"><button data-v="laptop" class="on">Here</button><button data-v="cluster">Training Job (EKS)</button></div>
           </label>
-          <label title="auto: becomes latest only if its warm@3 beats the current latest">Promote
+          <label title="auto: becomes latest only if its gate metric (pulse-v3: warm@3; lightgbm + markov: lightgbm top-1) beats the current latest">Promote
             <select id="gPromote"><option value="auto">auto (release gate)</option><option value="always">always</option><option value="never">never (candidate)</option></select>
           </label>
           <label>Notes <input id="gNotes" placeholder="what changed"></label>
@@ -367,7 +366,7 @@
         <p><b>The cloud around it:</b></p>
         <ul>
           <li><b>Load tests</b> (Experiments → Load test): Locust and asyncio drive the predictor, the tools or whole episodes harder and harder.</li>
-          <li><b>Model registry + retraining</b> (Models tab): pulse-v3's models are versioned in S3. Retraining (here or as a Kubernetes Job) publishes a new version that becomes the latest only if it beats the current one on held-out tasks.</li>
+          <li><b>Model registry + retraining</b> (Models tab): pulse-v3's model and the lightgbm + markov model are versioned in S3. Retraining (here or as a Kubernetes Job) publishes a new version that becomes the latest only if it beats the current one on held-out tasks.</li>
           <li><b>Infrastructure as code</b>: Terraform makes the S3 registry, ECR, the CI roles and, optionally, the EKS cluster.</li>
           <li><b>CI/CD + GitOps</b>: GitHub Actions test the code and build the image; Argo CD makes the cluster follow Git (top bar: commit, sync status).</li>
         </ul>
@@ -381,6 +380,7 @@
     <div class="card">
       <div class="card-head"><h3>Predictor</h3><span class="pill" id="predPill">stopped</span></div>
       <label>Model <select id="predModel"></select></label>
+      <div class="small muted">Reads from each hint: <span id="predInputs"></span></div>
       <label>Prewarm policy
         <div class="seg small" id="policySeg"><button data-v="theta" class="on">θ threshold</button><button data-v="topk">Top-k</button></div>
       </label>
@@ -393,7 +393,7 @@
       </div>
       <label class="check"><input type="checkbox" id="lookChk"> Lookahead (prewarm during the customer's turn)</label>
       <label class="pol-look hidden">lookahead θ_next <input type="number" id="thetaNext" min="0.05" max="0.9" step="0.05" value="0.3"></label>
-      <div class="note small hidden" id="policyNote">This predictor ignores top-k / lookahead (it runs θ). Apply latency_ideas.patch and retrain first (LATENCY_IDEAS_RUN.md).</div>
+      <div class="note small hidden" id="policyNote">This predictor has no lookahead model, so it runs the policy without lookahead (lookahead: lightgbm and markov only).</div>
       <div class="actions">
         <button class="primary small" id="predStart">Start</button>
         <button class="small" id="predStop">Stop</button>

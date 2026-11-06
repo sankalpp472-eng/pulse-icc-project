@@ -13,7 +13,7 @@ Argo CD (in the cluster) ◀──── watches Git ─────────
 
 | Application | Source | Sync |
 |---|---|---|
-| `pulse-system` | `EKS_deployment/cloud` (kustomize): predictor, speculator, controller, UI, RBAC, `pulse-config`, the trainer's service account | automatic, **no self-heal** (the UI changes things at runtime), no prune |
+| `pulse-system` | `EKS_deployment/cloud` (kustomize): predictor (`PREDICTOR` in `gitops/settings.yaml`), controller, UI, RBAC, `pulse-config`, the trainer's service account | automatic, **no self-heal** (the UI changes things at runtime), no prune |
 | `pulse-crds` | `deploy/prewarm`: the PrewarmRequest CRD | automatic, self-heal |
 | `monitoring` | kube-prometheus-stack chart + `deploy/monitoring/values*.yaml` | automatic, self-heal, prune |
 | `monitoring-config` | `deploy/monitoring` (kustomize): scrape configs and dashboards | automatic, self-heal, prune |

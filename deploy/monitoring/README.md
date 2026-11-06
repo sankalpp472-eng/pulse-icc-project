@@ -25,7 +25,7 @@ You can also install it from the UI: switch the top bar to Knative, then click *
 
 | Source | Metrics | How |
 |---|---|---|
-| `predictor/service.py`, `pulse_pred/service.py` | `predictor_request_seconds`, `predictor_hints_total`, `predictor_prewarm_candidates_total` | PodMonitor `pulse-predictors`: the `pulse-predictor` pod (port `http`) and the predictor the UI pod starts (port `predictor`) |
+| `predictor/service.py` (any of the four predictors) | `predictor_request_seconds`, `predictor_hints_total`, `predictor_prewarm_candidates_total` | PodMonitor `pulse-predictors`: the `pulse-predictor` pod (port `http`) and the predictor the UI pod starts (port `predictor`) |
 | `controller/prewarm_controller.py` | `pulse_controller_warmups_total{tool,cold}`, `_pings_total`, `_ping_seconds{cold}`, `_failures_total`, `_evictions_total`, `_warm_seconds` | PodMonitor `pulse-controller` (port `metrics`, `CONTROLLER_METRICS_PORT`, default 9102) |
 | `test/test_knative/w1_replay.py` | `pulse_tool_call_seconds{tool,temperature}`, `pulse_tool_calls_total` (cold = slower than 1 s) | PodMonitor `pulse-runners`: run pods (port `metrics`) and the UI pod (port `runner-metrics`); `--metrics-port` / `PULSE_METRICS_PORT=9105`, which the UI and `run_cloud.sh` set |
 | kube-state-metrics | pods per Knative service (`kube_pod_status_ready` × `kube_pod_labels{label_serving_knative_dev_service}`) | chart; the pod label is allow-listed in `values.yaml` |
@@ -60,4 +60,3 @@ Edit the panels in `dashboards/build.py`, run `python deploy/monitoring/dashboar
   keep the full record.
 - **Not yet instrumented:** live runs (`w1_live.py`) and the UI's interactive episodes don't publish
   tool-call metrics yet. Their pods, prewarms and predictor are still visible.
-- **The LLM speculator** has no `/metrics`, so its predictor panels stay empty.

@@ -1,7 +1,7 @@
 # Argo CD applications: what the cluster should run, read from this Git repository (install.sh fills in __REPO__,
 # __REVISION__ and __CHART_VERSION__). A merged commit is a deploy; `git revert` is a rollback.
 #
-#   pulse-system   EKS_deployment/cloud (kustomize): predictor, speculator, controller, UI, RBAC, pulse-config,
+#   pulse-system   EKS_deployment/cloud (kustomize): predictor, controller, UI, RBAC, pulse-config,
 #                  the trainer's service account. CI writes the image tag there after every build.
 #   pulse-crds     deploy/prewarm: the PrewarmRequest CRD
 #   monitoring     kube-prometheus-stack (Helm) with deploy/monitoring/values*.yaml

@@ -35,6 +35,9 @@ spec:
             - {name: UI_STATE_DIR, value: /home/app/ui-state}
             - {name: UI_RESULTS_DIR, value: /home/app/results/cloud_runs}
             - {name: CLUSTER_NAME, value: pulse-eks}
+            - {name: PULSE_EMBED_BASE, value: "http://pulse-embed:8091/v1"}   # for a pulse_v3 predictor this pod starts
+            - {name: PULSE_DATA_DIR, value: /tmp/pulse-data}                 # models downloaded from S3 (writable)
+            - {name: ACTION_MODELS_DIR, value: /tmp/action-models}
           envFrom:
             - secretRef: {name: pulse-llm-keys, optional: true}
             - configMapRef: {name: pulse-config, optional: true}   # GitOps settings, e.g. PULSE_MODEL_URI (deploy/gitops)

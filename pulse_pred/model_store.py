@@ -1,11 +1,15 @@
 """
 Model registry on S3 (the bucket comes from terraform/model_store.tf). Models are not kept in git.
+One prefix per model family, the same layout for each:
+  s3://<bucket>/pulse-v3        pulse-v3 (pulse_pred/train.py)                       file predictor.pkl
+  s3://<bucket>/action-model    lightgbm + markov (predictor/train_action.py)       file action_model.pkl
 
-Layout under a model prefix, e.g. s3://<bucket>/pulse-v3:
-  <version>/predictor.pkl     the trained bundle
-  <version>/manifest.json     version, sha256, size, scikit-learn version, created, notes, held-out metrics
-  latest.json                 {"version": "<version>"}: what PULSE_MODEL_URI=s3://<bucket>/pulse-v3 loads
-  _data/                      the training data (train.py): tau_bench/*.json, tau_bench/schemas/, embed_cache.npz
+Layout under a model prefix:
+  <version>/<file>            the trained bundle (the manifest names the file)
+  <version>/manifest.json     version, file, sha256, size, scikit-learn version, created, notes, held-out metrics
+  latest.json                 {"version": "<version>"}: what s3://<bucket>/<prefix> loads
+  _data/                      the training data: pulse-v3: tau_bench/*.json, tau_bench/schemas/, embed_cache.npz;
+                              action-model: action_rows.csv
 
     python pulse_pred/model_store.py publish predictor.pkl s3://<bucket>/pulse-v3 --version 2026-11-03 --notes "..."
     python pulse_pred/model_store.py fetch s3://<bucket>/pulse-v3            # -> pulse_pred/data/models/<version>/
@@ -70,11 +74,12 @@ def fetch(uri, dest=None, s3=None):
     s3 = s3 or _s3()
     bucket, prefix, version = resolve(uri, s3)
     local = Path(dest or paths.DATA / "models") / version
-    path = local / FILE
     manifest = json.loads(s3.get_object(Bucket=bucket, Key=f"{prefix}/{version}/manifest.json")["Body"].read())
+    name = manifest.get("file", FILE)
+    path = local / name
     if not (path.exists() and _sha256(path) == manifest["sha256"]):
         local.mkdir(parents=True, exist_ok=True)
-        s3.download_file(bucket, f"{prefix}/{version}/{FILE}", str(path))
+        s3.download_file(bucket, f"{prefix}/{version}/{name}", str(path))
         if _sha256(path) != manifest["sha256"]:
             raise ValueError(f"{uri} version {version}: sha256 does not match its manifest")
     (local / "manifest.json").write_text(json.dumps(manifest, indent=1))
@@ -85,11 +90,12 @@ def publish(model, uri, version, notes="", latest=True, s3=None, metrics=None):
     """Upload a trained bundle as a new version (never overwrites one) and point latest.json at it."""
     s3 = s3 or _s3()
     bucket, prefix = _split(uri)
-    key = f"{prefix}/{version}/{FILE}"
-    if s3.list_objects_v2(Bucket=bucket, Prefix=key).get("KeyCount"):
+    name = Path(model).name                           # predictor.pkl, action_model.pkl
+    key = f"{prefix}/{version}/{name}"
+    if s3.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}/{version}/").get("KeyCount"):
         raise ValueError(f"version {version} already exists under {uri}")
     import sklearn
-    manifest = {"version": version, "file": FILE, "sha256": _sha256(model), "bytes": Path(model).stat().st_size,
+    manifest = {"version": version, "file": name, "sha256": _sha256(model), "bytes": Path(model).stat().st_size,
                 "sklearn": sklearn.__version__, "created": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
                 "notes": notes, **({"metrics": metrics} if metrics else {})}
     s3.upload_file(str(model), bucket, key)
@@ -132,17 +138,18 @@ def promote(uri, version, s3=None):
                   ContentType="application/json")
 
 
-DATA_FILES = ("tau_bench/*.json", "tau_bench/schemas/**/*", "embed_cache.npz")
+DATA_FILES = ("tau_bench/*.json", "tau_bench/schemas/**/*", "embed_cache.npz")      # pulse-v3
 
 
-def data(direction, uri, local=None, s3=None) -> list[str]:
-    """Sync the training data between pulse_pred/data/ and <prefix>/_data/ (files whose size differs)."""
+def data(direction, uri, local=None, s3=None, files=DATA_FILES) -> list[str]:
+    """Sync the training data between a local folder (default pulse_pred/data/) and <prefix>/_data/
+    (files whose size differs). `files` = the glob patterns pushed."""
     s3 = s3 or _s3()
     bucket, prefix = _split(uri)
     local = Path(local or paths.DATA)
     moved = []
     if direction == "push":
-        for pat in DATA_FILES:
+        for pat in files:
             for f in sorted(p for p in local.glob(pat) if p.is_file()):
                 key = f"{prefix}/_data/{f.relative_to(local).as_posix()}"
                 try:
@@ -164,7 +171,7 @@ def data(direction, uri, local=None, s3=None) -> list[str]:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="pulse-v3 models on S3")
+    ap = argparse.ArgumentParser(description="model registry on S3 (pulse-v3, action-model)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("publish", help="upload a trained bundle as a new version")
     p.add_argument("model")
@@ -182,6 +189,9 @@ def main():
     d = sub.add_parser("data", help="sync the training data: push (local -> S3) or pull")
     d.add_argument("direction", choices=["push", "pull"])
     d.add_argument("uri")
+    d.add_argument("--local", help="local folder (default pulse_pred/data/; action-model: predictor/data)")
+    d.add_argument("--files", nargs="+", default=list(DATA_FILES), help="glob patterns to push "
+                   "(default: pulse-v3's data; action-model: action_rows.csv)")
     a = ap.parse_args()
     if a.cmd == "publish":
         print(json.dumps(publish(a.model, a.uri, a.version, a.notes, latest=not a.no_latest), indent=1))
@@ -189,14 +199,15 @@ def main():
         print(fetch(a.uri))
     elif a.cmd == "list":
         for m in versions(a.uri):
-            met = (m.get("metrics") or {}).get("new") or {}
+            mt = m.get("metrics") or {}
+            met, gate = mt.get("new") or {}, mt.get("gate_metric", "warm@3")
             print(f"{'*' if m['latest'] else ' '} {m['version']:<20} {m.get('created', '')[:16]}  "
-                  f"warm@3 {met.get('warm@3', '-')}  hit@3 {met.get('hit@3', '-')}  {m.get('notes', '')[:60]}")
+                  f"{gate} {met.get(gate, '-')}  {m.get('notes', '')[:60]}")
     elif a.cmd == "promote":
         promote(a.uri, a.version)
         print(f"latest -> {a.version}")
     else:
-        moved = data(a.direction, a.uri)
+        moved = data(a.direction, a.uri, a.local, files=a.files)
         print(f"{len(moved)} file(s) {'uploaded' if a.direction == 'push' else 'downloaded'}")
 
 

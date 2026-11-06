@@ -163,8 +163,8 @@ TAU_FILES = {"gpt-4o": "gpt-4o-airline.json", "claude-3.5-sonnet": "sonnet-35-ne
 def attach_signals(traces: list[dict]) -> int:
     """Give every call of a tau-bench trace the predictor's signals (predictor/signals.py) for the LLM step
     that made it, computed from the original tau-bench conversation exactly as predictor/build_action_data.py
-    does for training. The next-action models (PREDICTOR_MODEL=gbt ...) need them; without them the
-    predictor answers with its trajectory-only ensemble. Returns the number of traces matched.
+    does for training. lightgbm needs them; without them it answers with the trajectory-only
+    Markov chain. Returns the number of traces matched.
     Also keeps, per call, the state before every LLM step since the previous call (the agent's replies to
     the customer, then the call itself): the fair hint timing sends one hint per LLM step with only what
     was known then (c["hint_states"] = [(signals, history), ...], last = the call's own step)."""
@@ -187,7 +187,7 @@ def attach_signals(traces: list[dict]) -> int:
                 elif role == "assistant":
                     calls = tool_calls(m)
                     sig = compute_signals(events)
-                    hist = history[-HISTORY_N:]        # what the LLM speculator reads (--hint-context)
+                    hist = history[-HISTORY_N:]        # what speculator / pulse_v3 read (hint "history")
                     for n, args in calls:
                         per_call.append(((n, args), (sig, hist, pre)))
                         events.append(("call", n, args))
@@ -343,16 +343,14 @@ class Replay:
 
     def send_hint(self, episode: str, trajectory: list[str], signals: dict | None = None,
                   history: list | None = None) -> None:
-        """What agent.emit_hint does: POST the trajectory (+ signals, if known) to the predictor in the
-        background (never waits). With --hint-context also the conversation so far (LLM speculator)."""
+        """What agent/hints.py does: POST the inputs this predictor reads (its GET /info: trajectory, signals,
+        history) in the background (never waits). --hint-context forces the history on."""
         if not self.predictor_url:
             return
-        hint = {"workflow_id": self.workflow_id, "episode_id": episode, "trajectory": trajectory[-8:],
-                "current_tool": trajectory[-1] if trajectory else "START", "ts": time.time()}
-        if signals is not None:
-            hint["signals"] = signals
-        if self.hint_context and history is not None:
-            hint["history"] = history
+        sys.path.insert(0, str(HERE.parents[1] / "predictor"))
+        import client
+        wanted = client.inputs(self.predictor_url) | ({"history"} if self.hint_context else set())
+        hint = client.make_hint(wanted, episode, trajectory, self.workflow_id, signals=signals, history=history)
 
         def post():
             rec, t0 = {"hint": hint}, time.perf_counter()
@@ -451,12 +449,12 @@ def main():
                          "(default); legacy = one hint at the gap start with the call step's signals (runs "
                          "before 28 Oct 2026: it knew the customer's reply before the reply time had passed)")
     ap.add_argument("--hint-context", action="store_true",
-                    help="C3 with the LLM speculator (baselines/llm_speculator/service.py): hints also carry the "
-                         "last 10 messages of the recorded conversation")
+                    help="always send the last 10 messages of the recorded conversation (by default hints carry "
+                         "them only when the predictor's /info lists 'history': speculator, pulse_v3)")
     ap.add_argument("--hint-timeout", type=float, default=1.0,
                     help="seconds to wait for the predictor's answer (logging only; prewarming happens anyway)")
     ap.add_argument("--no-signals", action="store_true",
-                    help="C3: send trajectory-only hints (the predictor then uses its ensemble, not gbt)")
+                    help="C3: send trajectory-only hints (lightgbm then answers with the Markov chain)")
     ap.add_argument("--label", default="", help="extra text at the end of the result folder name (e.g. eks)")
     ap.add_argument("--metrics-port", type=int, default=int(os.getenv("PULSE_METRICS_PORT", "0")),
                     help="serve Prometheus metrics of the run on this port (0 = off; deploy/monitoring scrapes 9105)")

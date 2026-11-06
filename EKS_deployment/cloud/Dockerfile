@@ -1,6 +1,5 @@
 # One image for everything Pulse runs in the cluster besides the tools:
-#   pulse-predictor   uvicorn service:app --app-dir predictor                 (LightGBM gbt)
-#   pulse-speculator  uvicorn service:app --app-dir baselines/llm_speculator  (LLM speculator)
+#   pulse-predictor   uvicorn service:app --app-dir predictor   (PREDICTOR=lightgbm|markov|speculator|pulse_v3)
 #   pulse-controller  python controller/prewarm_controller.py
 #   run pods          bash cloud_entry.sh replay|live <args>                 (w1_replay.py / w1_live.py)
 # Built from a staging folder by build_image.sh (code + trained models + tau-bench airline trajectories;

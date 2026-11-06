@@ -3,14 +3,23 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fmt = (v, d = 0) => (v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toFixed(d));
+// the four predictors (predictor/predictors/). INPUTS = what each one reads from a hint; the running predictor's
+// own GET /info overrides it. Old run names (gbt, ngram_action) still get a label.
 const PREDICTORS = {
-  gbt: "LightGBM (next action) · main",
-  lr_action: "Logistic regression",
-  ngram_action: "n-gram baseline",
-  ensemble: "Trajectory ensemble (older)",
-  speculator: "LLM speculator (Groq)",
+  lightgbm: "LightGBM (next action) · main",
+  markov: "Markov chain (order 2)",
+  speculator: "LLM speculator",
   pulse_v3: "pulse-v3 (text + tool graph)",
 };
+const PRED_INPUTS = {
+  lightgbm: ["trajectory", "signals"], markov: ["trajectory"],
+  speculator: ["trajectory", "history"], pulse_v3: ["trajectory", "history"],
+};
+const LOOKAHEAD_OK = new Set(["lightgbm", "markov"]);
+const OLD_NAMES = { gbt: "LightGBM (gbt)", ngram_action: "n-gram (ngram_action)", lr_action: "Logistic regression (removed)",
+                    ensemble: "Trajectory ensemble (removed)" };
+const predLabel = (k) => PREDICTORS[k] || OLD_NAMES[k] || k;
+const inputBadges = (ins) => (ins || []).map((i) => `<span class="badge" title="this predictor reads the hint's ${esc(i)}">${esc(i)}</span>`).join(" ");
 const HELDOUT = [6, 20, 22, 26, 30];
 const CONFIG_COLOR = { C0: "#eb6834", C1: "#2a78d6", C3: "#1baf7a" };
 const EXTRA = ["#eda100", "#e87ba4", "#7a5af5", "#008300"];
@@ -73,11 +82,17 @@ $("#detectBtn").onclick = async () => {
 
 // ------------------------------------------------------------------ predictor card
 const predModel = $("#predModel");
-predModel.innerHTML = Object.entries(PREDICTORS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+predModel.innerHTML = Object.entries(PREDICTORS).map(([k, v]) => `<option value="${k}">${v} · reads ${PRED_INPUTS[k].join(" + ")}</option>`).join("");
 $("#theta").oninput = () => ($("#thetaVal").textContent = Number($("#theta").value).toFixed(2));
 const policySeg = seg("policySeg", () => policyForm());
 $("#lookChk").onchange = () => policyForm();
+predModel.onchange = () => policyForm();
 function policyForm() {
+  // lookahead needs a second model trained for the step after the customer's reply (lightgbm, markov)
+  const look = LOOKAHEAD_OK.has(predModel.value);
+  $("#lookChk").disabled = !look;
+  if (!look) $("#lookChk").checked = false;
+  $("#predInputs").innerHTML = inputBadges(PRED_INPUTS[predModel.value]);
   $$(".pol-theta").forEach((e) => e.classList.toggle("hidden", policySeg.get() !== "theta"));
   $$(".pol-topk").forEach((e) => e.classList.toggle("hidden", policySeg.get() !== "topk"));
   $$(".pol-look").forEach((e) => e.classList.toggle("hidden", !$("#lookChk").checked));
@@ -436,8 +451,12 @@ function expForm() {
   $$(".c3-only").forEach((e) => e.classList.toggle("hidden", !c3));
   $$(".x-theta").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xPolicy").value !== "theta"));
   $$(".x-topk").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xPolicy").value !== "topk"));
+  const lookOk = LOOKAHEAD_OK.has($("#xPred").value);
+  $("#xLook").disabled = !lookOk;
+  if (!lookOk) $("#xLook").checked = false;
   $$(".x-look").forEach((e) => e.classList.toggle("hidden", !c3 || !$("#xLook").checked));
 }
+$("#xPred").addEventListener("change", () => expForm());
 $("#xPolicy").onchange = () => expForm();
 $("#xLook").onchange = () => expForm();
 $("#lTarget").onchange = $("#lEngine").onchange = () => expForm();
@@ -550,9 +569,9 @@ function selChanged() {
 $("#rCompare").onclick = () => {
   const runs = selected().map((p) => RESULTS.runs.find((r) => r.path === p));
   const used = {};
-  const color = (r) => {         // C0 orange, C1 blue, C3 with the main predictor (gbt) green, other predictors extra colours
+  const color = (r) => {         // C0 orange, C1 blue, C3 with the main predictor (lightgbm) green, others extra colours
     const k = r.config + (r.predictor || "");
-    if (!used[k]) used[k] = r.config !== "C3" || !r.predictor || r.predictor === "gbt"
+    if (!used[k]) used[k] = r.config !== "C3" || !r.predictor || r.predictor === "gbt" || r.predictor === "lightgbm"
       ? CONFIG_COLOR[r.config] || EXTRA[0] : EXTRA[Object.keys(used).length % EXTRA.length];
     return used[k];
   };
@@ -622,18 +641,19 @@ function renderServices(sv) {
   const pill = $("#predPill");
   if (!p) { pill.textContent = "stopped"; pill.className = "pill"; $("#predInfo").textContent = ""; }
   else if (!p.running) { pill.textContent = "exited"; pill.className = "pill bad"; $("#predInfo").textContent = (p.log_tail || []).join(" ").slice(-240); }
-  else if (!p.ready) { pill.textContent = "loading…"; pill.className = "pill wait"; $("#predInfo").textContent = PREDICTORS[p.model] || p.model; }
+  else if (!p.ready) { pill.textContent = "loading…"; pill.className = "pill wait"; $("#predInfo").textContent = predLabel(p.model); }
   else {
     pill.textContent = "ready"; pill.className = "pill ok";
     const h = p.health || {};
     const asked = p.policy || {};
-    // a predictor without the latency patch answers /healthz without "policy" and keeps prewarming by θ
-    const ignored = p.policy_supported === false && (asked.policy === "topk" || asked.lookahead);
+    // lookahead asked for a predictor whose /info says it can't: it runs the policy without it
+    const ignored = p.lookahead_supported === false && asked.lookahead;
     $("#policyNote").classList.toggle("hidden", !ignored);
     const changed = !predictorMatchesCard();
     $("#predInfo").innerHTML = (changed ? `<b class="warn-text">Running: ${esc(p.policy_label)}. The card's new settings are ` +
         `${applyPending || busyNow() ? "applied when the current episode ends" : "being applied…"}</b><br>` : "") +
-      `${esc(PREDICTORS[p.model] || p.model)} · ${esc(ignored ? "θ " + p.theta : p.policy_label)} · CRDs ${esc(p.crd)}` +
+      `${esc(predLabel(p.model))} ${inputBadges(p.inputs || PRED_INPUTS[p.model])} · ` +
+      `${esc(ignored ? p.policy_label.replace(/ \+ lookahead.*/, "") : p.policy_label)} · CRDs ${esc(p.crd)}` +
       (sv.controller ? ` · controller ${sv.controller.deployment ? "(deploy/" + esc(sv.controller.deployment) + ") " : ""}${sv.controller.running ? "running" : "not running"}` : "") +
       (h.crd && h.crd.written != null ? ` · ${h.crd.written} written` : "") +
       (p.serving_version ? ` · model ${esc(p.serving_version)}` : "") +
@@ -658,53 +678,74 @@ function renderDeployment(d) {
   if (d.argocd_url) $("#argoLink").href = d.argocd_url;
 }
 
-// ------------------------------------------------------------------ models (pulse-v3 registry on S3)
+// ------------------------------------------------------------------ models (the S3 registry: one tab per family)
+// per family: the predictors it serves, the held-out numbers shown (the first one gates a release), how it trains
+const FAMILIES = {
+  pulse_v3: { predictors: ["pulse_v3"], how: "pulse_pred/train.py: train → evaluate on held-out tasks → publish",
+              cols: [["warm@3", "held-out share of next-step calls warm with the top 3 prewarmed (the release gate)"],
+                     ["hit@1", "next tool ranked first"], ["hit@3", "next tool in the top 3"]] },
+  action: { predictors: ["lightgbm", "markov"], how: "predictor/train_action.py: train both → evaluate on the 10 held-out tasks → publish",
+            cols: [["lightgbm_top1", "lightgbm: next action ranked first, held-out (the release gate)"],
+                   ["lightgbm_hit@0.3", "lightgbm: share of tool calls prewarmed at θ 0.3"],
+                   ["markov_top1", "markov: next action ranked first, held-out"]] },
+};
 const gWhere = seg("gWhere");
+const gFamily = seg("gFamily", () => loadModels());
+const fam = () => gFamily.get() || "pulse_v3";
 let MODELS = { versions: [] };
 async function loadModels() {
   $("#gNote").classList.add("hidden");
-  try { MODELS = await api("/api/models"); } catch (e) { MODELS = { versions: [], error: e.message }; }
+  try { MODELS = await api("/api/models?family=" + fam()); } catch (e) { MODELS = { versions: [], error: e.message }; }
   renderModels();
 }
 function renderModels() {
+  const F = FAMILIES[fam()], gate = F.cols[0][0];
   const p = (state.services || {}).predictor;
-  const serving = p && p.model === "pulse_v3" && p.running ? p.serving_version : null;
+  const serving = p && F.predictors.includes(p.model) && p.running ? p.serving_version : null;
   $("#gUri").textContent = MODELS.uri || "";
+  $("#gHow").textContent = F.how;
   $("#gNote").innerHTML = esc(MODELS.error || "");
   $("#gNote").classList.toggle("hidden", !MODELS.error);
-  const m3 = (m) => ((m.metrics || {}).new || {});
+  $("#gTbl thead tr").innerHTML = "<th>Version</th><th>Created</th>" +
+    F.cols.map(([k, t]) => `<th title="${esc(t)}">${esc(k)}</th>`).join("") +
+    `<th title="the model it was compared with at training time (${esc(gate)})">vs</th><th>Notes</th><th></th>`;
+  const mt = (m) => ((m.metrics || {}).new || {});
   $("#gTbl tbody").innerHTML = MODELS.versions.map((m) => {
     const cur = (m.metrics || {}).current || {};
     return `<tr><td class="mono">${esc(m.version)} ${m.latest ? '<span class="pill ok">latest</span>' : ""}` +
       `${m.version === serving ? ' <span class="pill wait">serving</span>' : ""}</td>
       <td class="muted">${esc((m.created || "").slice(0, 16).replace("T", " "))}</td>
-      <td><b>${fmt(m3(m)["warm@3"], 3)}</b></td><td>${fmt(m3(m)["hit@1"], 3)}</td><td>${fmt(m3(m)["hit@3"], 3)}</td>
-      <td class="muted small">${cur["warm@3"] != null ? `${fmt(cur["warm@3"], 3)} (${esc((m.metrics || {}).current_version || "")})` : "–"}</td>
+      ${F.cols.map(([k], i) => `<td>${i === 0 ? "<b>" : ""}${fmt(mt(m)[k], 3)}${i === 0 ? "</b>" : ""}</td>`).join("")}
+      <td class="muted small">${cur[gate] != null ? `${fmt(cur[gate], 3)} (${esc((m.metrics || {}).current_version || "")})` : "–"}</td>
       <td class="small">${esc(m.notes || "")}</td>
-      <td><button class="small" data-use="${esc(m.version)}" title="Start the pulse_v3 predictor with this version">Use</button>
+      <td><button class="small" data-use="${esc(m.version)}" title="Start ${esc(F.predictors.join(" / "))} with this version">Use</button>
         ${m.latest ? "" : `<button class="small ghost" data-promote="${esc(m.version)}" title="Make it the latest (also: roll back)">Promote</button>`}
         ${state.cluster && state.cluster.in_cluster ? "" : `<button class="small ghost" data-pin="${esc(m.version)}" title="GitOps: pin this version for the cluster in EKS_deployment/cloud/gitops/config.yaml (no commit)">Pin in Git</button>`}</td></tr>`;
-  }).join("") || `<tr><td colspan="8" class="muted">${MODELS.error ? "–" : "No versions yet."}</td></tr>`;
+  }).join("") || `<tr><td colspan="${F.cols.length + 5}" class="muted">${MODELS.error ? "–" : "No versions yet."}</td></tr>`;
   $$("#gTbl [data-use]").forEach((b) => (b.onclick = async () => {
-    try { await api("/api/models/use", { version: b.dataset.use }); predModel.value = "pulse_v3";
-      toast(`Starting pulse_v3 with model ${b.dataset.use} (about a minute)`); } catch (e) { toast(e.message, 6000); }
+    try {
+      const st = await api("/api/models/use", { family: fam(), version: b.dataset.use });
+      predModel.value = (st.predictor || {}).model || F.predictors[0];
+      policyForm();
+      toast(`Starting ${predModel.value} with model ${b.dataset.use}`);
+    } catch (e) { toast(e.message, 6000); }
   }));
   $$("#gTbl [data-pin]").forEach((b) => (b.onclick = async () => {
     try {
-      const r = await api("/api/models/pin", { version: b.dataset.pin });
+      const r = await api("/api/models/pin", { family: fam(), version: b.dataset.pin });
       toast(r.changed ? `Pinned ${b.dataset.pin} in ${r.file}. Next: ${r.next}` : `${r.file} already pins ${b.dataset.pin}`, 12000);
     } catch (e) { toast(e.message, 6000); }
   }));
   $$("#gTbl [data-promote]").forEach((b) => (b.onclick = async () => {
     if (!confirm(`Make ${b.dataset.promote} the latest model? Predictors that load "latest" pick it up when they restart.`)) return;
-    try { MODELS = await api("/api/models/promote", { version: b.dataset.promote }); renderModels(); toast("Promoted"); }
+    try { MODELS = await api("/api/models/promote", { family: fam(), version: b.dataset.promote }); renderModels(); toast("Promoted"); }
     catch (e) { toast(e.message, 6000); }
   }));
 }
 $("#gRefresh").onclick = loadModels;
 $("#gRetrain").onclick = async () => {
   try {
-    await api("/api/models/retrain", { where: gWhere.get(), promote: $("#gPromote").value, notes: $("#gNotes").value.trim() });
+    await api("/api/models/retrain", { family: fam(), where: gWhere.get(), promote: $("#gPromote").value, notes: $("#gNotes").value.trim() });
     runAfter = 0;
     $("#xLog").textContent = "";
     $("#gVerdict").textContent = "training… (log: Experiments → Run log)";

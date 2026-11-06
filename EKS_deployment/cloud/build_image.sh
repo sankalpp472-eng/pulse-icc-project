@@ -21,7 +21,7 @@ REPO=pulse-runner
 HERE=EKS_deployment/cloud
 STAGE=$HERE/.build
 
-for f in predictor/data/model.pkl predictor/data/action_model.pkl \
+for f in predictor/data/action_model.pkl \
          predictor/data/tau-bench/historical_trajectories/gpt-4o-airline.json \
          predictor/data/tau-bench/historical_trajectories/sonnet-35-new-airline.json; do
   [ -f "$f" ] || { echo "Missing $f (train the predictor / download the tau-bench trajectories first)"; exit 1; }
@@ -33,6 +33,8 @@ mkdir -p "$STAGE/app/agent" "$STAGE/app/predictor/data/tau-bench/historical_traj
 cp agent/{agent,hints,llm,prompts,tools,user}.py "$STAGE/app/agent/"
 cp -r agent/tau_airline agent/tau_retail "$STAGE/app/agent/"
 cp predictor/*.py "$STAGE/app/predictor/"
+mkdir -p "$STAGE/app/predictor/predictors"                        # the four predictors behind predictor/service.py
+cp predictor/predictors/*.py "$STAGE/app/predictor/predictors/"
 cp predictor/data/*.pkl "$STAGE/app/predictor/data/"
 cp predictor/data/tau-bench/historical_trajectories/*airline.json "$STAGE/app/predictor/data/tau-bench/historical_trajectories/"
 cp controller/prewarm_controller.py "$STAGE/app/controller/"
@@ -42,7 +44,7 @@ cp loadtest/*.py "$STAGE/app/loadtest/"
 # pulse-v3 (code only: its model comes from the S3 registry, its data/ stays out): the UI pod and the training Job
 tar -cf - --exclude=data --exclude=__pycache__ --exclude=tests pulse_pred | tar -xf - -C "$STAGE/app"
 cp test/test_knative/data/*.jsonl "$STAGE/app/test/test_knative/data/"
-cp baselines/llm_speculator/{service,common,prompt,speculate}.py "$STAGE/app/baselines/llm_speculator/"
+cp baselines/llm_speculator/{common,prompt,speculate}.py "$STAGE/app/baselines/llm_speculator/"   # the speculator's prompt + LLM calls
 cp "$HERE/cloud_entry.sh" "$STAGE/app/"
 # the demo UI (pulse-ui pod) + what it reads: measured cold starts (simulated cluster), earlier results (Results tab)
 mkdir -p "$STAGE/app/ui/static" "$STAGE/app/deploy/knative/results" "$STAGE/app/results"

@@ -121,7 +121,7 @@ def sim_min_scale(body: dict):
 
 # ---------------------------------------------------------------- services
 class PredictorIn(BaseModel):
-    model: str = "gbt"
+    model: str = "lightgbm"         # lightgbm | markov | speculator | pulse_v3
     theta: float = 0.3
     policy: dict | None = None      # {"policy": "theta"|"topk", "top_k", "p_min", "lookahead", "theta_next"}
 
@@ -289,45 +289,54 @@ def run_stop():
     return {"ok": True}
 
 
-# ---------------------------------------------------------------- models (pulse-v3 registry on S3)
+# ---------------------------------------------------------------- models (the S3 registry: pulse_v3 | action)
 @app.get("/api/models")
-def models():
-    return backend.models_list()
+def models(family: str = "pulse_v3"):
+    try:
+        return backend.models_list(family)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/models/use")
 def models_use(body: dict):
-    """Serve one registry version with pulse_v3 (keeps the card's θ / policy; CRDs if in Knative mode)."""
+    """Serve one registry version (keeps the card's θ / policy; CRDs if in Knative mode). action = lightgbm + markov:
+    keeps the running one of the two, else lightgbm."""
     v = str(body.get("version") or "")
     if not v:
         raise HTTPException(400, "which version?")
+    try:
+        preds = backend.family(body.get("family"))["predictors"]
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     cur = services.procs.get("predictor")
     info = cur.info if cur else {}
-    return services.start_predictor("pulse_v3", float(info.get("theta", 0.3)), cluster.mode == "knative",
+    model = info.get("model") if info.get("model") in preds else preds[0]
+    return services.start_predictor(model, float(info.get("theta", 0.3)), cluster.mode == "knative",
                                     info.get("policy"), model_version=v)
 
 
 @app.post("/api/models/promote")
 def models_promote(body: dict):
     try:
-        backend.models_promote(str(body.get("version") or ""))
+        backend.models_promote(str(body.get("version") or ""), body.get("family"))
     except Exception as e:
         raise HTTPException(400, f"{type(e).__name__}: {e}")
-    return backend.models_list()
+    return backend.models_list(body.get("family"))
 
 
 @app.post("/api/models/pin")
 def models_pin(body: dict):
     """GitOps: write the version into pulse-config in this checkout (no commit; review it, then push / PR)."""
     try:
-        return backend.models_pin_in_git(str(body.get("version") or ""))
+        return backend.models_pin_in_git(str(body.get("version") or ""), body.get("family"))
     except ValueError as e:
         raise HTTPException(400, str(e))
 
 
 @app.post("/api/models/retrain")
 def models_retrain(spec: dict):
-    """pulse_pred/train.py here, or the training Job in the cluster; its log streams in the Experiments tab."""
+    """The family's training here, or its training Job in the cluster; the log streams in the Experiments tab."""
     if busy():
         raise HTTPException(409, busy())
     try:
@@ -449,7 +458,7 @@ def _startup():
         cluster.mode = "knative"
     # load the main predictor right away: importing LightGBM + the models takes up to a minute on a laptop
     if os.getenv("UI_AUTOSTART_PREDICTOR", "1") != "0":
-        services.start_predictor("gbt", 0.3, crd=cluster.mode == "knative")
+        services.start_predictor(os.getenv("UI_PREDICTOR", "lightgbm"), 0.3, crd=cluster.mode == "knative")
 
 
 @app.on_event("shutdown")

@@ -4,7 +4,7 @@ Pulse's Grafana dashboards as code: edit the panels here, then
     python deploy/monitoring/dashboards/build.py        # writes the *.json next to this file
     bash deploy/monitoring/install.sh                    # loads them into Grafana (ConfigMaps)
 
-Every query uses metrics whose names are fixed by this repository (predictor/service.py, pulse_pred/service.py,
+Every query uses metrics whose names are fixed by this repository (predictor/service.py,
 controller/prewarm_controller.py, test/test_knative/pulse_metrics.py) or by kube-state-metrics / node-exporter /
 cAdvisor. Knative's own metrics are scraped too, but have no panels yet (check their names on the cluster first).
 The UI's Monitoring tab embeds these dashboards by uid.

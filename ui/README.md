@@ -115,7 +115,7 @@ Settings (environment):
 |---|---|---|
 | `UI_PORT` | 8765 | Port the UI listens on |
 | `UI_PREDICTOR_PORT` | 8000 | Port of the predictor the UI starts |
-| `UI_AUTOSTART_PREDICTOR` | 1 | Set to 0 to skip loading gbt at launch |
+| `UI_AUTOSTART_PREDICTOR` | 1 | Set to 0 to skip loading a predictor at launch (`UI_PREDICTOR`, default lightgbm) |
 | `PLOT_PYTHON` | | Python used for the plots |
 | `UI_HOST` | 127.0.0.1 | Bind address (`0.0.0.0` in the pod, behind the ClusterIP Service) |
 | `UI_RESULTS_DIR` | | Where new runs and plots go (the pod: `/home/app/results/cloud_runs`); unset = `results/` |
