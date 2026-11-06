@@ -16,7 +16,7 @@ import subprocess
 import time
 
 os.environ.setdefault("TOOL_BACKEND", "mcp")
-os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:8081/mcp")
+os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 from pulse import paths  # noqa: E402
 from pulse.agent.tools import make_tool_backend  # noqa: E402

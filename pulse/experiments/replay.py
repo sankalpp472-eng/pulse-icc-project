@@ -53,7 +53,7 @@ from pathlib import Path
 from pulse import paths  # noqa: E402
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 os.environ.setdefault("TOOL_BACKEND", "mcp")
-os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:8081/mcp")
+os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 
 from pulse.experiments.common import (COLD_LATENCY_S, PodWatcher, peak_pods, reset_db, run_config, run_dir,  # noqa: E402

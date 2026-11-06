@@ -27,7 +27,7 @@ service account and calls the tools at http://{svc}.default.svc.cluster.local/mc
 Settings (environment):
   KUBE_CONTEXT       cluster to watch      (default: current kubectl context; ignored in the cluster)
   CRD_NAMESPACE      namespace             (default: default)
-  MCP_URL_TEMPLATE   ingress URL for a tool (default http://127.0.0.1:8081/mcp; EKS: set by infra/eks/use_eks.sh)
+  MCP_URL_TEMPLATE   ingress URL for a tool (default http://127.0.0.1:31080/mcp; EKS: set by infra/eks/use_eks.sh)
   MCP_HOST_TEMPLATE  Host header           (default {svc}.default.example.com; empty = no Host header)
   MAX_REQUEST_AGE_S  ignore requests older than this, e.g. left over from an earlier run (default 30)
   CONTROLLER_LOG     one JSON line per action (default results/controller.jsonl)
@@ -51,7 +51,7 @@ from prometheus_client import Counter, Histogram, start_http_server
 GROUP, VERSION, PLURAL = "pulse.iisc.ac.in", "v1alpha1", "prewarmrequests"
 from pulse import paths  # noqa: E402
 NS = os.getenv("CRD_NAMESPACE", "default")
-URL_TPL = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:8081/mcp")
+URL_TPL = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 HOST_TPL = os.getenv("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 MAX_AGE_S = float(os.getenv("MAX_REQUEST_AGE_S", "30"))
 LOG = Path(os.getenv("CONTROLLER_LOG") or paths.RESULTS / "controller.jsonl")

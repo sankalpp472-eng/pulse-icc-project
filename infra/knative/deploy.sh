@@ -73,7 +73,7 @@ kubectl get ksvc -l pulse/role=$ROLE
 echo
 echo "Agent settings for these tools:"
 echo "  TOOL_BACKEND=mcp"
-echo "  MCP_URL_TEMPLATE=http://127.0.0.1:8081/mcp"
+echo "  MCP_URL_TEMPLATE=http://127.0.0.1:31080/mcp"
 if [ "$DOMAIN" = retail ]; then
   echo "  MCP_HOST_TEMPLATE=retail-{svc}.default.example.com"
 else

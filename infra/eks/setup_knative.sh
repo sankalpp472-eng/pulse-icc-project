@@ -5,7 +5,7 @@
 #   ALLOW_CIDR="$(curl -s https://checkip.amazonaws.com)/32" bash infra/eks/setup_knative.sh
 #
 # Differences from the local setup: no kind cluster to create, and Kourier gets an AWS load balancer
-# (a public hostname) instead of a NodePort on localhost:8081.
+# (a public hostname) instead of a NodePort on localhost:31080.
 # ALLOW_CIDR (recommended): only this IP range may reach the load balancer; without it the tools
 # are open to the whole internet.
 set -euo pipefail

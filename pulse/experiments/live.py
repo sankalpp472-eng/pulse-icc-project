@@ -78,7 +78,7 @@ os.environ["USER_DELAY_MEDIAN_S"] = str(ARGS.user_delay_median)
 os.environ["USER_DELAY_SIGMA"] = str(ARGS.user_delay_sigma)
 os.environ["USER_DELAY_SEED"] = str(ARGS.user_delay_seed)
 os.environ.setdefault("TOOL_BACKEND", "mcp")
-os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:8081/mcp")
+os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 # hints.py reads these at import: without --predictor-url no hints are sent (C0)
 os.environ["PREDICTOR_URL"] = ARGS.predictor_url or ""

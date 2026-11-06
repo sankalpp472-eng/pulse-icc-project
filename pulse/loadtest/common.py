@@ -24,7 +24,7 @@ from types import SimpleNamespace
 from pulse import paths
 
 COLD_S = 1.0                     # a tool call slower than this counts as cold (the runners' latency rule)
-URL_TPL = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:8081/mcp")
+URL_TPL = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 HOST_TPL = os.getenv("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 
 

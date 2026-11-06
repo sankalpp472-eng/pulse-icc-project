@@ -19,7 +19,7 @@ kubectl apply -f "https://github.com/knative/serving/releases/download/$KN/servi
 kubectl wait --for=condition=Established --all crd --timeout=120s
 kubectl apply -f "https://github.com/knative/serving/releases/download/$KN/serving-core.yaml"
 
-# 3. Kourier as the networking layer, exposed on NodePort 31080 (-> localhost:8081)
+# 3. Kourier as the networking layer, exposed on NodePort 31080 (-> localhost:31080)
 kubectl apply -f "https://github.com/knative-extensions/net-kourier/releases/download/$KN/kourier.yaml"
 kubectl patch configmap/config-network -n knative-serving --type merge \
   -p '{"data":{"ingress-class":"kourier.ingress.networking.knative.dev"}}'
@@ -38,5 +38,5 @@ kubectl apply -f service.yaml
 kubectl wait ksvc/cold-tool --for=condition=Ready --timeout=300s
 
 echo
-echo "Ready. Ingress: http://127.0.0.1:8081  (Host: cold-tool.default.example.com)"
+echo "Ready. Ingress: http://127.0.0.1:31080  (Host: cold-tool.default.example.com)"
 echo "Run:   python c0_baseline.py --trials 10"

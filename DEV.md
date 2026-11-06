@@ -173,7 +173,7 @@ names. `pulse/setup/` gets a fresh clone ready: `download_data.py` (tau-bench da
 |---|---|
 | `knative/` | The tools' image (`Dockerfile.mcp`), `deploy.sh` (Redis + the tools as Knative Services, min-scale 0 or 1) |
 | `prewarm/` | The `PrewarmRequest` CRD: the contract between predictor (writes `.spec`) and controller (writes `.status`) |
-| `kind/` | Local cluster: kind + Knative + Kourier (NodePort on localhost:8081) |
+| `kind/` | Local cluster: kind + Knative + Kourier (NodePort on localhost:31080) |
 | `eks/` | `cluster.yaml` (eksctl: 2 worker nodes + 1 client node), `eks_up.sh` (cluster, Knative + Kourier with an AWS load balancer open to your IP only, the tools, the CRD, a cold/warm check), `eks_down.sh`, `setup_knative.sh` |
 | `cloud/` | The runner image (`Dockerfile`, `build_image.sh` → ECR or kind), `pulse-cloud.yaml` (RBAC, `pulse-predictor` with `PREDICTOR=…`, `pulse-embed`, `pulse-controller`), `cloud_up.sh` (deploy + the LLM-key Secret), `run_cloud.sh` (a run as a pod; results copied back), `kustomization.yaml` + `gitops/` (the same manifests for Argo CD) |
 | `monitoring/` | kube-prometheus-stack values, PodMonitors for Pulse's components, the Grafana dashboards (`dashboards/build.py` generates them), `install.sh` |
@@ -247,7 +247,7 @@ Argo CD does not manage the tools (experiments switch their min-scale at runtime
 |---|---|
 | 8765 | the UI |
 | 8000 | the predictor |
-| 8081 | Kourier on kind (the tools) |
+| 31080 | Kourier on kind (the tools) |
 | 8091 | the embedding server |
 | 9102 / 9105 | Prometheus metrics of the controller / of a run |
 | 13000 / 18080 / 8089 | local forwards to Grafana / Argo CD, Locust's web UI |

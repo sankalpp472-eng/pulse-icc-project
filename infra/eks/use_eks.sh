@@ -6,7 +6,7 @@
 # Sets for this terminal:
 #   kubectl context      -> the EKS cluster (pod watcher, Redis reset, deploys all use it)
 #   KUBE_CONTEXT         -> same, for infra/knative/deploy.sh
-#   MCP_URL_TEMPLATE     -> http://<Kourier load balancer>/mcp   (was http://127.0.0.1:8081/mcp)
+#   MCP_URL_TEMPLATE     -> http://<Kourier load balancer>/mcp   (was http://127.0.0.1:31080/mcp)
 #   MCP_HOST_TEMPLATE    -> {svc}.default.example.com           (unchanged)
 # Undo with: source infra/eks/use_local.sh
 

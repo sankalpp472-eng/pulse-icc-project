@@ -108,7 +108,7 @@ class Cluster:
         self.reachable = self.tools_found > 0
         self.detail = f"{self.tools_found} tools deployed" if self.reachable else "no Pulse tools deployed"
         if self.context.startswith("kind-"):
-            self.url_tpl, self.host_tpl = "http://127.0.0.1:8081/mcp", "{svc}.default.example.com"
+            self.url_tpl, self.host_tpl = "http://127.0.0.1:31080/mcp", "{svc}.default.example.com"
         else:                                   # EKS from the laptop: Kourier's load balancer
             code, lb = _run(["kubectl", "get", "svc", "kourier", "-n", "kourier-system", "-o",
                              "jsonpath={.status.loadBalancer.ingress[0].hostname}"], 10)

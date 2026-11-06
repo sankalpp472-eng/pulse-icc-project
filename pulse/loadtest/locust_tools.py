@@ -6,7 +6,7 @@ call). Calls slower than 1 s count as cold. Watch the pods in the UI or Grafana 
     locust -f pulse/loadtest/locust_tools.py --headless                          # 2, 5, 10, 20 users, 60 s each
     locust -f pulse/loadtest/locust_tools.py --headless --stages "20:60:20"      # a burst: 20 users at once
 
-The tools' address comes from MCP_URL_TEMPLATE / MCP_HOST_TEMPLATE (kind: http://127.0.0.1:8081/mcp + Host header;
+The tools' address comes from MCP_URL_TEMPLATE / MCP_HOST_TEMPLATE (kind: http://127.0.0.1:31080/mcp + Host header;
 the UI sets them for the current cluster).
 """
 
