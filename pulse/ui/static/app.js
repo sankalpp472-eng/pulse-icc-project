@@ -74,12 +74,14 @@ async function loadSetup() {
     pill(d.trajectories === d.of, `tau-bench data ${d.trajectories}/${d.of}`, "data/tau-bench (Download data)") +
     pill(d.schemas > 0, `tool schemas ${d.schemas}`) +
     pill(m.action, "lightgbm + markov model", "models/action_model.pkl") +
+    pill(m.action_retail, "retail lightgbm + markov", "models/action_model_retail.pkl (Train retail lightgbm + markov)") +
     pill(m.pulse_v3, "pulse-v3 model", "models/pulse_v3/predictor.pkl (Train pulse-v3, or the S3 registry)") +
     pill(m.embed_server, "embedding server", "llama.cpp + nomic-embed-text on :8091 (pulse-v3)") +
     pill(env.llm_ready, env.llm_ready ? "LLM keys set" : "no LLM keys", "live runs, the AI customer, the speculator");
   $("#sEnvState").textContent = Object.entries(env.values).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(" · ") || "nothing set yet";
   $("#sTools").innerHTML = Object.entries(s.tools).map(([t, ok]) => pill(ok, t)).join("");
-  $("#sKind").textContent = s.kind.exists ? "cluster pulse-kn exists" : "no cluster";
+  $("#sKind").textContent = s.kind.exists
+    ? "cluster pulse-kn exists" + (s.kind.retail_tools ? ` · ${s.kind.retail_tools} retail tools` : "") : "no cluster";
   $("#sKind").className = "pill " + (s.kind.exists ? "ok" : "");
   $("#sEks").textContent = (s.eks.account ? `AWS ${s.eks.account}` : "not logged in to AWS") +
     (s.eks.context ? " · cluster context found" : "") + (s.images.ecr ? ` · image ${s.images.ecr.split(":").pop()}` : "");
@@ -130,6 +132,32 @@ const clusterSeg = seg("clusterSeg", async (mode) => {
     clusterSeg.set(state.cluster?.mode || "sim");
   }
 });
+// airline (14 tools) or retail (16): the tools experiment runs use on the real cluster
+let shownDomain = null;
+const domainSeg = seg("domainSeg", async (domain) => {
+  try {
+    const i = await api("/api/domain", { domain });
+    toast(`${domain}: ${i.detail}`, 5000);
+    shownDomain = domain;
+    domainForm(domain);
+  } catch (err) {
+    toast(err.message, 6000);
+    domainSeg.set(state.cluster?.domain || "airline");
+  }
+});
+// what the Experiments form offers for the domain: its task presets; retail has no live agent, speculator or run pod
+function domainForm(domain) {
+  const retail = domain === "retail";
+  $$("#xTasksPreset option[data-domain]").forEach((o) => { o.hidden = o.disabled = o.dataset.domain !== domain; });
+  const sel = $("#xTasksPreset");
+  if (sel.selectedOptions[0]?.disabled) { sel.value = retail ? "r-heldout" : "heldout"; sel.onchange(); }
+  for (const [id, off] of [["#xMode button[data-v=live]", retail], ["#xWherePod", retail]]) $(id).disabled = off;
+  if (retail && xMode.get() === "live") { xMode.set("replay"); expForm(); }
+  if (retail && xWhere.get() === "cluster") xWhere.set("laptop");
+  const spec = $("#xPred option[value=speculator]");
+  spec.disabled = retail;
+  if (retail && $("#xPred").value === "speculator") { $("#xPred").value = "lightgbm"; expForm(); }
+}
 $("#detectBtn").onclick = async () => {
   try {
     const i = await api("/api/cluster/detect", {});
@@ -520,6 +548,7 @@ $("#lTarget").onchange = $("#lEngine").onchange = () => expForm();
 function expTasks() {
   const v = $("#xTasksPreset").value;
   if (v === "heldout" || v === "heldout-seq") return HELDOUT;
+  if (v === "r-heldout") return state.cluster?.heldout || null;     // null: no retail model trained yet
   if (v === "fanout") return [2, 3, 28, 30, 31, 33, 34];
   if (v === "30") return [30];
   if (v === "all") return [];
@@ -543,6 +572,8 @@ $("#xStart").onclick = async () => {
     burst: $("#lBurst").value, pause: Number($("#lPause").value),
   };
   if (live && !spec.tasks.length) return toast("Pick tasks for a live run");
+  if (spec.tasks === null || (spec.tasks.length === 0 && $("#xTasksPreset").value === "r-heldout"))
+    return toast("No held-out retail tasks yet: Setup -> Train retail lightgbm + markov writes them (or pick All tasks)", 7000);
   try {
     const r = await api("/api/run/start", spec);
     runAfter = 0;
@@ -958,6 +989,7 @@ async function poll() {
     state = s;
     const c = s.cluster;
     clusterSeg.set(c.mode);
+    if (c.domain && c.domain !== shownDomain) { shownDomain = c.domain; domainSeg.set(c.domain); domainForm(c.domain); }
     $("#ctxName").textContent = c.context ? `(${c.context.replace(/^.*@/, "")})` : "";
     $$(".sim-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "sim"));
     $$(".knative-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "knative"));

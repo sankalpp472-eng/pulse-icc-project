@@ -22,6 +22,9 @@
       <button data-mode="knative">Knative <span id="ctxName" class="muted"></span></button>
     </div>
     <button class="ghost small" id="detectBtn" title="Check the kubectl context">↻</button>
+    <div class="seg knative-only hidden" id="domainSeg" title="Which tau-bench tools experiment runs use (retail: Setup -> Deploy the retail tools)">
+      <button data-v="airline" class="on">Airline · 14 tools</button><button data-v="retail">Retail · 16 tools</button>
+    </div>
     <span class="mon-box hidden" id="monBox">
       <span class="pill" id="monPill" title="Prometheus + Grafana (infra/monitoring)">monitoring</span>
       <a id="monLink" class="hidden" href="/grafana/" target="_blank" title="Grafana, through this UI">Grafana ↗</a>
@@ -224,11 +227,12 @@
           </label>
           <label>Tasks
             <select id="xTasksPreset">
-              <option value="heldout">Held-out: 6 20 22 26 30</option>
-              <option value="heldout-seq">Held-out, no fan-out (calls one at a time)</option>
-              <option value="fanout">Fan-out tasks: 2 3 28 30 31 33 34</option>
-              <option value="30">Task 30 only</option>
-              <option value="all">All W1 tasks (replay)</option>
+              <option value="heldout" data-domain="airline">Held-out: 6 20 22 26 30</option>
+              <option value="heldout-seq" data-domain="airline">Held-out, no fan-out (calls one at a time)</option>
+              <option value="fanout" data-domain="airline">Fan-out tasks: 2 3 28 30 31 33 34</option>
+              <option value="30" data-domain="airline">Task 30 only</option>
+              <option value="r-heldout" data-domain="retail">Held-out retail tasks (the retail model never saw them)</option>
+              <option value="all">All tasks (replay)</option>
               <option value="custom">Custom…</option>
             </select>
           </label>
@@ -350,6 +354,7 @@
         <div class="actions">
           <button data-act="download_data">Download data</button>
           <button data-act="train_action">Train lightgbm + markov</button>
+          <button data-act="train_action_retail">Train retail lightgbm + markov</button>
           <button data-act="embed_start">Start embedding server</button>
           <button class="ghost" data-act="embed_stop">Stop it</button>
           <button data-act="train_pulse_v3">Train pulse-v3</button>
@@ -382,11 +387,14 @@
         <div class="card-head"><h3>Local cluster (kind)</h3><span class="pill" id="sKind">…</span></div>
         <div class="actions">
           <button data-act="kind_create">Create cluster</button>
+          <button data-act="retail_tools">Deploy the retail tools</button>
           <button data-act="image_build" data-target="kind">Build image for kind</button>
           <button class="ghost" data-act="kind_delete">Delete cluster</button>
         </div>
         <p class="muted small">Free. Then switch the top bar to <b>Knative</b> to use it; deploy Pulse's own pods below only for
-          in-cluster runs.</p>
+          in-cluster runs. The cluster starts with the 14 airline tools; <b>Deploy the retail tools</b> adds tau-bench's
+          16 retail tools next to them (then pick <b>Retail</b> in the top bar, and train the retail model above for
+          lightgbm / markov).</p>
       </div>
 
       <div class="card">

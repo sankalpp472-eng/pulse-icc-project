@@ -46,12 +46,13 @@ def episodes(seed: int = 252, tasks: list[int] | None = None, n: int = 46, fanou
         return w1_replay.plan(a)
 
 
-def episode_hints(ep: dict, episode_id: str, workflow: str = "W1") -> list[dict]:
+def episode_hints(ep: dict, episode_id: str, workflow: str | None = None) -> list[dict]:
     """The hints of one episode, in order, as the agent sends them (see w1_replay.Replay.send_hint)."""
+    from pulse.experiments.common import DOMAIN, WORKLOAD
     out, traj = [], []
     for idx in ep["groups"]:
         for _, sig, hist in ep["hints"][idx[0]]:
-            h = {"workflow_id": workflow, "episode_id": episode_id, "trajectory": traj[-8:],
+            h = {"workflow_id": workflow or WORKLOAD, "domain": DOMAIN, "episode_id": episode_id, "trajectory": traj[-8:],
                  "current_tool": traj[-1] if traj else "START", "ts": time.time()}
             if sig is not None:
                 h["signals"] = sig

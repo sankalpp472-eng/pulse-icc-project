@@ -10,6 +10,8 @@ Where the model comes from:
   ACTION_MODEL_VERSION  pin a version (GitOps: pulse-config), instead of latest
   otherwise             the file ACTION_MODEL_PATH (default models/action_model.pkl, in git and in the image).
 If the registry can't be read the predictor still starts, from that file, and /healthz says why.
+DOMAIN=retail: the retail model, models/action_model_retail.pkl (train_action.py --domain retail; the registry holds
+the airline model only).
 """
 
 import os
@@ -19,8 +21,10 @@ from pulse import compat, paths, registry
 from pulse.predictor.contract import PredictRequest
 from pulse.predictor.predictors.base import Predictor
 
-ACTION_PATH = Path(os.getenv("ACTION_MODEL_PATH") or paths.MODELS / "action_model.pkl")
-ACTION_URI = os.getenv("ACTION_MODEL_URI", "")
+DOMAIN = "retail" if os.getenv("DOMAIN") == "retail" else "airline"
+ACTION_PATH = Path(os.getenv("ACTION_MODEL_PATH") or
+                   paths.MODELS / ("action_model_retail.pkl" if DOMAIN == "retail" else "action_model.pkl"))
+ACTION_URI = os.getenv("ACTION_MODEL_URI", "") if DOMAIN == "airline" else ""
 ACTION_VERSION = os.getenv("ACTION_MODEL_VERSION", "")
 _CACHE = {}
 
@@ -43,7 +47,9 @@ def load_action_model():
     if "m" not in _CACHE:
         path, source, version, error = model_file()
         if not path.exists():
-            raise SystemExit(f"{path} is missing: python -m pulse.setup.train_models action (or set ACTION_MODEL_URI)")
+            how = "action_retail (or the UI: Setup -> Train retail lightgbm + markov)" if DOMAIN == "retail" else \
+                "action (or set ACTION_MODEL_URI)"
+            raise SystemExit(f"{path} is missing: python -m pulse.setup.train_models {how}")
         _CACHE["m"] = compat.load(path)
         _CACHE["info"] = {"model_file": str(path), "model_source": source, "model_version": version,
                           "model_uri": ACTION_URI or None, **({"registry_error": error} if error else {})}
@@ -54,6 +60,7 @@ class ActionPickle(Predictor):
     """A predictor backed by one model inside action_model.pkl."""
     key = ""                       # model name inside the pickle
     supports_fanout = True
+    domains = (DOMAIN,)            # one model per domain
 
     def __init__(self):
         self.am = load_action_model()

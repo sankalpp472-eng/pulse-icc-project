@@ -11,7 +11,7 @@ agent ────────────────────────�
 ```
 
 It is built on [tau-bench](https://github.com/sierra-research/tau-bench)'s airline customer-service tasks (14
-tools), with a ReAct agent, an LLM-simulated customer, four interchangeable predictors, a prewarm controller,
+tools; the retail domain's 16 tools can be replayed too), with a ReAct agent, an LLM-simulated customer, four interchangeable predictors, a prewarm controller,
 experiment runners and a demo UI. It runs on a simulated cluster (nothing to install), a local Knative cluster
 (kind), or AWS EKS. Everything is driven from the UI.
 
@@ -62,9 +62,9 @@ Setup → *Tools on this machine* shows which of these are installed.
 
 | Card | Buttons |
 |---|---|
-| This project | Download data · Train lightgbm + markov (they ship trained; this reproduces them, ~1 min) · Start / stop the embedding server · Train pulse-v3 |
+| This project | Download data · Train lightgbm + markov (they ship trained; this reproduces them, ~1 min) · Train retail lightgbm + markov (~1 min) · Start / stop the embedding server · Train pulse-v3 |
 | LLM keys and settings | Groq / OpenRouter keys, the LLM backend, a local OpenAI-compatible server for the speculator. Saved to `.env`; values are never shown again |
-| Local cluster (kind) | Create cluster (kind + Knative + Kourier + Redis + the 14 tools at scale-to-zero, ~10 min) · Build image for kind · Delete cluster |
+| Local cluster (kind) | Create cluster (kind + Knative + Kourier + Redis + the 14 tools at scale-to-zero, ~5 min) · Deploy the retail tools (the 16 retail tools next to them, ~3 min) · Build image for kind · Delete cluster |
 | AWS EKS | Region · Build + push image (to your ECR) · Create cluster (~25 min) · Delete cluster · Check for leftovers |
 | Pulse in the current cluster | Deploy Pulse's services (predictor, prewarm controller, embedding server) · Switch predictor · Install Prometheus + Grafana |
 | Cloud extras | Terraform plan / apply (S3 model registry, ECR, CI roles) · Upload training data · Publish local model · GitOps: set my AWS account · Install Argo CD |
@@ -77,7 +77,11 @@ One job runs at a time.
 - **Simulated cluster** (default): pods, cold starts and the 60 s idle window are simulated, with cold-start times
   measured on EKS (`data/coldstart/`). No cluster needed.
 - **Knative**: the real tools on the current kubectl context (kind or EKS). The bar also shows monitoring and
-  GitOps status.
+  GitOps status, and the **domain**: *Airline* (14 tools, the default) or *Retail* (16 tools; deploy them first,
+  Setup → Local cluster). With *Retail*, experiment runs replay tau-bench's recorded retail conversations
+  (workload W3) and lightgbm / markov use the retail model (Setup → *Train retail lightgbm + markov*; it also
+  picks the 23 held-out retail tasks the Experiments tab offers). Our live agent, the LLM speculator and in-cluster
+  runs are airline only.
 
 ### Predictor card (right side)
 
@@ -127,6 +131,9 @@ Batch runs that write a result folder to `results/`:
 **Local Knative.** Setup → *Create cluster* (kind). Top bar → *Knative*. Experiments → Replay, C0, then C3 →
 Results → compare and plot. Optional: Setup → *Install Prometheus + Grafana*, then the Monitoring tab.
 
+**Retail on kind.** Setup → *Train retail lightgbm + markov*, *Deploy the retail tools* → top bar *Knative*,
+*Retail* → Experiments → Replay, held-out retail tasks, C0 then C3 → Results.
+
 **AWS EKS.** Setup → AWS EKS: *Build + push image*, *Create cluster* (confirms the cost) → Pulse in the current
 cluster: *Deploy Pulse's services* → top bar *Knative* → Experiments with Runner = *Run pod* → Results.
 **At the end of every session**: Setup → *Delete cluster*, then *Check for leftovers*. ECR images and the S3
@@ -154,7 +161,7 @@ virtual environment's Python):
 
 ```bash
 python -m pulse.setup.download_data                     # data/tau-bench/
-python -m pulse.setup.train_models action|pulse_v3|all   # models/
+python -m pulse.setup.train_models action|action_retail|pulse_v3|all   # models/
 bash scripts/embed_server.sh [stop]                      # pulse_v3's embedding server (Docker)
 PREDICTOR=lightgbm python -m uvicorn pulse.predictor.service:app --port 8000
 python -m pulse.controller.prewarm_controller

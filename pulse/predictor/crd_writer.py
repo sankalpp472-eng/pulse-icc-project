@@ -30,8 +30,9 @@ from pulse import paths
 
 
 def service_name(tool: str) -> str:
-    """search_direct_flight -> search-direct-flight (same rule as pulse/agent/gen_services.py)"""
-    return tool.replace("_", "-")
+    """search_direct_flight -> search-direct-flight; with DOMAIN=retail get_order_details -> retail-get-order-details
+    (same rule as pulse/agent/gen_services.py)"""
+    return ("retail-" if os.getenv("DOMAIN") == "retail" else "") + tool.replace("_", "-")
 
 
 def make_object(tool, probability, threshold, ttl_s, episode_id="", workflow_id="",

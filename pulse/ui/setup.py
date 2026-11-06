@@ -28,11 +28,13 @@ IMAGE_FILE = {"ecr": CLOUD / ".image-ecr", "kind": CLOUD / ".image-kind"}
 ACTIONS = {   # name: (what the button does, confirm text or None)
     "download_data": ("Download the tau-bench data", None),
     "train_action": ("Train lightgbm + markov (~1 min)", None),
+    "train_action_retail": ("Train the retail lightgbm + markov (~1 min)", None),
     "embed_start": ("Start the embedding server (Docker)", None),
     "embed_stop": ("Stop the embedding server", None),
     "train_pulse_v3": ("Train pulse-v3 (~45 min, needs the embedding server)", None),
     "kind_create": ("Create the local kind cluster with Knative and the 14 tools (~10 min)", None),
     "kind_delete": ("Delete the local kind cluster", "Delete the kind cluster pulse-kn and everything in it?"),
+    "retail_tools": ("Deploy the 16 retail tools into the kind cluster (~5 min)", None),
     "image_build": ("Build the runner image", None),
     "eks_create": ("Create the EKS cluster, Knative and the tools (~25 min)",
                    "Create an EKS cluster in your AWS account? It costs money by the hour (about $0.10 for the "
@@ -116,6 +118,13 @@ def _kind_exists():
     return code == 0 and "pulse-kn" in out.split()
 
 
+def _retail_tools() -> int:
+    """How many retail tool services the kind cluster has (Deploy the retail tools)."""
+    code, out = backend._run(["kubectl", "--context", "kind-pulse-kn", "get", "ksvc", "-l", backend.DOMAINS["retail"]["role"],
+                              "-o", "name", "--request-timeout=6s"], 10)
+    return len(out.split()) if code == 0 else 0
+
+
 def _eks_context():
     code, out = backend._run(["kubectl", "config", "get-contexts", "-o", "name"], 10)
     return next((c for c in out.split() if "pulse-eks" in c), None) if code == 0 else None
@@ -138,10 +147,11 @@ def status(cluster) -> dict:
     tools["bash"] = bool(backend.bash())
     images = {t: (f.read_text().strip() if f.exists() else None) for t, f in IMAGE_FILE.items()}
     knative = cluster.mode == "knative" and cluster.reachable
+    kind = _kind_exists() if tools["kind"] else False
     return {
         "python": backend.PY, "tools": tools,
         "data": download_data.status(), "models": train_models.status(), "env": env_status(),
-        "kind": {"exists": _kind_exists() if tools["kind"] else False},
+        "kind": {"exists": kind, "retail_tools": _retail_tools() if kind else 0},
         "eks": {"context": _eks_context() if tools["kubectl"] else None,
                 "account": _aws_account() if tools["aws"] else None},
         "images": images,
@@ -173,6 +183,8 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
         return [(title, [py, "-m", "pulse.setup.download_data"], env)]
     if name == "train_action":
         return [(title, [py, "-m", "pulse.setup.train_models", "action"], env)]
+    if name == "train_action_retail":
+        return [(title, [py, "-m", "pulse.setup.train_models", "action_retail"], env)]
     if name == "train_pulse_v3":
         if not train_models.embed_server_up():
             raise ValueError("start the embedding server first (Setup -> Embedding server -> Start)")
@@ -188,6 +200,18 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
                                             "infra/prewarm/prewarmrequest-crd.yaml"], env)]
     if name == "kind_delete":
         return [(title, [_need_bash(), "infra/kind/teardown.sh"], env)]
+    if name == "retail_tools":
+        if not _kind_exists():
+            raise ValueError("create the kind cluster first (Local cluster -> Create cluster)")
+        # The published tools image predates the retail tools: build it here and load it into kind. kind.local/ is a
+        # registry Knative never looks up (registries-skipping-tag-resolving), so the nodes' copy is used.
+        b, image = _need_bash(), "kind.local/pulse-mcp-tools:retail"
+        return [("build the tools image (infra/knative/Dockerfile.mcp)",
+                 ["docker", "build", "-f", "infra/knative/Dockerfile.mcp", "-t", image, "."], env),
+                ("load it into the kind nodes", ["kind", "load", "docker-image", image, "--name", "pulse-kn"], env),
+                ("Redis DB 1 + the 16 retail tools at scale-to-zero (DOMAIN=retail infra/knative/deploy.sh)",
+                 [b, "infra/knative/deploy.sh", "0"],
+                 {**env, "DOMAIN": "retail", "SKIP_BUILD": "1", "IMAGE": image, "KUBE_CONTEXT": "kind-pulse-kn"})]
     if name == "image_build":
         target = p.get("target") if p.get("target") in ("ecr", "kind") else "ecr"
         return [(f"{title} for {target} (infra/cloud/build_image.sh)", [_need_bash(), "infra/cloud/build_image.sh"],

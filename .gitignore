@@ -14,6 +14,9 @@ data/speculator/
 models/pulse_v3/
 models/registry/
 models/action-model/
+# the retail model and its data (python -m pulse.setup.train_models action_retail)
+models/action_model_retail.pkl
+data/predictor/retail_*
 
 # outputs: experiment and load-test runs, logs, the UI's process logs
 results/

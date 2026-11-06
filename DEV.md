@@ -140,6 +140,15 @@ line per action and serves Prometheus metrics (port 9102). Runs on the laptop (t
 A run folder holds `calls.csv`, `pods.csv`, `episodes.jsonl`, `hints.jsonl` (C3), `run_config.json` and
 `summary.json` (latency percentiles, cold share, pod-seconds).
 
+**Domains.** `DOMAIN=airline` (default, workload W1) or `DOMAIN=retail` (W3). One variable switches every piece:
+the tools' backend and read-only set (`agent/tools.py`), the tool pods the runners watch (label
+`pulse/role=mcp-tool` / `mcp-tool-retail`), the Redis database reset between runs (DB 0: reservations, users; DB 1:
+orders, users), the replay's traces (retail: built from tau-bench's recorded retail conversations,
+`replay.tau_traces()`), the hints' `domain` and `workflow_id`, the action predictor's model
+(`models/action_model_retail.pkl`) and the PrewarmRequests' service names (`retail-<tool>`). The retail tools are
+Knative services `retail-<tool>` reached with `MCP_HOST_TEMPLATE=retail-{svc}.default.example.com`. The UI sets all
+of it from the top bar's domain switch; the live agent, the speculator and the in-cluster runner stay airline.
+
 ### 3.7 `pulse.loadtest`
 
 Locust (closed loop: `locust_predictor.py`, `locust_tools.py`, `locust_episodes.py`, with load stages in
@@ -184,7 +193,8 @@ names. `pulse/setup/` gets a fresh clone ready: `download_data.py` (tau-bench da
 **Images.** `pulse-runner` (`infra/cloud/Dockerfile`) runs the predictor, controller, run pods and training Jobs:
 the package, `models/action_model.pkl`, a locally trained pulse-v3 model if present, the airline trajectories and
 replay traces. The tools' image is built from `infra/knative/Dockerfile.mcp`; `deploy.sh` defaults to a published
-copy.
+copy (airline only). The UI's *Deploy the retail tools* builds it locally, loads it into kind as
+`kind.local/pulse-mcp-tools:retail` (a registry Knative does not resolve) and runs `DOMAIN=retail deploy.sh`.
 
 **Cloud concepts used:** serverless scale-to-zero (Knative), a custom resource with a controller (CRD +
 reconcile loop), containers and registries (Docker, ECR), managed Kubernetes (EKS) and its networking (load
@@ -201,7 +211,9 @@ Argo CD), observability (Prometheus, Grafana), load testing (Locust, asyncio), a
 | `action` | lightgbm, markov | `action_model.pkl` | `pulse.predictor.train_action` | lightgbm's held-out top-1 |
 | `pulse_v3` | pulse_v3 | `predictor.pkl` | `pulse.pulse_v3.train` | held-out warm@3 (the share of next calls that would find a warm pod with the top 3 prewarmed) |
 
-- **Locally** (no AWS): `python -m pulse.setup.train_models action|pulse_v3` writes `models/`.
+- **Locally** (no AWS): `python -m pulse.setup.train_models action|action_retail|pulse_v3` writes `models/`.
+  `action_retail` trains the retail lightgbm + markov on the LLM speculator's split (92 tasks, 23 held out:
+  `data/predictor/retail_split.json`); it is not in the registry.
 - **The S3 registry** (`pulse/registry.py`, bucket from `infra/terraform/model_store.tf`): one prefix per family
   (`pulse-v3/`, `action-model/`), one folder per version (model + `manifest.json` with sha256, scikit-learn
   version, metrics), `latest.json`, and the training data under `_data/` (keyed like `data/`).
@@ -241,6 +253,7 @@ Argo CD does not manage the tools (experiments switch their min-scale at runtime
 | `PULSE_MODEL_URI` / `PULSE_MODEL_VERSION` / `PULSE_MODEL`, `PULSE_EMBED_BASE` | pulse_v3 |
 | `ACTION_MODEL_URI` / `ACTION_MODEL_VERSION` / `ACTION_MODEL_PATH` | lightgbm, markov |
 | `PREDICTOR_URL`, `TOOL_BACKEND`, `MCP_URL_TEMPLATE`, `MCP_HOST_TEMPLATE`, `KUBE_CONTEXT` | the agent and the runners |
+| `DOMAIN` (`airline` / `retail`) | the tools, the runners, the predictor (§3.6) |
 | `REGION`, `TARGET`, `USE_TERRAFORM`, `USE_GITOPS` | the cluster and image scripts |
 
 | Port | Service |

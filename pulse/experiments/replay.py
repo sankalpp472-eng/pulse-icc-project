@@ -1,5 +1,7 @@
 """
 W1 C0 baseline, REPLAY: real tau-bench agent traces replayed against the 14 MCP tools on Knative.
+DOMAIN=retail: the same for the 16 retail tools (workload W3), with traces built from tau-bench's recorded retail
+conversations (every task, both models) instead of data/traces/w1_tau_traces.jsonl.
 
 No LLM is called. Each episode is one recorded agent run (GPT-4o or Claude 3.5 Sonnet on one
 of the 23 W1 change/cancel tasks; data/w1_tau_traces.jsonl) and replays its tool calls, with
@@ -56,8 +58,8 @@ os.environ.setdefault("TOOL_BACKEND", "mcp")
 os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 
-from pulse.experiments.common import (COLD_LATENCY_S, PodWatcher, peak_pods, reset_db, run_config, run_dir,  # noqa: E402
-                       predictor_info, save_predictor_health,
+from pulse.experiments.common import (COLD_LATENCY_S, DOMAIN, N_TOOLS, RETAIL, WORKLOAD,  # noqa: E402
+                       PodWatcher, peak_pods, reset_db, run_config, run_dir, predictor_info, save_predictor_health,
                        shared_db, tasks_tag, wait_all_ready, wait_all_zero)
 from pulse.experiments.metrics import RunMetrics  # noqa: E402
 from pulse.agent.tools import READ_ONLY_TOOLS as READ_TOOLS, LocalToolBackend, MCPToolBackend  # noqa: E402
@@ -156,7 +158,33 @@ def fanout_groups(trace: dict) -> list[list[int]]:
 
 TAU_DIR = paths.TRAJECTORIES
 HISTORY_N = 10     # conversation messages a hint carries for the LLM speculator (its prompt's LAST_N)
-TAU_FILES = {"gpt-4o": "gpt-4o-airline.json", "claude-3.5-sonnet": "sonnet-35-new-airline.json"}
+TAU_FILES = {"gpt-4o": f"gpt-4o-{DOMAIN}.json", "claude-3.5-sonnet": f"sonnet-35-new-{DOMAIN}.json"}
+
+
+def tau_traces() -> list[dict]:
+    """Retail: replay traces built from tau-bench's recorded conversations (both models, every task), in the format
+    of w1_tau_traces.jsonl: per call its tool, its arguments, and how many times the agent answered the customer
+    since the previous call (each answer = one customer turn the replay waits for)."""
+    from pulse.predictor.build_action_data import tool_calls
+    out = []
+    for model, fname in TAU_FILES.items():
+        if not (TAU_DIR / fname).exists():
+            raise SystemExit(f"{TAU_DIR / fname} missing: download the tau-bench data (python -m pulse.setup.download_data)")
+        for ep in json.loads((TAU_DIR / fname).read_text(encoding="utf-8")):
+            calls, turns = [], 0
+            for m in ep["traj"]:
+                if m.get("role") != "assistant":
+                    continue
+                tc = tool_calls(m)
+                if not tc:                     # the agent answers the customer
+                    turns += 1
+                    continue
+                calls += [{"tool": n, "args": args, "user_turns_before": turns if k == 0 else 0}
+                          for k, (n, args) in enumerate(tc)]
+                turns = 0
+            out.append({"task_id": ep["task_id"], "task_set": DOMAIN, "source_model": model,
+                        "trial": ep.get("trial", 0), "reward": ep.get("reward"), "calls": calls})
+    return out
 
 
 def attach_signals(traces: list[dict]) -> int:
@@ -221,7 +249,7 @@ def attach_signals(traces: list[dict]) -> int:
 
 def load_traces(paths: list[str] | None) -> list[dict]:
     if not paths:
-        return [json.loads(l) for l in open(TRACES, encoding="utf-8")]
+        return tau_traces() if RETAIL else [json.loads(l) for l in open(TRACES, encoding="utf-8")]
     out = []
     for p in map(Path, paths):
         out += live_traces(p) if p.is_dir() else [json.loads(l) for l in open(p, encoding="utf-8")]
@@ -347,7 +375,8 @@ class Replay:
             return
         import pulse.predictor.client as client
         wanted = client.inputs(self.predictor_url) | ({"history"} if self.hint_context else set())
-        hint = client.make_hint(wanted, episode, trajectory, self.workflow_id, signals=signals, history=history)
+        hint = client.make_hint(wanted, episode, trajectory, self.workflow_id, domain=DOMAIN, signals=signals,
+                                history=history)
 
         def post():
             rec, t0 = {"hint": hint}, time.perf_counter()
@@ -440,7 +469,7 @@ def main():
                                             "the prewarm controller must be running")
     ap.add_argument("--fanout", action="store_true",
                     help="fire independent runs of the same read-only tool at once (asyncio.gather), see top of file")
-    ap.add_argument("--workflow-id", default="W1", help="workflow id sent in hints")
+    ap.add_argument("--workflow-id", default=WORKLOAD, help="workflow id sent in hints (default W1; retail W3)")
     ap.add_argument("--hint-timing", choices=["fair", "legacy"], default="fair",
                     help="tau-bench traces: fair = a hint before every LLM step with only what was known then "
                          "(default); legacy = one hint at the gap start with the call step's signals (runs "
@@ -460,7 +489,7 @@ def main():
     episodes = plan(a)
     n_calls = sum(len(e["trace"]["calls"]) for e in episodes)
     span = episodes[-1]["start_offset_s"]
-    print(f"W1 replay | {len(episodes)} episodes, {n_calls} tool calls, starts spread over {span / 60:.1f} min "
+    print(f"{WORKLOAD} {DOMAIN} replay | {len(episodes)} episodes, {n_calls} tool calls, starts spread over {span / 60:.1f} min "
           f"(rate {a.rate}/min, seed {a.seed})")
     multi = [g for e in episodes for g in e["groups"] if len(g) > 1]
     fanout = {"enabled": a.fanout, "groups": len(multi), "calls_in_groups": sum(map(len, multi)),
@@ -472,13 +501,16 @@ def main():
     db = "redis (shared, reset once at start)" if shared_db() else "in-memory per pod (no shared DB!)"
     params = {k: v for k, v in vars(a).items()}
     cfg = run_config(sorted({e["trace"]["task_id"] for e in episodes}), db,
+                     "W3 retail (tau-bench, every task), replay of recorded traces" if RETAIL else
                      "W1 airline change/cancel (tau-bench), replay of recorded traces",
                      {"note": "replay: no LLM calls; " + (
                          "traces recorded by our ReAct agent (live runs), with their real gaps"
                          f" x{a.gap_scale}" if a.traces else
                          "traces recorded by gpt-4o and claude-3.5-sonnet (tau-bench), sampled gaps"),
                       "trace_models": sorted({e["trace"]["source_model"] for e in episodes})},
-                     {"replay": {**params, "traces_source": a.traces or [str(TRACES.relative_to(paths.ROOT))],
+                     {"replay": {**params, "traces_source": a.traces or (
+                                     [str((TAU_DIR / f).relative_to(paths.ROOT)) for f in TAU_FILES.values()] if RETAIL
+                                     else [str(TRACES.relative_to(paths.ROOT))]),
                                  "planned_calls": n_calls, "start_span_s": span, "fanout": fanout}})
     if a.predictor_url:   # scale-to-zero tools + predictor + prewarm controller = C3
         cfg["config"] = "C3" if cfg["config"] == "C0" else f"{cfg['config']}+prewarm"
@@ -513,10 +545,10 @@ def main():
     if scale_to_zero:
         wait_all_zero(watcher)          # C0 / C3: every run starts with all tools cold
         watcher.forget()                # pods from before the run (e.g. an old revision) are not part of it
-        start_state = "all 14 tools at zero"
+        start_state = f"all {N_TOOLS} tools at zero"
     else:
         wait_all_ready()                # C1 (min-scale 1): tools never go to zero; start once all are warm
-        start_state = "all 14 tools warm"
+        start_state = f"all {N_TOOLS} tools warm"
     if db.startswith("redis"):
         reset_db()
     print(f"{start_state}, database reset; starting\n")

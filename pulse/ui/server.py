@@ -112,6 +112,22 @@ def detect():
     return cluster.detect()
 
 
+@app.post("/api/domain")
+def set_domain(body: dict):
+    """Which tau-bench tools experiment runs use: airline (14 tools) or retail (16, deployed by Setup). The predictor
+    serves one domain, so it stops (runs start the right one)."""
+    domain = body.get("domain")
+    if domain not in backend.DOMAINS:
+        raise HTTPException(400, f"domain must be one of {sorted(backend.DOMAINS)}")
+    if busy():
+        raise HTTPException(409, f"Can't switch now: {busy()}")
+    if domain != cluster.domain:
+        services.stop("predictor")
+        cluster.domain = domain
+        cluster.pods = []
+    return cluster.detect() if cluster.mode == "knative" else cluster.info()
+
+
 @app.post("/api/sim/min_scale")
 def sim_min_scale(body: dict):
     sim.set_min_scale(int(body.get("min_scale", 0)))
@@ -128,7 +144,10 @@ class PredictorIn(BaseModel):
 @app.post("/api/predictor/start")
 def predictor_start(p: PredictorIn):
     crd = cluster.mode == "knative"
-    st = services.start_predictor(p.model, p.theta, crd, p.policy)
+    try:
+        st = services.start_predictor(p.model, p.theta, crd, p.policy)
+    except ValueError as e:                 # e.g. the speculator with the retail domain
+        raise HTTPException(400, str(e))
     if crd and not services.controller_running():
         st = services.start_controller()
     return st
@@ -147,6 +166,8 @@ def session_start(cfg: dict):
         raise HTTPException(409, busy())
     if cfg.get("kind") not in ("live", "replay", "recorded"):
         raise HTTPException(400, "kind must be live, replay or recorded")
+    if cluster.mode == "knative" and cluster.domain != "airline":
+        raise HTTPException(400, "The live demo's agent works on the airline tools: switch the domain to airline (top bar)")
     if cfg["kind"] == "recorded" and not (RECORDINGS / f"{cfg.get('recording')}.json").exists():
         raise HTTPException(400, "pick a recorded live run (record one first: Live agent, then Start episode)")
     pred = None
@@ -309,8 +330,11 @@ def models_use(body: dict):
     cur = services.procs.get("predictor")
     info = cur.info if cur else {}
     model = info.get("model") if info.get("model") in preds else preds[0]
-    return services.start_predictor(model, float(info.get("theta", 0.3)), cluster.mode == "knative",
-                                    info.get("policy"), model_version=v)
+    try:
+        return services.start_predictor(model, float(info.get("theta", 0.3)), cluster.mode == "knative",
+                                        info.get("policy"), model_version=v)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/models/promote")

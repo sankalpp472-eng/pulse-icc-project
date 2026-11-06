@@ -33,6 +33,26 @@ TOOL_NAMES = ["book_reservation", "calculate", "cancel_reservation", "get_reserv
               "list_all_airports", "search_direct_flight", "search_onestop_flight", "send_certificate", "think",
               "transfer_to_human_agents", "update_reservation_baggages", "update_reservation_flights",
               "update_reservation_passengers"]
+# The tau-bench domains on a real cluster (infra/knative/deploy.sh, DOMAIN=retail for retail): the label of their tool
+# services, the prefix of the retail services' names, and their tools. The live agent and the simulated cluster are
+# airline only; experiment runs (replay, load tests) take either.
+DOMAINS = {
+    "airline": {"role": "pulse/role=mcp-tool", "prefix": "", "tools": TOOL_NAMES},
+    "retail": {"role": "pulse/role=mcp-tool-retail", "prefix": "retail-",
+               "tools": ["calculate", "cancel_pending_order", "exchange_delivered_order_items", "find_user_id_by_email",
+                         "find_user_id_by_name_zip", "get_order_details", "get_product_details", "get_user_details",
+                         "list_all_product_types", "modify_pending_order_address", "modify_pending_order_items",
+                         "modify_pending_order_payment", "modify_user_address", "return_delivered_order_items",
+                         "think", "transfer_to_human_agents"]},
+}
+
+
+def retail_heldout() -> list[int]:
+    """The retail tasks the retail lightgbm / markov never saw (build_action_data.py --domain retail writes them)."""
+    try:
+        return json.loads((paths.PREDICTOR_DATA / "retail_split.json").read_text())["test_tasks"]
+    except (OSError, ValueError, KeyError):
+        return []
 NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
 
@@ -78,6 +98,7 @@ class Cluster:
 
     def __init__(self):
         self.mode = "sim"
+        self.domain = "airline"                 # which tau-bench tools experiment runs use (DOMAINS)
         self.context, self.reachable, self.detail = None, False, "not checked"
         self.tools_found, self.min_scale = 0, None
         self.url_tpl, self.host_tpl = None, None
@@ -93,8 +114,7 @@ class Cluster:
         if not self.context:
             self.reachable, self.detail = False, "no kubectl context"
             return self.info()
-        code, out = _run(["kubectl", "get", "ksvc", "-l", "pulse/role=mcp-tool", "-o", "json",
-                          "--request-timeout=6s"], 10)
+        code, out = _run(["kubectl", "get", "ksvc", "-l", self.role, "-o", "json", "--request-timeout=6s"], 10)
         if code != 0:
             why = "is Docker / the cluster running?" if any(s in out for s in ("refused", "Unable to connect", "Timeout",
                                                                               "no such host")) else out[-160:]
@@ -106,7 +126,9 @@ class Cluster:
                   .get("autoscaling.knative.dev/min-scale", "0") for i in items}
         self.min_scale = int(scales.pop()) if len(scales) == 1 else None
         self.reachable = self.tools_found > 0
-        self.detail = f"{self.tools_found} tools deployed" if self.reachable else "no Pulse tools deployed"
+        self.detail = f"{self.tools_found} {self.domain} tools deployed" if self.reachable else \
+            "no retail tools deployed (Setup -> Deploy the retail tools)" if self.domain == "retail" else \
+            "no Pulse tools deployed"
         if self.context.startswith("kind-"):
             self.url_tpl, self.host_tpl = "http://127.0.0.1:31080/mcp", "{svc}.default.example.com"
         else:                                   # EKS from the laptop: Kourier's load balancer
@@ -116,16 +138,23 @@ class Cluster:
             self.host_tpl = "{svc}.default.example.com"
         return self.info()
 
-    def info(self) -> dict:
-        return {"mode": self.mode, "context": self.context, "reachable": self.reachable, "detail": self.detail,
-                "tools": self.tools_found, "min_scale": self.min_scale, "ingress": self.url_tpl}
+    @property
+    def role(self) -> str:
+        return DOMAINS[self.domain]["role"]
 
-    def tool_env(self) -> dict:
-        """Environment for anything that calls the tools on the real cluster."""
-        env = {"TOOL_BACKEND": "mcp", "KUBE_CONTEXT": self.context or ""}
+    def info(self) -> dict:
+        return {"mode": self.mode, "domain": self.domain, "context": self.context, "reachable": self.reachable,
+                "detail": self.detail, "tools": self.tools_found, "min_scale": self.min_scale, "ingress": self.url_tpl,
+                "heldout": retail_heldout() if self.domain == "retail" else None}
+
+    def tool_env(self, domain: str | None = None) -> dict:
+        """Environment for anything that calls the tools on the real cluster (DOMAIN: whose tools; the retail
+        services are retail-<tool>)."""
+        domain = domain or self.domain
+        env = {"TOOL_BACKEND": "mcp", "KUBE_CONTEXT": self.context or "", "DOMAIN": domain}
         if self.url_tpl:
             env["MCP_URL_TEMPLATE"] = self.url_tpl
-            env["MCP_HOST_TEMPLATE"] = self.host_tpl or ""
+            env["MCP_HOST_TEMPLATE"] = DOMAINS[domain]["prefix"] + (self.host_tpl or "") if self.host_tpl else ""
         return env
 
     def set_min_scale(self, n: int, say=print) -> None:
@@ -133,7 +162,7 @@ class Cluster:
         The other settings (concurrency, max-scale, window) stay as infra/knative/deploy.sh set them."""
         patch = json.dumps({"spec": {"template": {"metadata": {"annotations": {
             "autoscaling.knative.dev/min-scale": str(n)}}}}})
-        code, out = _run(["kubectl", "get", "ksvc", "-l", "pulse/role=mcp-tool", "-o", "name"], 15)
+        code, out = _run(["kubectl", "get", "ksvc", "-l", self.role, "-o", "name"], 15)
         names = out.split() if code == 0 else []
         if not names:
             raise RuntimeError(f"no tools found ({out[:200]})")
@@ -142,7 +171,7 @@ class Cluster:
             if code != 0:
                 raise RuntimeError(f"could not patch {name}: {out[:200]}")
         say(f"  {len(names)} tools patched to min-scale {n}; waiting for the new revisions to be Ready ...")
-        code, out = _run(["kubectl", "wait", "--for=condition=Ready", "ksvc", "-l", "pulse/role=mcp-tool",
+        code, out = _run(["kubectl", "wait", "--for=condition=Ready", "ksvc", "-l", self.role,
                           "--timeout=600s"], 620)
         if code != 0:
             raise RuntimeError(f"tools not Ready: {out[-300:]}")
@@ -153,10 +182,10 @@ class Cluster:
     def _poll(self):
         while True:
             if self.mode == "knative" and self.reachable:
-                code, out = _run(["kubectl", "get", "pods", "-l", "pulse/role=mcp-tool", "-o", "json",
+                code, out = _run(["kubectl", "get", "pods", "-l", self.role, "-o", "json",
                                   "--request-timeout=4s"], 6)
                 if code == 0:
-                    counts = {t: {"tool": t, "ready": 0, "starting": 0, "busy": 0} for t in TOOL_NAMES}
+                    counts = {t: {"tool": t, "ready": 0, "starting": 0, "busy": 0} for t in DOMAINS[self.domain]["tools"]}
                     for p in json.loads(out).get("items", []):
                         if p["metadata"].get("deletionTimestamp"):
                             continue
@@ -278,10 +307,18 @@ class Services:
         model = self.ALIASES.get(model, model)
         if model not in self.MODELS:
             raise ValueError(f"unknown predictor {model}")
+        domain = self.cluster.domain if self.cluster.mode == "knative" else "airline"
+        if domain == "retail" and model == "speculator":
+            raise ValueError("the LLM speculator's prompt knows the airline tools only: pick lightgbm, markov or "
+                             "pulse_v3 for retail")
+        if domain == "retail" and model in ("lightgbm", "markov") and model_version:
+            raise ValueError("the registry holds the airline lightgbm + markov: with retail they use "
+                             "models/action_model_retail.pkl (switch the domain to airline to use a version)")
         self.stop("predictor")
         policy = norm_policy(policy)
+        # DOMAIN: the retail action model, and PrewarmRequests for the retail-<tool> services
         env = {"THETA": str(theta), "TTL_S": "60", "CRD_MODE": "k8s" if crd else "off",
-               "CRD_DRYRUN_FILE": str(STATE / "prewarm_requests.jsonl"),
+               "CRD_DRYRUN_FILE": str(STATE / "prewarm_requests.jsonl"), "DOMAIN": domain,
                **policy_env(policy)}
         if crd:
             env["KUBE_CONTEXT"] = self.cluster.context or ""
@@ -292,13 +329,13 @@ class Services:
                 env.update(PULSE_MODEL_URI=MODEL_URI, PULSE_MODEL_VERSION=model_version)
         elif model in ("lightgbm", "markov"):
             model_version = model_version or os.getenv("ACTION_MODEL_VERSION") or None  # pinned by GitOps (pulse-config)
-            if ACTION_URI:
+            if ACTION_URI and domain == "airline":                                       # the registry: airline only
                 env.update(ACTION_MODEL_URI=ACTION_URI, ACTION_MODEL_VERSION=model_version or "")
         # 0.0.0.0 (like the controller's metrics): Prometheus in kind scrapes it from the Docker network
         cmd = [PY, "-m", "uvicorn", "pulse.predictor.service:app", "--host", "0.0.0.0",
                "--port", str(PREDICTOR_PORT), "--log-level", "warning"]
         self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
-                                                                "crd": "k8s" if crd else "off",
+                                                                "crd": "k8s" if crd else "off", "domain": domain,
                                                                 "model_version": model_version})
         self.health = None
         return self.status()
@@ -311,7 +348,8 @@ class Services:
         if CONTROLLER_LOG.exists():
             CONTROLLER_LOG.unlink()
         self.cluster._log_pos = 0
-        env = {**self.cluster.tool_env(), "CONTROLLER_LOG": str(CONTROLLER_LOG), "MAX_REQUEST_AGE_S": "30"}
+        # PrewarmRequests name the service itself (retail-<tool> for retail): the airline Host template fits both domains
+        env = {**self.cluster.tool_env("airline"), "CONTROLLER_LOG": str(CONTROLLER_LOG), "MAX_REQUEST_AGE_S": "30"}
         self.procs["controller"] = Proc("controller", [PY, "-m", "pulse.controller.prewarm_controller"], env,
                                         {"context": self.cluster.context})
         return self.status()
@@ -717,6 +755,11 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     mode, config, where = spec["mode"], spec["config"], spec.get("where", "laptop")
     pred = Services.ALIASES.get(spec.get("predictor") or "lightgbm", spec.get("predictor") or "lightgbm")
     tasks = [str(int(t)) for t in spec.get("tasks") or []]
+    if cluster.domain == "retail":
+        if mode == "live":
+            raise ValueError("live runs use our airline agent: switch the domain to airline (top bar), or replay retail")
+        if where == "cluster":
+            raise ValueError("the in-cluster runner and predictor are airline only: run retail from the laptop")
     if mode == "load":
         return build_load(spec, cluster, services, tasks)
     steps: list[tuple[str, list[str], dict]] = []
@@ -766,6 +809,7 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
         policy = norm_policy(spec.get("policy"))
         cur = services.procs.get("predictor")
         if not (cur and cur.alive() and cur.info.get("model") == pred and cur.info.get("crd") == "k8s"
+                and cur.info.get("domain") == cluster.domain
                 and abs(cur.info.get("theta", -1) - float(spec.get("theta", 0.3))) < 1e-9
                 and cur.info.get("policy") == policy):
             services.start_predictor(pred, float(spec.get("theta", 0.3)), crd=True, policy=policy)
@@ -789,7 +833,9 @@ def ensure_predictor(spec: dict, services: Services, crd: bool) -> str:
     pred = Services.ALIASES.get(spec.get("predictor") or "lightgbm", spec.get("predictor") or "lightgbm")
     theta, policy = float(spec.get("theta", 0.3)), norm_policy(spec.get("policy"))
     cur = services.procs.get("predictor")
+    domain = services.cluster.domain if services.cluster.mode == "knative" else "airline"
     if not (cur and cur.alive() and cur.info.get("model") == pred and cur.info.get("crd") == ("k8s" if crd else "off")
+            and cur.info.get("domain") == domain
             and abs(cur.info.get("theta", -1) - theta) < 1e-9 and cur.info.get("policy") == policy):
         services.start_predictor(pred, theta, crd=crd, policy=policy)
     if crd and not services.controller_running():

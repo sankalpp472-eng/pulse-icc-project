@@ -2,12 +2,15 @@
 Train the predictors' models locally from a fresh clone (no AWS). Run pulse.setup.download_data first.
 
     python -m pulse.setup.train_models action        # lightgbm + markov -> models/action_model.pkl     (~1 min)
+    python -m pulse.setup.train_models action_retail # the same for retail -> models/action_model_retail.pkl
     python -m pulse.setup.train_models pulse_v3      # pulse-v3 -> models/pulse_v3/predictor.pkl        (~45 min)
     python -m pulse.setup.train_models all
 
   action    build_action_data (training rows from the tau-bench airline conversations, the train / test tasks of
             data/predictor/steps.csv) -> train_action (train, score on the 10 held-out tasks). The repository already
             ships a trained models/action_model.pkl; this reproduces it.
+  action_retail  the same from the tau-bench retail conversations (the LLM speculator's split: 92 training tasks,
+            23 held out, listed in data/predictor/retail_split.json); the retail replays' lightgbm / markov use it.
   pulse_v3  pulse.pulse_v3.train --local (tool graph + V3 model, scored on held-out tasks), then copies the model to
             models/pulse_v3/predictor.pkl, where the pulse_v3 predictor loads it without S3. Needs the embedding
             server (llama.cpp + nomic-embed-text) on PULSE_EMBED_BASE: bash scripts/embed_server.sh
@@ -47,6 +50,12 @@ def action():
     run("pulse.predictor.train_action")
 
 
+def action_retail():
+    need(paths.TRAJECTORIES / "gpt-4o-retail.json", "python -m pulse.setup.download_data")
+    run("pulse.predictor.build_action_data", "--domain", "retail")
+    run("pulse.predictor.train_action", "--domain", "retail")
+
+
 def embed_server_up():
     try:
         with urllib.request.urlopen(EMBED.rstrip("/").removesuffix("/v1") + "/health", timeout=3) as r:
@@ -71,15 +80,18 @@ def pulse_v3():
 def status() -> dict:
     """Which models are there (the UI's Setup tab shows it)."""
     return {"action": (paths.MODELS / "action_model.pkl").exists(),
+            "action_retail": (paths.MODELS / "action_model_retail.pkl").exists(),
             "pulse_v3": (v3_paths.MODELS / "predictor.pkl").exists(), "embed_server": embed_server_up()}
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("which", choices=["action", "pulse_v3", "all"])
+    ap.add_argument("which", choices=["action", "action_retail", "pulse_v3", "all"])
     a = ap.parse_args()
     if a.which in ("action", "all"):
         action()
+    if a.which in ("action_retail", "all"):
+        action_retail()
     if a.which in ("pulse_v3", "all"):
         pulse_v3()
 

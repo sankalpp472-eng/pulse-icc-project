@@ -18,6 +18,15 @@ from pulse import paths
 
 ROOT_RESULTS = paths.RESULTS
 
+# The tau-bench domain the run uses (DOMAIN=airline|retail, as pulse/agent/tools.py and infra/knative/deploy.sh):
+# its tool pods' label, its Redis database and the tables its tools write, and its workload name.
+DOMAIN = os.getenv("DOMAIN", "airline")
+RETAIL = DOMAIN == "retail"
+ROLE = "pulse/role=" + ("mcp-tool-retail" if RETAIL else "mcp-tool")
+REDIS_DB, WRITTEN_TABLES = ("1", ("orders", "users")) if RETAIL else ("0", ("reservations", "users"))
+WORKLOAD = "W3" if RETAIL else "W1"
+N_TOOLS = 16 if RETAIL else 14
+
 
 def results_root() -> Path:
     """results/local_runs on a kind cluster, results/cloud_runs otherwise (EKS); PULSE_RESULTS_DIR overrides."""
@@ -32,8 +41,9 @@ RESULTS = results_root()
 
 def run_dir(config: str, mode: str, detail: str = "", label: str = "") -> Path:
     """A new result folder named so a run can be told apart at a glance, e.g.
-    results/local_runs/2026-10-22_1336_C3_W1-replay_task9-x3   (date_time_config_workload-mode_detail[_label])."""
-    parts = [time.strftime("%Y-%m-%d_%H%M"), config, f"W1-{mode}", detail, label]
+    results/local_runs/2026-10-22_1336_C3_W1-replay_task9-x3   (date_time_config_workload-mode_detail[_label]);
+    retail runs are W3."""
+    parts = [time.strftime("%Y-%m-%d_%H%M"), config, f"{WORKLOAD}-{mode}", detail, label]
     name = re.sub(r"[^A-Za-z0-9._+-]+", "-", "_".join(x for x in parts if x))
     path = RESULTS / name
     if path.exists():                       # two runs started in the same minute
@@ -59,7 +69,7 @@ class PodWatcher(threading.Thread):
         self.forgot_at = 0.0
 
     def snapshot(self) -> list[dict]:
-        out = subprocess.run(["kubectl", "get", "pods", "-l", "pulse/role=mcp-tool", "-o", "json"],
+        out = subprocess.run(["kubectl", "get", "pods", "-l", ROLE, "-o", "json"],
                              capture_output=True, text=True)
         return json.loads(out.stdout)["items"] if out.returncode == 0 else []
 
@@ -136,7 +146,7 @@ def _cmd(*args) -> str:
 def run_config(task_ids: list, db: str, workload: str, models: dict, extra: dict | None = None) -> dict:
     """Everything needed to identify a run later: models, Knative and cluster settings, code version."""
     tools = []
-    for s in _kjson("get", "ksvc", "-l", "pulse/role=mcp-tool").get("items", []):
+    for s in _kjson("get", "ksvc", "-l", ROLE).get("items", []):
         tpl = s["spec"]["template"]
         c = tpl["spec"]["containers"][0]
         ann = tpl.get("metadata", {}).get("annotations", {})
@@ -155,7 +165,7 @@ def run_config(task_ids: list, db: str, workload: str, models: dict, extra: dict
     uniq = lambda k: sorted({str(t[k]) for t in tools})
     return {
         "started": datetime.now().isoformat(timespec="seconds"),
-        "workload": workload, "task_ids": task_ids, "models": models,
+        "workload": workload, "domain": DOMAIN, "task_ids": task_ids, "models": models,
         "config": "C0" if uniq("min_scale") == ["0"] else
                   "C1" if uniq("min_scale") == ["1"] else f"min_scale={uniq('min_scale')}",
         "knative": {
@@ -210,17 +220,18 @@ def shared_db() -> bool:
 
 
 def reset_db() -> None:
-    """Restore reservations + users from the pristine seed copies inside Redis."""
-    for t in ("reservations", "users"):
-        subprocess.run(["kubectl", "exec", "deploy/redis", "--", "redis-cli", "COPY", f"seed:{t}", t, "REPLACE"],
-                       capture_output=True, check=True)
+    """Restore the tables the tools write (airline: reservations + users in Redis DB 0; retail: orders + users in
+    DB 1) from the pristine seed copies inside Redis."""
+    for t in WRITTEN_TABLES:
+        subprocess.run(["kubectl", "exec", "deploy/redis", "--", "redis-cli", "-n", REDIS_DB,
+                        "COPY", f"seed:{t}", t, "REPLACE"], capture_output=True, check=True)
 
 
-def wait_all_ready(n_tools: int = 14, timeout: float = 600) -> None:
+def wait_all_ready(n_tools: int = N_TOOLS, timeout: float = 600) -> None:
     """C1: wait until every tool has at least one ready pod (they never scale to zero)."""
     t0 = time.time()
     while time.time() - t0 < timeout:
-        items = _kjson("get", "pods", "-l", "pulse/role=mcp-tool").get("items", [])
+        items = _kjson("get", "pods", "-l", ROLE).get("items", [])
         ready = {p["metadata"]["labels"].get("pulse/tool") for p in items
                  if any(c.get("type") == "Ready" and c.get("status") == "True"
                         for c in p.get("status", {}).get("conditions", []))}
