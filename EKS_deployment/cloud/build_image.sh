@@ -9,8 +9,7 @@
 # from ECR). The image tag (date + git commit) is written to EKS_deployment/cloud/.image-<target>, where
 # cloud_up.sh and run_cloud.sh read it.
 # What goes in: the code the pods run, the trained models (predictor/data/*.pkl), the tau-bench airline
-# trajectories (hint signals), the replay traces, the demo UI (ui/; pulse-ui pod, ui_cloud.sh) with the plot
-# scripts, the measured per-tool cold starts and the result folders so far (read-only, for comparisons).
+# trajectories (hint signals) and the replay traces. The demo UI runs on the laptop, not in the image.
 # Never agent/.env: Groq keys go in as a Secret.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -39,19 +38,11 @@ cp predictor/data/*.pkl "$STAGE/app/predictor/data/"
 cp predictor/data/tau-bench/historical_trajectories/*airline.json "$STAGE/app/predictor/data/tau-bench/historical_trajectories/"
 cp controller/prewarm_controller.py "$STAGE/app/controller/"
 cp test/test_knative/{w1_replay,w1_live,c0_common,plot_compare,plot_c0,score_hints,pulse_metrics}.py "$STAGE/app/test/test_knative/"
-mkdir -p "$STAGE/app/loadtest"                                    # load tests (Locust / asyncio), run by the UI pod
-cp loadtest/*.py "$STAGE/app/loadtest/"
-# pulse-v3 (code only: its model comes from the S3 registry, its data/ stays out): the UI pod and the training Job
+# pulse-v3 (code only: its model comes from the S3 registry, its data/ stays out): the predictor and the training Job
 tar -cf - --exclude=data --exclude=__pycache__ --exclude=tests pulse_pred | tar -xf - -C "$STAGE/app"
 cp test/test_knative/data/*.jsonl "$STAGE/app/test/test_knative/data/"
 cp baselines/llm_speculator/{common,prompt,speculate}.py "$STAGE/app/baselines/llm_speculator/"   # the speculator's prompt + LLM calls
 cp "$HERE/cloud_entry.sh" "$STAGE/app/"
-# the demo UI (pulse-ui pod) + what it reads: measured cold starts (simulated cluster), earlier results (Results tab)
-mkdir -p "$STAGE/app/ui/static" "$STAGE/app/deploy/knative/results" "$STAGE/app/results"
-cp ui/{server,backend,session,sim_cluster}.py "$STAGE/app/ui/"
-cp ui/static/* "$STAGE/app/ui/static/"
-cp deploy/knative/results/*_tools-cold-warm.csv "$STAGE/app/deploy/knative/results/" 2>/dev/null || true
-for d in cloud_runs local_runs; do if [ -d "results/$d" ]; then cp -r "results/$d" "$STAGE/app/results/"; fi; done
 cp "$HERE/requirements.txt" "$STAGE/"
 find "$STAGE" -name __pycache__ -type d -prune -exec rm -rf {} +
 find "$STAGE" -name ".env*" -exec rm -f {} +          # belt and braces: no secrets in the image

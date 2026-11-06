@@ -10,12 +10,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 CTX=$(kubectl config get-contexts -o name | grep -m1 pulse-eks || true)
-# Runs made in the demo UI live only in its pod: copy them home before the cluster goes
-if [ -n "$CTX" ] && kubectl --context "$CTX" get deploy pulse-ui >/dev/null 2>&1; then
-  echo "Copying the demo UI's runs to results/cloud_runs/ first ..."
-  kubectl config use-context "$CTX" >/dev/null
-  bash EKS_deployment/cloud/ui_cloud.sh fetch || echo "(could not fetch the UI's runs; continuing)"
-fi
 [ -n "$CTX" ] && kubectl --context "$CTX" delete pwr --all --ignore-not-found || true
 if [ "${USE_TERRAFORM:-0}" = 1 ]; then
   # Kourier's load balancer was made by Kubernetes, not Terraform: remove it first, or the VPC can't be deleted

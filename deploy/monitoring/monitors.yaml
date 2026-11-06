@@ -6,13 +6,9 @@ kind: PodMonitor
 metadata: {name: pulse-predictors, namespace: monitoring}
 spec:
   namespaceSelector: {matchNames: [default]}
-  selector:
-    matchExpressions: [{key: app, operator: In, values: [pulse-predictor, pulse-ui]}]
+  selector: {matchLabels: {app: pulse-predictor}}
   podMetricsEndpoints:
     - port: http                      # pulse-predictor's own port (predictor/service.py mounts /metrics/)
-      path: /metrics/
-      relabelings: [{sourceLabels: [__meta_kubernetes_pod_label_app], targetLabel: component}]
-    - port: predictor                 # the predictor the UI pod starts (any model, port 8000)
       path: /metrics/
       relabelings: [{sourceLabels: [__meta_kubernetes_pod_label_app], targetLabel: component}]
 ---
@@ -31,12 +27,9 @@ kind: PodMonitor
 metadata: {name: pulse-runners, namespace: monitoring}
 spec:
   namespaceSelector: {matchNames: [default]}
-  selector:
-    matchExpressions: [{key: app, operator: In, values: [pulse-run, pulse-ui]}]
+  selector: {matchLabels: {app: pulse-run}}
   podMetricsEndpoints:
     - port: metrics                   # run_cloud.sh's run pods
-      relabelings: [{sourceLabels: [__meta_kubernetes_pod_label_app], targetLabel: component}]
-    - port: runner-metrics            # runs the UI pod starts itself
       relabelings: [{sourceLabels: [__meta_kubernetes_pod_label_app], targetLabel: component}]
 ---
 # Knative: the queue-proxy next to every tool pod, and the activator / autoscaler. Scraped for exploration in

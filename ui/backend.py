@@ -2,11 +2,10 @@
 The UI's back office: which cluster it talks to, the predictor / controller processes it starts,
 batch runs (w1_replay.py / w1_live.py / run_cloud.sh) and the result folders.
 
-The UI runs either on the laptop (kubectl context: kind or EKS) or INSIDE the EKS cluster as the pulse-ui pod
-(EKS_deployment/cloud/ui_cloud.sh): then it calls the tools at their in-cluster URLs, uses the pod's service
-account, the pulse-controller Deployment does the prewarming, and runs write to UI_RESULTS_DIR in the pod.
+The UI runs on the laptop. It talks to the simulated cluster, or to a real one through the current kubectl
+context (kind or EKS); experiment runs can still run as pods inside the cluster (run_cloud.sh).
 
-Nothing here prints secrets: processes inherit agent/.env (laptop) or the pulse-llm-keys Secret (pod).
+Nothing here prints secrets: processes inherit agent/.env.
 """
 
 import json
@@ -21,40 +20,28 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-IN_CLUSTER = bool(os.getenv("KUBERNETES_SERVICE_HOST"))   # the pulse-ui pod on EKS
 STATE = Path(os.getenv("UI_STATE_DIR", ROOT / "ui" / ".state"))   # logs of the processes the UI starts
 PY = sys.executable                             # the agent's Python (agent/.venv) runs the UI and everything it starts
 PREDICTOR_PORT = int(os.getenv("UI_PREDICTOR_PORT", "8000"))
 PREDICTOR_URL = f"http://127.0.0.1:{PREDICTOR_PORT}"
 CONTROLLER_LOG = STATE / "controller.jsonl"
-CONTROLLER_DEPLOY = "pulse-controller"           # in the cluster: the controller is this Deployment (cloud_up.sh)
-# Where new runs and plots go: the pod's own folder in the cluster (fetch with ui_cloud.sh fetch), else results/
-WRITE_DIR = Path(os.environ["UI_RESULTS_DIR"]) if os.getenv("UI_RESULTS_DIR") else None
 RESULT_DIRS = {"local": ROOT / "results" / "local_runs", "cloud": ROOT / "results" / "cloud_runs",
                "load": ROOT / "results" / "load_runs", "legacy": ROOT / "test" / "test_knative" / "results"}
-# load tests (loadtest/) write here: the pod's own folder in the cluster, else results/load_runs
-LOAD_WRITE_DIR = WRITE_DIR.parent / "load_runs" if WRITE_DIR else None
-if WRITE_DIR:
-    RESULT_DIRS = {"this pod": WRITE_DIR, "this pod (load)": LOAD_WRITE_DIR, **RESULT_DIRS}
 TOOL_NAMES = ["book_reservation", "calculate", "cancel_reservation", "get_reservation_details", "get_user_details",
               "list_all_airports", "search_direct_flight", "search_onestop_flight", "send_certificate", "think",
               "transfer_to_human_agents", "update_reservation_baggages", "update_reservation_flights",
               "update_reservation_passengers"]
 NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-STARTED_ISO = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())   # the controller logs UTC ISO times
 
 
 def rel(p: Path) -> str:
-    """A result path as the browser sees it: relative to the repo, or 'pod/...' inside UI_RESULTS_DIR."""
-    p = Path(p).resolve()
-    if WRITE_DIR and (p == WRITE_DIR.resolve() or WRITE_DIR.resolve() in p.parents):
-        return "pod/" + p.relative_to(WRITE_DIR.resolve()).as_posix()
-    return p.relative_to(ROOT).as_posix()
+    """A result path as the browser sees it: relative to the repo."""
+    return Path(p).resolve().relative_to(ROOT).as_posix()
 
 
 def unrel(s: str) -> Path:
     """The inverse of rel()."""
-    return (WRITE_DIR / s[4:]).resolve() if WRITE_DIR and s.startswith("pod/") else (ROOT / s).resolve()
+    return (ROOT / s).resolve()
 
 
 def _run(args: list[str], timeout: float = 10) -> tuple[int, str]:
@@ -96,16 +83,11 @@ class Cluster:
         self.pods_at = 0.0
         self.events: list[dict] = []           # controller actions (tailed from its log)
         self._log_pos = 0
-        self._seen: set[str] = set()           # controller log lines already turned into events (in the cluster)
-        self.controller_ready = None
         threading.Thread(target=self._poll, daemon=True).start()
 
     def detect(self) -> dict:
-        if IN_CLUSTER:                          # the pod's service account; kubectl has no context to name
-            self.context = os.getenv("CLUSTER_NAME", "pulse-eks") + " (in-cluster)"
-        else:
-            code, ctx = _run(["kubectl", "config", "current-context"], 5)
-            self.context = ctx if code == 0 else None
+        code, ctx = _run(["kubectl", "config", "current-context"], 5)
+        self.context = ctx if code == 0 else None
         if not self.context:
             self.reachable, self.detail = False, "no kubectl context"
             return self.info()
@@ -123,9 +105,7 @@ class Cluster:
         self.min_scale = int(scales.pop()) if len(scales) == 1 else None
         self.reachable = self.tools_found > 0
         self.detail = f"{self.tools_found} tools deployed" if self.reachable else "no Pulse tools deployed"
-        if IN_CLUSTER:                          # straight to the Knative service, no ingress / Host header
-            self.url_tpl, self.host_tpl = "http://{svc}.default.svc.cluster.local/mcp", ""
-        elif self.context.startswith("kind-"):
+        if self.context.startswith("kind-"):
             self.url_tpl, self.host_tpl = "http://127.0.0.1:8081/mcp", "{svc}.default.example.com"
         else:                                   # EKS from the laptop: Kourier's load balancer
             code, lb = _run(["kubectl", "get", "svc", "kourier", "-n", "kourier-system", "-o",
@@ -136,14 +116,11 @@ class Cluster:
 
     def info(self) -> dict:
         return {"mode": self.mode, "context": self.context, "reachable": self.reachable, "detail": self.detail,
-                "tools": self.tools_found, "min_scale": self.min_scale, "ingress": self.url_tpl,
-                "in_cluster": IN_CLUSTER, "controller_deployment": self.controller_ready if IN_CLUSTER else None}
+                "tools": self.tools_found, "min_scale": self.min_scale, "ingress": self.url_tpl}
 
     def tool_env(self) -> dict:
         """Environment for anything that calls the tools on the real cluster."""
-        env = {"TOOL_BACKEND": "mcp"}
-        if not IN_CLUSTER:
-            env["KUBE_CONTEXT"] = self.context or ""
+        env = {"TOOL_BACKEND": "mcp", "KUBE_CONTEXT": self.context or ""}
         if self.url_tpl:
             env["MCP_URL_TEMPLATE"] = self.url_tpl
             env["MCP_HOST_TEMPLATE"] = self.host_tpl or ""
@@ -188,31 +165,8 @@ class Cluster:
                         ok = st and all(c.get("ready") for c in st)
                         counts[t]["ready" if ok else "starting"] += 1
                     self.pods, self.pods_at = list(counts.values()), time.time()
-                if IN_CLUSTER:
-                    self._tail_controller_deployment()
-                else:
-                    self._tail_controller()
+                self._tail_controller()
             time.sleep(1.0)
-
-    def _tail_controller_deployment(self):
-        """In the cluster the controller is the pulse-controller Deployment: read its JSON log lines."""
-        code, out = _run(["kubectl", "logs", f"deploy/{CONTROLLER_DEPLOY}", "--tail=200", "--request-timeout=4s"], 6)
-        self.controller_ready = code == 0
-        if code != 0:
-            return
-        for line in out.splitlines():
-            if not line.startswith("{") or line in self._seen:
-                continue
-            self._seen.add(line)
-            try:
-                r = json.loads(line)
-            except ValueError:
-                continue
-            if r.get("event") in ("warmed", "evicted", "failed") and str(r.get("time", "")) >= STARTED_ISO:
-                r["source"] = "controller"
-                self.events.append(r)
-        if len(self._seen) > 5000:
-            self._seen = set(list(self._seen)[-2000:])
 
     def _tail_controller(self):
         if not CONTROLLER_LOG.exists():
@@ -327,7 +281,7 @@ class Services:
         env = {"THETA": str(theta), "TTL_S": "60", "CRD_MODE": "k8s" if crd else "off",
                "PREDICTOR_DIR": str(ROOT / "predictor"), "CRD_DRYRUN_FILE": str(STATE / "prewarm_requests.jsonl"),
                **policy_env(policy)}
-        if crd and not IN_CLUSTER:          # in the cluster crd_writer.py uses the pod's service account
+        if crd:
             env["KUBE_CONTEXT"] = self.cluster.context or ""
         env["PREDICTOR"] = model
         if model == "pulse_v3":
@@ -347,13 +301,9 @@ class Services:
         return self.status()
 
     def controller_running(self) -> bool:
-        if IN_CLUSTER:
-            return bool(self.cluster.controller_ready)
         return bool(self.procs.get("controller") and self.procs["controller"].alive())
 
     def start_controller(self) -> dict:
-        if IN_CLUSTER:                 # the pulse-controller Deployment already watches the PrewarmRequests
-            return self.status()
         self.stop("controller")
         if CONTROLLER_LOG.exists():
             CONTROLLER_LOG.unlink()
@@ -367,7 +317,7 @@ class Services:
         """Live demo, 'background load': N more agents replaying recorded episodes (loadtest/locust_episodes.py)
         while the demo episode runs, sending hints too when the demo uses the predictor. Stopped with the episode."""
         self.stop("bgload")
-        env = {**self.cluster.tool_env(), **({"PULSE_LOAD_DIR": str(LOAD_WRITE_DIR)} if LOAD_WRITE_DIR else {})}
+        env = self.cluster.tool_env()
         cmd = [PY, "-m", "locust", "-f", "loadtest/locust_episodes.py", "--headless", "--only-summary",
                "--stages", f"{agents}:7200:{agents}", "--pulse-config", "C3" if predictor_url else "C0",
                "--label", "ui-background", "--loglevel", "WARNING"]
@@ -429,8 +379,6 @@ class Services:
             sup = out["predictor"].get("supports")
             out["predictor"]["policy_supported"] = True
             out["predictor"]["lookahead_supported"] = bool(sup and sup.get("lookahead")) if sup else None
-        if IN_CLUSTER:
-            out["controller"] = {"running": self.controller_running(), "deployment": CONTROLLER_DEPLOY}
         return out
 
 
@@ -484,9 +432,8 @@ def models_list(fam: str | None = None) -> dict:
         return {**base, "uri": uri, "versions": _store().versions(uri), "error": None}
     except ImportError as e:
         return {**base, "uri": uri, "versions": [], "error": f"{e}: pip install -r pulse_pred/requirements.txt"}
-    except Exception as e:                       # no AWS credentials (laptop) or no IAM role (UI pod)
-        return {**base, "uri": uri, "versions": [], "error": f"{type(e).__name__}: {e}"[:300] +
-                (" (the UI pod has no S3 role yet: use the laptop UI)" if IN_CLUSTER else "")}
+    except Exception as e:                       # no AWS credentials
+        return {**base, "uri": uri, "versions": [], "error": f"{type(e).__name__}: {e}"[:300]}
 
 
 def models_promote(version: str, fam: str | None = None):
@@ -502,8 +449,8 @@ def build_retrain(spec: dict) -> list[tuple[str, list[str], dict]]:
     promote, notes = spec.get("promote", "auto"), str(spec.get("notes") or "")
     if spec.get("where") == "cluster":
         b = bash()
-        if IN_CLUSTER or not b:
-            raise ValueError("the training Job is started from the laptop (deploy/training/run_training.sh)")
+        if not b:
+            raise ValueError("bash not found (Git Bash on Windows): needed for deploy/training/run_training.sh")
         env = {k: (uri if v is None else v) for k, v in f["job"].items()}
         return [(f"retrain {f['label']} as a Job in the cluster (deploy/training/run_training.sh)",
                  [b, "deploy/training/run_training.sh"], {**env, "PROMOTE": promote, "NOTES": notes})]
@@ -519,8 +466,8 @@ def models_pin_in_git(version: str, fam: str | None = None) -> dict:
     (EKS_deployment/cloud/gitops/config.yaml) in this checkout. Nothing is committed: the change goes in through a
     reviewed commit / pull request, and Argo CD rolls it out."""
     f = family(fam)
-    if IN_CLUSTER or not GITOPS_CONFIG.exists():
-        raise ValueError("pinning in Git needs the repository checkout (the laptop UI)")
+    if not GITOPS_CONFIG.exists():
+        raise ValueError(f"{GITOPS_CONFIG} not found")
     import re
     text = GITOPS_CONFIG.read_text(encoding="utf-8")
     new = re.sub(rf'({f["pin"]}:).*', rf'\1 "{version}"', text)
@@ -570,7 +517,7 @@ class Deployment:
                       "health": (a.get("status") or {}).get("health", {}).get("status"),
                       "revision": ((a.get("status") or {}).get("sync", {}).get("revision") or "")[:7]}
                      for a in json.loads(out).get("items", [])] if self.argocd else []
-        if self.argocd and not IN_CLUSTER and not (self.pf and self.pf.poll() is None):
+        if self.argocd and not (self.pf and self.pf.poll() is None):
             self.pf = subprocess.Popen(["kubectl", "port-forward", "-n", "argocd", "svc/argocd-server",
                                         f"{ARGOCD_LOCAL_PORT}:80"], stdout=subprocess.DEVNULL,
                                        stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
@@ -583,7 +530,7 @@ class Deployment:
     def info(self) -> dict:
         return {"commit": self.commit, "image": self.image.rsplit(":", 1)[-1] if self.image else "",
                 "argocd": self.argocd, "apps": self.apps,
-                "argocd_url": f"http://127.0.0.1:{ARGOCD_LOCAL_PORT}" if self.argocd and not IN_CLUSTER else None}
+                "argocd_url": f"http://127.0.0.1:{ARGOCD_LOCAL_PORT}" if self.argocd else None}
 
 
 # ====================================================================== monitoring (deploy/monitoring/)
@@ -608,8 +555,7 @@ class Monitoring:
         threading.Thread(target=self._loop, daemon=True).start()
 
     def base(self) -> str:
-        return (f"http://{GRAFANA_SVC}.{MON_NS}.svc.cluster.local" if IN_CLUSTER
-                else f"http://127.0.0.1:{GRAFANA_LOCAL_PORT}")
+        return f"http://127.0.0.1:{GRAFANA_LOCAL_PORT}"
 
     def _healthy(self) -> bool:
         try:
@@ -628,23 +574,19 @@ class Monitoring:
             self._stop_pf()
             self.installed, self.reachable, self.detail, self.figures = None, False, "Knative mode only", {}
             return
-        if IN_CLUSTER:
-            self.installed = self.reachable = self._healthy()
-            self.detail = "ok" if self.reachable else "not installed (deploy/monitoring/install.sh, from the laptop)"
-        else:
-            code, _ = _run(["kubectl", "get", "svc", GRAFANA_SVC, "-n", MON_NS, "-o", "name"], 8)
-            self.installed = code == 0
-            if not self.installed:
-                self._stop_pf()
-                self.reachable, self.detail, self.figures = False, "not installed", {}
-                return
-            if not (self.pf and self.pf.poll() is None):
-                self.pf = subprocess.Popen(["kubectl", "port-forward", "-n", MON_NS, f"svc/{GRAFANA_SVC}",
-                                            f"{GRAFANA_LOCAL_PORT}:80"], stdout=subprocess.DEVNULL,
-                                           stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
-                time.sleep(2)
-            self.reachable = self._healthy()
-            self.detail = "ok" if self.reachable else "port-forward to Grafana not answering yet"
+        code, _ = _run(["kubectl", "get", "svc", GRAFANA_SVC, "-n", MON_NS, "-o", "name"], 8)
+        self.installed = code == 0
+        if not self.installed:
+            self._stop_pf()
+            self.reachable, self.detail, self.figures = False, "not installed", {}
+            return
+        if not (self.pf and self.pf.poll() is None):
+            self.pf = subprocess.Popen(["kubectl", "port-forward", "-n", MON_NS, f"svc/{GRAFANA_SVC}",
+                                        f"{GRAFANA_LOCAL_PORT}:80"], stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+            time.sleep(2)
+        self.reachable = self._healthy()
+        self.detail = "ok" if self.reachable else "port-forward to Grafana not answering yet"
         if self.reachable:
             self.figures = self._figures()
 
@@ -668,8 +610,8 @@ class Monitoring:
         """The cluster-measured numbers the cards show next to the UI's own."""
         out = {"tool_pods": self.query(_READY_TOOL_PODS),
                "tool_pod_s_15m": self.query(f"sum_over_time(({_READY_TOOL_PODS})[15m:15s]) * 15")}
-        # the predictor this UI started: scraped as the UI pod (EKS) or from the laptop (kind); not on EKS-from-laptop
-        comp = "pulse-ui" if IN_CLUSTER else "laptop" if (self.cluster.context or "").startswith("kind-") else None
+        # the predictor this UI started: Prometheus scrapes it on the laptop only from kind (not across to EKS)
+        comp = "laptop" if (self.cluster.context or "").startswith("kind-") else None
         if comp:
             p95 = self.query(f'histogram_quantile(0.95, sum by (le) '
                              f'(rate(predictor_request_seconds_bucket{{component="{comp}"}}[2m])))')
@@ -679,7 +621,7 @@ class Monitoring:
     def info(self) -> dict:
         return {"installed": self.installed, "reachable": self.reachable, "detail": self.detail,
                 "url": "/grafana/", "dashboards": DASHBOARDS, "figures": self.figures,
-                "can_install": not IN_CLUSTER and bool(bash())}
+                "can_install": bool(bash())}
 
 
 def run_window(path: str) -> tuple[float, float]:
@@ -801,7 +743,7 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
             if spec.get(k) not in (None, ""):
                 args += [flag, str(spec[k])]
 
-    if where == "cluster" and not IN_CLUSTER:  # EKS_deployment/cloud/run_cloud.sh: the runner is a pod
+    if where == "cluster":                     # EKS_deployment/cloud/run_cloud.sh: the runner is a pod
         b = bash()
         if not b:
             raise ValueError("Git Bash not found (needed for run_cloud.sh)")
@@ -816,14 +758,12 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
                       [b, "EKS_deployment/cloud/run_cloud.sh", *args], cenv))
         return steps
 
-    # ---- the runner runs where the UI runs: the laptop, or the pulse-ui pod in the cluster
+    # ---- the runner runs on the laptop
     want = 1 if config == "C1" else 0
     if cluster.min_scale != want:
         steps.append((f"set the tools to min-scale {want} ({'always warm' if want else 'scale to zero'})",
                       lambda say: cluster.set_min_scale(want, say), {}))
-    if WRITE_DIR:
-        env = {**env, "PULSE_RESULTS_DIR": str(WRITE_DIR), "PULSE_RUNNER": "pulse-ui pod"}
-    label = spec.get("label") or ("ui-eks" if IN_CLUSTER else "ui")
+    label = spec.get("label") or "ui"
     if config == "C3":
         policy = norm_policy(spec.get("policy"))
         cur = services.procs.get("predictor")
@@ -841,7 +781,7 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
         label = f"{label}-{pred}{tag}"
     script = "test/test_knative/w1_replay.py" if mode == "replay" else "test/test_knative/w1_live.py"
     steps.append((f"{mode} {config}{' (' + pred + ')' if config == 'C3' else ''} "
-                  f"{'in the pulse-ui pod' if IN_CLUSTER else 'from the laptop'}",
+                  "from the laptop",
                   [PY, script, *args, "--label", label], env))
     return steps
 
@@ -871,10 +811,8 @@ def build_load(spec: dict, cluster: Cluster, services: Services, tasks: list[str
     if target != "predictor" and not knative:
         raise ValueError("the tools and episodes load tests need the real cluster: switch to Knative (top bar)")
     steps: list[tuple] = []
-    env = {**(cluster.tool_env() if knative else {}), "PULSE_RUNNER": "pulse-ui pod" if IN_CLUSTER else "laptop"}
-    if LOAD_WRITE_DIR:
-        env["PULSE_LOAD_DIR"] = str(LOAD_WRITE_DIR)
-    label = spec.get("label") or ("ui-eks" if IN_CLUSTER else "ui")
+    env = {**(cluster.tool_env() if knative else {}), "PULSE_RUNNER": "laptop"}
+    label = spec.get("label") or "ui"
     if target != "predictor":
         want = 1 if config == "C1" else 0
         if cluster.min_scale != want:
@@ -895,7 +833,7 @@ def build_load(spec: dict, cluster: Cluster, services: Services, tasks: list[str
             cmd += ["--host", url]
         elif target == "episodes" and url:
             cmd += ["--predictor-url", url]
-        web = bool(spec.get("interactive")) and not IN_CLUSTER
+        web = bool(spec.get("interactive"))
         cmd += ["--autostart", "--autoquit", "5", "--web-host", "127.0.0.1", "--web-port", "8089"] if web \
             else ["--headless", "--only-summary"]
         title = f"Locust load test: {target} {config}" + (" (live web UI: http://127.0.0.1:8089)" if web else "")
@@ -977,15 +915,10 @@ def make_plots(paths: list[str]) -> dict:
     for d in dirs:
         if not (d / "summary.json").exists():
             raise ValueError(f"not a run folder: {d.name}")
-    # next to the first run, unless that folder is read-only (the results baked into the image): the pod's folder
-    base = WRITE_DIR if WRITE_DIR else dirs[0].parent
-    base.mkdir(parents=True, exist_ok=True)
+    base = dirs[0].parent                       # next to the first run
     load = [json.loads((d / "summary.json").read_text(encoding="utf-8")).get("kind") == "load" for d in dirs]
     if any(load) and not all(load):
         raise ValueError("pick either experiment runs or load runs, not both")
-    if all(load):                               # load runs: latency / throughput / failures against load
-        base = LOAD_WRITE_DIR if LOAD_WRITE_DIR else dirs[0].parent
-        base.mkdir(parents=True, exist_ok=True)
     script = "loadtest/plot_load.py" if all(load) else "test/test_knative/plot_compare.py"
     out = base / f"compare_{time.strftime('%Y-%m-%d_%H%M%S')}_ui_{len(dirs)}runs"
     p = subprocess.run([plot_python(), script, *map(str, dirs), "--out", str(out)],
@@ -997,7 +930,7 @@ def make_plots(paths: list[str]) -> dict:
 
 
 def zip_folder(s: str) -> tuple[bytes, str]:
-    """A run / comparison folder as a zip, to take it home from the pod (or use ui_cloud.sh fetch)."""
+    """A run / comparison folder as a zip (to share it)."""
     import io
     import zipfile
     d = result_path(s)

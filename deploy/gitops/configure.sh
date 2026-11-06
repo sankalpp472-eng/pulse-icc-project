@@ -10,6 +10,7 @@ ACCOUNT=${1:-$(aws sts get-caller-identity --query Account --output text)}
 [[ "$ACCOUNT" =~ ^[0-9]{12}$ ]] || { echo "not an AWS account id: $ACCOUNT"; exit 1; }
 FILES="EKS_deployment/cloud/kustomization.yaml EKS_deployment/cloud/gitops/settings.yaml
        EKS_deployment/cloud/gitops/config.yaml EKS_deployment/cloud/gitops/trainer-sa.yaml"
-sed -i "s/ACCOUNT_ID/$ACCOUNT/g" $FILES
+# replaces the ACCOUNT_ID placeholder or whatever account is there now (a fork starts with the team's account)
+sed -i -E "s/ACCOUNT_ID|\b[0-9]{12}\b/$ACCOUNT/g" $FILES
 grep -n "$ACCOUNT" $FILES
 echo "Now: git commit -am 'gitops: AWS account $ACCOUNT' && git push"

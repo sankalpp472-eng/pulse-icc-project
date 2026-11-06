@@ -2,7 +2,7 @@
 Prometheus metrics published by the experiment runners (w1_replay.py --metrics-port / PULSE_METRICS_PORT).
 
 The runner serves them at http://<host>:<port>/metrics. Prometheus (deploy/monitoring/) scrapes port 9105:
-the run pods and the UI pod in EKS, and host.docker.internal:9105 from the kind cluster.
+the run pods in EKS, and host.docker.internal:9105 from the kind cluster.
 
 Every series carries run_id, so several runs can be told apart in Prometheus/Grafana.
 All tool x cold/warm series are created at start with value 0, so increase() over a

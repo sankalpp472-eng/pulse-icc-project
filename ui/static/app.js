@@ -720,7 +720,7 @@ function renderModels() {
       <td class="small">${esc(m.notes || "")}</td>
       <td><button class="small" data-use="${esc(m.version)}" title="Start ${esc(F.predictors.join(" / "))} with this version">Use</button>
         ${m.latest ? "" : `<button class="small ghost" data-promote="${esc(m.version)}" title="Make it the latest (also: roll back)">Promote</button>`}
-        ${state.cluster && state.cluster.in_cluster ? "" : `<button class="small ghost" data-pin="${esc(m.version)}" title="GitOps: pin this version for the cluster in EKS_deployment/cloud/gitops/config.yaml (no commit)">Pin in Git</button>`}</td></tr>`;
+        <button class="small ghost" data-pin="${esc(m.version)}" title="GitOps: pin this version for the cluster in EKS_deployment/cloud/gitops/config.yaml (no commit)">Pin in Git</button></td></tr>`;
   }).join("") || `<tr><td colspan="${F.cols.length + 5}" class="muted">${MODELS.error ? "–" : "No versions yet."}</td></tr>`;
   $$("#gTbl [data-use]").forEach((b) => (b.onclick = async () => {
     try {
@@ -892,13 +892,6 @@ async function poll() {
     state = s;
     const c = s.cluster;
     clusterSeg.set(c.mode);
-    $("#inClusterPill").classList.toggle("hidden", !c.in_cluster);
-    if (c.in_cluster) {                      // the runner is this pod; run_cloud.sh is a laptop script
-      $("#xWhereHere").textContent = "This UI pod";
-      $("#xWherePod").classList.add("hidden");
-      $("#expNote").innerHTML = "Runs execute in this UI pod on the client node, next to the tools. New results go to the pod's own folder " +
-        "(<i>this pod</i> in Results): download them as zip, or <code>bash EKS_deployment/cloud/ui_cloud.sh fetch</code> before the cluster goes down.";
-    }
     $("#ctxName").textContent = c.context ? `(${c.context.replace(/^.*@/, "")})` : "";
     $$(".sim-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "sim"));
     $$(".knative-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "knative"));

@@ -3,10 +3,8 @@ Pulse demo UI: run live and replay episodes, pick the predictor, watch the tools
 prewarms land, launch experiment runs and compare their results.
 
     agent/.venv/Scripts/python ui/server.py            # from the repo root, then open http://127.0.0.1:8765
-    bash EKS_deployment/cloud/ui_cloud.sh up             # or inside the EKS cluster, opened via port-forward
 
-Listens on 127.0.0.1 (UI_HOST; the pod uses 0.0.0.0 behind a ClusterIP Service, never a load balancer).
-See ui/README.md.
+Runs on the laptop and listens on 127.0.0.1 only (it can start runs and change the cluster, and has no login).
 """
 
 import os
@@ -355,8 +353,8 @@ def monitoring_install():
         raise HTTPException(409, busy())
     if cluster.mode != "knative":
         raise HTTPException(400, "Monitoring is installed into the real cluster: switch to Knative (top bar) first")
-    if backend.IN_CLUSTER or not backend.bash():
-        raise HTTPException(400, "Install it from the laptop: bash deploy/monitoring/install.sh (needs helm)")
+    if not backend.bash():
+        raise HTTPException(400, "bash not found (Git Bash on Windows): needed for deploy/monitoring/install.sh")
     S["run"] = backend.BatchRun({"mode": "monitoring install"},
                                 [("install Prometheus + Grafana (deploy/monitoring/install.sh)",
                                   [backend.bash(), "deploy/monitoring/install.sh"], {})], services)
@@ -453,9 +451,6 @@ app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
 @app.on_event("startup")
 def _startup():
-    # in the cluster: use the real tools from the start (they are right next to the UI)
-    if backend.IN_CLUSTER and cluster.detect()["reachable"]:
-        cluster.mode = "knative"
     # load the main predictor right away: importing LightGBM + the models takes up to a minute on a laptop
     if os.getenv("UI_AUTOSTART_PREDICTOR", "1") != "0":
         services.start_predictor(os.getenv("UI_PREDICTOR", "lightgbm"), 0.3, crd=cluster.mode == "knative")
@@ -474,5 +469,5 @@ def _shutdown():
 
 if __name__ == "__main__":
     port = int(os.getenv("UI_PORT", "8765"))
-    print(f"Pulse demo UI: http://127.0.0.1:{port}" + (" (in the cluster: open it with ui_cloud.sh)" if backend.IN_CLUSTER else ""))
-    uvicorn.run(app, host=os.getenv("UI_HOST", "127.0.0.1"), port=port, log_level="warning")
+    print(f"Pulse demo UI: http://127.0.0.1:{port}")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")

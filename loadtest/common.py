@@ -9,7 +9,7 @@ Shared by the load tests (loadtest/*.py):
   mcp_request()     one stateless MCP tools/call (agent/mcp_server.py runs stateless JSON: no session needed),
                     through the same URL / Host templates as the runners (MCP_URL_TEMPLATE, MCP_HOST_TEMPLATE)
   Recorder          every request -> requests.csv + summary.json in a run folder under results/load_runs/
-                    (PULSE_LOAD_DIR overrides it, e.g. the UI pod's own folder)
+                    (PULSE_LOAD_DIR overrides it)
 """
 
 import csv

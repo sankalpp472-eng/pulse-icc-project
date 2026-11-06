@@ -1,5 +1,5 @@
 # GitOps view of the Pulse system (Argo CD application pulse-system, deploy/gitops/): the same manifests
-# cloud_up.sh and ui_cloud.sh apply, with their placeholders filled by kustomize instead of sed.
+# cloud_up.sh applies, with their placeholders filled by kustomize instead of sed.
 #   account      the AWS account (234612058031) in newName and gitops/*.yaml: deploy/gitops/configure.sh
 #   newTag       the runner image: CI (.github/workflows/image.yml) writes it after every build
 #   kubectl kustomize EKS_deployment/cloud      # what Argo CD applies
@@ -8,7 +8,6 @@ kind: Kustomization
 namespace: default
 resources:
   - pulse-cloud.yaml
-  - pulse-ui.yaml
   - gitops/config.yaml
   - gitops/trainer-sa.yaml
 images:
