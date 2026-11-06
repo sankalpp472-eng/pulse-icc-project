@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pulse"
+version = "1.0.0"
+description = "Predictive prewarming of serverless MCP tools for an LLM agent (DS252, IISc)"
+readme = "README.md"
+requires-python = ">=3.11"
+# dependencies: requirements.txt (pinned where the trained models need it); scripts/setup.sh installs both
+
+[tool.setuptools.packages.find]
+include = ["pulse*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.md", "LICENSE", "static/*"]

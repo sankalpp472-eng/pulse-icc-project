@@ -1,0 +1,31 @@
+# Everything the pulse package needs on a laptop (scripts/setup.sh installs it into .venv).
+# The cluster image pins its own versions: infra/cloud/requirements.txt.
+
+# the agent, the simulated customer and the speculator: OpenAI-compatible LLM APIs (Groq, OpenRouter, Ollama)
+openai>=1.40.0
+python-dotenv>=1.0.0
+langgraph>=1.0                 # the LangGraph variant of the agent (pulse/agent/langgraph_agent.py)
+langchain-openai>=1.0
+langsmith>=0.4
+
+# the tools as MCP servers, and the MCP client the agent and runners use
+mcp>=2.3
+redis>=5
+
+# the prediction service and its models (the pickles load only with these versions)
+fastapi
+uvicorn>=0.30
+pydantic
+numpy
+scipy
+pandas
+scikit-learn==1.9.1
+lightgbm==4.7.0
+prometheus-client
+kubernetes                     # PrewarmRequest objects (CRD_MODE=k8s), the controller, the runners' pod watcher
+boto3                          # the S3 model registry (pulse/registry.py)
+
+# load tests and plots
+locust>=2.20
+httpx
+matplotlib

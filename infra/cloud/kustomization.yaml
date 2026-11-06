@@ -1,0 +1,18 @@
+# GitOps view of the Pulse system (Argo CD application pulse-system, infra/gitops/): the same manifests
+# cloud_up.sh applies, with their placeholders filled by kustomize instead of sed.
+#   account      the AWS account (234612058031) in newName and gitops/*.yaml: infra/gitops/configure.sh
+#   newTag       the runner image: CI (.github/workflows/image.yml) writes it after every build
+#   kubectl kustomize infra/cloud      # what Argo CD applies
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: default
+resources:
+  - pulse-cloud.yaml
+  - gitops/config.yaml
+  - gitops/trainer-sa.yaml
+images:
+  - name: __IMAGE__
+    newName: 234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner
+    newTag: 20261104-1113-c73bf6f-dirty
+patches:
+  - path: gitops/settings.yaml

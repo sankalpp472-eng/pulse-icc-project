@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "pulse-ui",
-      "runtimeExecutable": "agent/.venv/Scripts/python.exe",
-      "runtimeArgs": ["ui/server.py"],
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "pulse.ui.server"],
       "port": 8765
     }
   ]
