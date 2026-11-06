@@ -124,6 +124,8 @@ aside label { margin-bottom: 10px; }
 .chip { font-family: var(--mono); font-size: 11.5px; padding: 1px 7px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); }
 .chip.warm { border-color: var(--accent); color: var(--accent); font-weight: 650; }
 .chip .p { color: var(--ink3); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips .pill { font-size: 12px; }
 .call { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 6px 8px; margin-top: 6px; border-left: 3px solid var(--accent); background: var(--surface2); border-radius: 6px; }
 .call.cold { border-left-color: var(--bad); }
 .call .name { font-family: var(--mono); font-weight: 650; font-size: 12.5px; }

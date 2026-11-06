@@ -6,19 +6,23 @@
 #
 #   bash infra/eks/eks_up.sh          # ~25 min the first time, ~5 min when the cluster exists
 #   USE_TERRAFORM=1 bash infra/eks/eks_up.sh   # the cluster from infra/terraform/eks/ instead of eksctl (same nodes)
+#   REGION=us-east-1 bash infra/eks/eks_up.sh   # another AWS region (default ap-south-1, Mumbai); eksctl path only
 #
 # Needs: aws (logged in, `aws configure`), eksctl (or terraform), kubectl, and the project's Python packages.
-# The cluster costs money by the hour until you run infra/eks/eks_down.sh.
+# The cluster costs money by the hour until you run infra/eks/eks_down.sh (with the same REGION).
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 PY=${PYTHON:-python}
-REGION=ap-south-1
+REGION=${REGION:-ap-south-1}
 NAME=pulse-eks
+CLUSTER_YAML=$(mktemp)                          # infra/eks/cluster.yaml in the chosen region
+trap 'rm -f "$CLUSTER_YAML"' EXIT
+sed "s/^\(  region: \)ap-south-1/\1$REGION/" infra/eks/cluster.yaml > "$CLUSTER_YAML"
 CLUSTER_TOOL=$([ "${USE_TERRAFORM:-0}" = 1 ] && echo terraform || echo eksctl)
 
 for t in aws "$CLUSTER_TOOL" kubectl curl; do
-  command -v "$t" >/dev/null || { echo "$t is not installed (see infra/eks/README.md, step 1)"; exit 1; }
+  command -v "$t" >/dev/null || { echo "$t is not installed (README.md, AWS EKS prerequisites)"; exit 1; }
 done
 aws sts get-caller-identity >/dev/null || { echo "Not logged in to AWS: run aws configure"; exit 1; }
 
@@ -33,7 +37,7 @@ elif eksctl get cluster --name "$NAME" --region "$REGION" >/dev/null 2>&1; then
   aws eks update-kubeconfig --region "$REGION" --name "$NAME" >/dev/null
 else
   echo "Creating cluster $NAME (15-20 min) ..."
-  eksctl create cluster -f infra/eks/cluster.yaml
+  eksctl create cluster -f "$CLUSTER_YAML"
 fi
 CTX=$(kubectl config get-contexts -o name | grep -m1 "$NAME")
 kubectl config use-context "$CTX"
@@ -59,4 +63,4 @@ fi
 echo
 echo "EKS is ready. In the UI (python -m pulse.ui.server): Setup -> Deploy Pulse services, then Knative + Experiments."
 echo "Or: bash infra/cloud/cloud_up.sh, then CONFIG=C3 bash infra/cloud/run_cloud.sh --fanout"
-echo "When done for the day: bash infra/eks/eks_down.sh"
+echo "When done for the day: REGION=$REGION bash infra/eks/eks_down.sh"

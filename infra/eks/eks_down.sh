@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Delete the EKS cluster and everything in it (nodes, load balancer, VPC), ~10 min.
-# Result folders on your laptop are kept. Afterwards, check the AWS console (ap-south-1:
-# EKS, EC2 -> Instances and Load Balancers) that nothing is left running.
+# Result folders on your laptop are kept. Afterwards check that nothing is left running (the UI's Setup tab:
+# "Check for leftovers", or the AWS console: EKS, EC2 -> Instances and Load Balancers, in the cluster's region).
 #
 #   bash infra/eks/eks_down.sh
+#   REGION=us-east-1 bash infra/eks/eks_down.sh   # the region eks_up.sh used (default ap-south-1)
 #   USE_TERRAFORM=1 bash infra/eks/eks_down.sh   # a cluster made by infra/terraform/eks/ (eks_up.sh USE_TERRAFORM=1)
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+REGION=${REGION:-ap-south-1}
 
 CTX=$(kubectl config get-contexts -o name | grep -m1 pulse-eks || true)
 [ -n "$CTX" ] && kubectl --context "$CTX" delete pwr --all --ignore-not-found || true
@@ -18,7 +20,7 @@ if [ "${USE_TERRAFORM:-0}" = 1 ]; then
   terraform -chdir=infra/terraform/eks init -input=false -backend-config="bucket=$TF_STATE_BUCKET" >/dev/null
   terraform -chdir=infra/terraform/eks destroy -input=false -auto-approve
 else
-  eksctl delete cluster -f infra/eks/cluster.yaml --wait
+  eksctl delete cluster --name pulse-eks --region "$REGION" --wait
 fi
 kubectl config use-context kind-pulse-kn >/dev/null 2>&1 || true
 echo

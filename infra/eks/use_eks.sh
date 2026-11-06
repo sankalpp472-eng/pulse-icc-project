@@ -12,7 +12,7 @@
 
 _ctx=$(kubectl config get-contexts -o name | grep -m1 "pulse-eks" || true)
 if [ -z "$_ctx" ]; then
-  echo "No kubectl context for pulse-eks. Run: aws eks update-kubeconfig --region ap-south-1 --name pulse-eks"
+  echo "No kubectl context for pulse-eks. Run: aws eks update-kubeconfig --region ${REGION:-ap-south-1} --name pulse-eks"
   return 1 2>/dev/null || exit 1
 fi
 kubectl config use-context "$_ctx" >/dev/null

@@ -39,6 +39,7 @@
 <div class="layout">
   <main>
     <nav class="tabs" id="tabs">
+      <button data-tab="setup">Setup</button>
       <button data-tab="demo" class="on">Live demo</button>
       <button data-tab="exp">Experiments</button>
       <button data-tab="results">Results</button>
@@ -338,6 +339,111 @@
           <button class="primary" id="gRetrain">▶ Retrain</button>
           <span class="muted" id="gVerdict"></span>
         </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ SETUP -->
+    <section id="tab-setup" class="tab">
+      <div class="card">
+        <div class="card-head"><h3>This project</h3><button class="ghost small" id="sRefresh">↻</button></div>
+        <div class="chips" id="sProject">checking…</div>
+        <div class="actions">
+          <button data-act="download_data">Download data</button>
+          <button data-act="train_action">Train lightgbm + markov</button>
+          <button data-act="embed_start">Start embedding server</button>
+          <button class="ghost" data-act="embed_stop">Stop it</button>
+          <button data-act="train_pulse_v3">Train pulse-v3</button>
+        </div>
+        <p class="muted small">The data is tau-bench's public recorded conversations. lightgbm + markov ship trained; pulse-v3
+          trains here in about 45 minutes with the embedding server (Docker) running. The speculator needs LLM keys.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>LLM keys and settings</h3><span class="muted small">saved to .env on this machine, never shown again</span></div>
+        <div class="form-grid" id="sEnv">
+          <label>LLM backend <select data-env="LLM_BACKEND"><option value="">(keep)</option><option>groq</option><option>openrouter</option><option>ollama</option></select></label>
+          <label>Groq API key <input type="password" data-env="GROQ_API_KEY" autocomplete="off"></label>
+          <label>Groq key 2 (optional) <input type="password" data-env="GROQ_API_KEY_2" autocomplete="off"></label>
+          <label>OpenRouter key <input type="password" data-env="OPEN_ROUTER_API_KEY" autocomplete="off"></label>
+          <label>Speculator: local server URL <input data-env="SPEC_BASE_URL" placeholder="http://127.0.0.1:11434/v1"></label>
+          <label>Speculator: model <input data-env="SPEC_MODEL" placeholder="qwen3:8b"></label>
+        </div>
+        <div class="actions"><button id="sEnvSave">Save</button><span class="muted small" id="sEnvState"></span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Tools on this machine</h3></div>
+        <div class="chips" id="sTools">checking…</div>
+        <p class="muted small">kind and EKS need Docker, kubectl and bash (Git Bash on Windows); EKS also the AWS CLI (logged in)
+          and eksctl or Terraform; monitoring and GitOps need helm.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Local cluster (kind)</h3><span class="pill" id="sKind">…</span></div>
+        <div class="actions">
+          <button data-act="kind_create">Create cluster</button>
+          <button data-act="image_build" data-target="kind">Build image for kind</button>
+          <button class="ghost" data-act="kind_delete">Delete cluster</button>
+        </div>
+        <p class="muted small">Free. Then switch the top bar to <b>Knative</b> to use it; deploy Pulse's own pods below only for
+          in-cluster runs.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>AWS EKS</h3><span class="pill" id="sEks">…</span></div>
+        <div class="form-grid">
+          <label>Region <input id="sRegion" value="ap-south-1"></label>
+          <label class="check"><input type="checkbox" id="sTerraform"> cluster with Terraform (instead of eksctl)</label>
+        </div>
+        <div class="actions">
+          <button data-act="image_build" data-target="ecr">1. Build + push image</button>
+          <button data-act="eks_create">2. Create cluster</button>
+          <button class="ghost" data-act="eks_delete">Delete cluster</button>
+          <button class="ghost" data-act="eks_leftovers">Check for leftovers</button>
+        </div>
+        <p class="muted small warn-text">An EKS cluster costs money by the hour until it is deleted. Delete it at the end of every
+          session, then check for leftovers.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Pulse in the current cluster</h3><span class="pill" id="sClusterPred">…</span></div>
+        <div class="form-grid">
+          <label>Predictor <select id="sPredictor"></select></label>
+          <label>θ <input type="number" id="sTheta" min="0.05" max="0.9" step="0.05" value="0.3"></label>
+        </div>
+        <div class="actions">
+          <button data-act="cloud_up">Deploy Pulse's services</button>
+          <button data-act="set_predictor">Switch predictor</button>
+          <button data-act="monitoring_install">Install Prometheus + Grafana</button>
+        </div>
+        <p class="muted small">Deploys the predictor, the prewarm controller and the embedding server (needs the image from the
+          step above). In-cluster experiment runs (Experiments → Where: inside the cluster) use them.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Cloud extras: model registry and GitOps</h3><span class="muted small" id="sAccount"></span></div>
+        <div class="form-grid">
+          <label>Your GitHub fork (owner/repo, optional) <input id="sRepo" placeholder="owner/pulse-icc-project"></label>
+          <label>Model family <select id="sFamily"><option value="action">lightgbm + markov</option><option value="pulse_v3">pulse-v3</option></select></label>
+          <label>Version to publish <input id="sVersion" placeholder="2026-11-07"></label>
+          <label>Argo CD follows branch <input id="sRevision" placeholder="main"></label>
+        </div>
+        <div class="actions">
+          <button data-act="tf_plan">Terraform plan</button>
+          <button class="ghost" data-act="tf_apply">Terraform apply</button>
+          <button data-act="registry_push_data">Upload training data</button>
+          <button class="ghost" data-act="registry_publish">Publish local model</button>
+          <button data-act="gitops_configure">GitOps: set my AWS account</button>
+          <button data-act="gitops_install">Install Argo CD</button>
+        </div>
+        <p class="muted small">Optional. The registry needs Terraform's state bucket once (infra/terraform/bootstrap). Start the UI
+          with PULSE_MODEL_URI / ACTION_MODEL_URI set to use the registry (Models tab).</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Log</h3><span class="muted" id="sState"></span>
+          <button class="ghost small hidden" id="sStop">■ Stop</button></div>
+        <pre class="log" id="sLog">No job yet.</pre>
       </div>
     </section>
 

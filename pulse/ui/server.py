@@ -28,6 +28,7 @@ ROOT = paths.ROOT
 os.chdir(ROOT)
 
 import pulse.ui.backend as backend  # noqa: E402
+from pulse.ui import setup as setup_actions  # noqa: E402
 from pulse.ui.session import Session  # noqa: E402
 from pulse.ui.sim_cluster import SimCluster  # noqa: E402
 
@@ -67,7 +68,7 @@ def busy() -> str | None:
     if s and s.is_alive():
         return "an interactive episode is running"
     if r and r.state == "running":
-        return "an experiment run is in progress"
+        return "a job is running (experiment, setup or training): wait for it or stop it"
     return None
 
 
@@ -341,6 +342,37 @@ def models_retrain(spec: dict):
         raise HTTPException(400, str(e))
     S["run"] = backend.BatchRun({"mode": "retrain", **spec}, steps, services)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- setup (data, models, keys, clusters, cloud)
+@app.get("/api/setup")
+def setup_status():
+    """What is installed, downloaded, trained and running (setup.status: tools on PATH, AWS login, clusters)."""
+    return {**setup_actions.status(cluster),
+            "actions": {k: {"title": t, "confirm": c} for k, (t, c) in setup_actions.ACTIONS.items()}}
+
+
+@app.post("/api/setup/run")
+def setup_run(body: dict):
+    """One Setup action (setup.ACTIONS) in the job runner; its log streams like an experiment run's."""
+    if busy():
+        raise HTTPException(409, busy())
+    name = str(body.get("action") or "")
+    try:
+        steps = setup_actions.build(name, body.get("params") or {}, cluster)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    S["run"] = backend.BatchRun({"mode": "setup", "action": name}, steps, services)
+    return {"ok": True}
+
+
+@app.post("/api/setup/env")
+def setup_env(body: dict):
+    """Write LLM keys / settings into .env. The answer says which are set, never their values."""
+    try:
+        return setup_actions.save_env(body.get("values") or {})
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 # ---------------------------------------------------------------- monitoring (Prometheus + Grafana)

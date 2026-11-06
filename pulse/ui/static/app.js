@@ -60,8 +60,65 @@ $("#tabs").addEventListener("click", (e) => {
   if (b.dataset.tab === "results") loadResults();
   if (b.dataset.tab === "mon") renderMonTab();
   if (b.dataset.tab === "models") loadModels();
+  if (b.dataset.tab === "setup") loadSetup();
 });
 const showTab = (name) => $(`#tabs button[data-tab="${name}"]`).click();
+
+// ------------------------------------------------------------------ setup (data, models, keys, clusters, cloud)
+let SETUP = null;
+const pill = (ok, text, title = "") => `<span class="pill ${ok === true ? "ok" : ok === false ? "bad" : "wait"}" title="${esc(title)}">${esc(text)}</span>`;
+async function loadSetup() {
+  try { SETUP = await api("/api/setup"); } catch (e) { toast(e.message, 6000); return; }
+  const s = SETUP, d = s.data, m = s.models, env = s.env;
+  $("#sProject").innerHTML =
+    pill(d.trajectories === d.of, `tau-bench data ${d.trajectories}/${d.of}`, "data/tau-bench (Download data)") +
+    pill(d.schemas > 0, `tool schemas ${d.schemas}`) +
+    pill(m.action, "lightgbm + markov model", "models/action_model.pkl") +
+    pill(m.pulse_v3, "pulse-v3 model", "models/pulse_v3/predictor.pkl (Train pulse-v3, or the S3 registry)") +
+    pill(m.embed_server, "embedding server", "llama.cpp + nomic-embed-text on :8091 (pulse-v3)") +
+    pill(env.llm_ready, env.llm_ready ? "LLM keys set" : "no LLM keys", "live runs, the AI customer, the speculator");
+  $("#sEnvState").textContent = Object.entries(env.values).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(" · ") || "nothing set yet";
+  $("#sTools").innerHTML = Object.entries(s.tools).map(([t, ok]) => pill(ok, t)).join("");
+  $("#sKind").textContent = s.kind.exists ? "cluster pulse-kn exists" : "no cluster";
+  $("#sKind").className = "pill " + (s.kind.exists ? "ok" : "");
+  $("#sEks").textContent = (s.eks.account ? `AWS ${s.eks.account}` : "not logged in to AWS") +
+    (s.eks.context ? " · cluster context found" : "") + (s.images.ecr ? ` · image ${s.images.ecr.split(":").pop()}` : "");
+  $("#sEks").className = "pill " + (s.eks.context ? "ok" : "");
+  $("#sAccount").textContent = s.eks.account ? `AWS account ${s.eks.account}` : "";
+  $("#sClusterPred").textContent = s.cluster.knative ? `${s.cluster.context} · predictor ${s.cluster.predictor || "not deployed"}`
+    : "switch the top bar to Knative";
+  if (!$("#sPredictor").options.length) $("#sPredictor").innerHTML = s.predictors.map((p) => `<option>${p}</option>`).join("");
+}
+function setupParams(btn) {
+  return { region: $("#sRegion").value.trim(), terraform: $("#sTerraform").checked, target: btn.dataset.target,
+           predictor: $("#sPredictor").value, theta: Number($("#sTheta").value), github_repo: $("#sRepo").value.trim(),
+           family: $("#sFamily").value, version: $("#sVersion").value.trim(), revision: $("#sRevision").value.trim() };
+}
+$("#tab-setup").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  const act = b.dataset.act, info = (SETUP && SETUP.actions[act]) || {};
+  if (info.confirm && !confirm(info.confirm)) return;
+  try {
+    await api("/api/setup/run", { action: act, params: setupParams(b) });
+    runAfter = 0;
+    $("#xLog").textContent = "";
+    $("#sLog").textContent = "";
+    toast(`${info.title || act}: started (log below)`);
+  } catch (err) { toast(err.message, 8000); }
+});
+$("#sRefresh").onclick = loadSetup;
+$("#sStop").onclick = () => api("/api/run/stop", {});
+$("#sEnvSave").onclick = async () => {
+  const values = {};
+  $$("#sEnv [data-env]").forEach((el) => { if (el.value) values[el.dataset.env] = el.value; });
+  try {
+    await api("/api/setup/env", { values });
+    $$("#sEnv input[type=password]").forEach((el) => (el.value = ""));
+    toast("Saved to .env. Restart the predictor (or the UI) for new keys to take effect.", 6000);
+    loadSetup();
+  } catch (err) { toast(err.message, 6000); }
+};
 
 // ------------------------------------------------------------------ cluster switch
 const clusterSeg = seg("clusterSeg", async (mode) => {
@@ -502,12 +559,21 @@ function renderRun(run) {
   if (gate) { $("#gVerdict").textContent = gate; loadModels(); }
   if (run.spec && run.spec.mode === "retrain" && run.state === "failed") $("#gVerdict").textContent = "training failed: see Run log";
   if (run.lines.length) {
-    const log = $("#xLog");
-    log.textContent += (log.textContent && !log.textContent.endsWith("\n") ? "\n" : "") + run.lines.join("\n");
-    if ($("#xFollow").checked) log.scrollTop = log.scrollHeight;
+    for (const log of [$("#xLog"), $("#sLog")]) {          // the Experiments tab's Run log and the Setup tab's log
+      log.textContent += (log.textContent && !log.textContent.endsWith("\n") ? "\n" : "") + run.lines.join("\n");
+      if ($("#xFollow").checked) log.scrollTop = log.scrollHeight;
+    }
     runAfter = run.n;
   }
   const running = run.state === "running";
+  const setupSecs = Math.round((run.ended || state.now) - run.started);
+  $("#sState").textContent = `${run.spec.mode === "setup" ? run.spec.action : run.spec.mode} · ${run.state} · ` +
+    `${Math.floor(setupSecs / 60)}m ${setupSecs % 60}s`;
+  $("#sStop").classList.toggle("hidden", !running);
+  if (run.spec.mode === "setup" && !running && renderRun._last !== run.started) {    // a setup job ended: new status
+    renderRun._last = run.started;
+    loadSetup();
+  }
   $("#xStart").classList.toggle("hidden", running);
   $("#xStop").classList.toggle("hidden", !running);
   const secs = Math.round((run.ended || state.now) - run.started);
