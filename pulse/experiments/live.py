@@ -90,7 +90,7 @@ from pulse.agent.agent import run_episode  # noqa: E402
 from pulse.agent.tau_airline import load_tasks  # noqa: E402
 from pulse.agent.tools import CALL_LOG  # noqa: E402
 from pulse.experiments.common import (COLD_LATENCY_S, PodWatcher, peak_pods, reset_db, run_config, run_dir,  # noqa: E402
-                       save_predictor_health,
+                       predictor_info, save_predictor_health,
                        shared_db, tasks_tag, wait_all_zero)
 
 CALL_FIELDS = ["episode", "task_id", "task_set", "call_idx", "tool", "t_start", "latency_ms", "cold",
@@ -140,8 +140,8 @@ def main():
         if health.get("crd", {}).get("mode") != "k8s":
             print("WARNING: predictor is not in CRD_MODE=k8s -> no PrewarmRequests, nothing gets prewarmed")
         cfg["prewarm"] = {"predictor_url": a.predictor_url, "workflow_id": a.workflow_id,
-                          "predictor": {k: health.get(k) for k in ("model", "action_models", "theta", "ttl_s")},
-                          "crd_mode": health.get("crd", {}).get("mode"), "hint_signals": hints.USE_SIGNALS,
+                          "predictor": predictor_info(health),
+                          "crd_mode": health.get("crd", {}).get("mode"), "hint_inputs": hints.USE_CONTEXT,
                           "mechanism": "Option A: controller sends an MCP ping per PrewarmRequest; "
                                        "TTL = Knative idle window",
                           "hints": "sent by the agent before every LLM step (agent/hints.py)"}

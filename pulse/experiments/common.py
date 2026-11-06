@@ -185,6 +185,13 @@ def run_config(task_ids: list, db: str, workload: str, models: dict, extra: dict
     }
 
 
+def predictor_info(health: dict) -> dict:
+    """What run_config.json records about the predictor, from its GET /healthz (pulse/predictor/service.py)."""
+    pol = health.get("policy") or {}
+    return {"model": health.get("predictor"), "theta": pol.get("theta"), "ttl_s": pol.get("ttl_s"), "policy": pol,
+            "model_file": health.get("model_file"), "model_version": health.get("model_version")}
+
+
 def save_predictor_health(predictor_url: str | None, out_dir: Path) -> None:
     """C3: the predictor's /healthz at the end of the run (model, theta, CRD writes, the LLM speculator's
     call counts) -> predictor_health.json in the run folder."""

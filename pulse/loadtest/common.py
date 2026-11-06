@@ -116,6 +116,14 @@ def _stats(rows: list[tuple]) -> dict:
             "mean": round(statistics.mean(lat) * 1000, 1) if lat else None, "max": _pct(lat, 100)}
 
 
+def predictor_name(url: str | None) -> str | None:
+    """The predictor answering at `url` (its GET /info), recorded with the run; None if there is none."""
+    if not url:
+        return None
+    from pulse.predictor import client
+    return client.info(url).get("name")
+
+
 class Recorder:
     """Every request of a load run: (t_start, load, kind, name, latency_s, ok, error). `load` is what the run
     varies: users (Locust) or hints/s / burst size (asyncio). Tool calls slower than COLD_S count as cold."""

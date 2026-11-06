@@ -57,7 +57,7 @@ os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:8081/mcp")
 os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 
 from pulse.experiments.common import (COLD_LATENCY_S, PodWatcher, peak_pods, reset_db, run_config, run_dir,  # noqa: E402
-                       save_predictor_health,
+                       predictor_info, save_predictor_health,
                        shared_db, tasks_tag, wait_all_ready, wait_all_zero)
 from pulse.experiments.metrics import RunMetrics  # noqa: E402
 from pulse.agent.tools import READ_ONLY_TOOLS as READ_TOOLS, LocalToolBackend, MCPToolBackend  # noqa: E402
@@ -490,7 +490,7 @@ def main():
         if health.get("crd", {}).get("mode") != "k8s":
             print("WARNING: predictor is not in CRD_MODE=k8s -> no PrewarmRequests, nothing gets prewarmed")
         cfg["prewarm"] = {"predictor_url": a.predictor_url, "workflow_id": a.workflow_id,
-                          "predictor": {k: health.get(k) for k in ("model", "theta", "ttl_s")},
+                          "predictor": predictor_info(health),
                           "crd_mode": health.get("crd", {}).get("mode"),
                           "mechanism": "Option A: controller sends k = desiredReplicas MCP pings per PrewarmRequest "
                                        "(one if the tool already has k pods); TTL = Knative idle window",
@@ -498,7 +498,7 @@ def main():
                           "hint_signals": a.signals_matched, "hint_context": a.hint_context,
                           "hint_timing": a.hint_timing,
                           "hint_timeout_s": a.hint_timeout,
-                          "health": {k: health.get(k) for k in ("stats", "keys", "action_models") if k in health}}
+                          "health": {k: health.get(k) for k in ("stats", "keys", "models_in_file") if k in health}}
     detail = (tasks_tag(cfg["task_ids"]) if a.traces or a.tasks else "taubench") + \
         (f"-x{a.repeat}" if a.repeat > 1 else "") + ("" if a.traces else f"-{len(episodes)}ep") + \
         ("-fanout" if a.fanout else "")

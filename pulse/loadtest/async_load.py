@@ -87,6 +87,8 @@ def main():
     ap.add_argument("--label", default="")
     a = ap.parse_args()
     params = {k: v for k, v in vars(a).items() if k not in ("target", "label")}
+    if a.target == "predictor":
+        params["predictor"] = common.predictor_name(a.url)
     rec = common.Recorder(a.target, "asyncio", a.config, params)
     out = common.run_dir(a.target, "asyncio", a.config, a.label)
     try:

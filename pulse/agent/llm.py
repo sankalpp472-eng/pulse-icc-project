@@ -32,12 +32,17 @@ load_dotenv(paths.ENV_FILE)  # .env in the repository root, whatever the cwd
 BACKEND = os.getenv("LLM_BACKEND", "groq").lower()
 
 
+def is_key(v) -> bool:
+    """A real key, not empty and not .env.example's placeholder (your_..._here)."""
+    return bool(v and v.strip() and not v.strip().startswith("your_"))
+
+
 def _groq_keys() -> list[str]:
     numbered = sorted((k for k in os.environ if re.fullmatch(r"GROQ_API_KEY_\d+", k)),
                       key=lambda k: int(k.rsplit("_", 1)[1]))
-    keys = [os.environ[k] for k in numbered if os.environ[k].strip()]
-    if not keys and os.getenv("GROQ_API_KEY"):
-        keys = [os.environ["GROQ_API_KEY"]]
+    keys = [os.environ[k].strip() for k in numbered if is_key(os.environ[k])]
+    if not keys and is_key(os.getenv("GROQ_API_KEY")):
+        keys = [os.environ["GROQ_API_KEY"].strip()]
     if not keys:
         raise ValueError("No Groq key: set GROQ_API_KEY_1 (..._2, ...) or GROQ_API_KEY in .env")
     return keys

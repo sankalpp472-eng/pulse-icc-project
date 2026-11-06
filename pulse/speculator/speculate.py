@@ -64,15 +64,19 @@ class QuotaExhausted(RuntimeError):
 
 def api_keys():
     load_dotenv(paths.ENV_FILE)
-    if os.getenv("SPEC_API_KEY"):
-        return [os.environ["SPEC_API_KEY"]]
+    real = lambda v: bool(v and v.strip() and not v.strip().startswith("your_"))   # noqa: E731 (not the placeholder)
+    if real(os.getenv("SPEC_API_KEY")):
+        return [os.environ["SPEC_API_KEY"].strip()]
+    if os.getenv("SPEC_BASE_URL"):                     # a local server (Ollama, vLLM) takes any key
+        return ["local"]
     numbered = sorted((k for k in os.environ if re.fullmatch(r"GROQ_API_KEY_\d+", k)),
                       key=lambda k: int(k.rsplit("_", 1)[1]))
-    keys = [os.environ[k] for k in numbered if os.environ[k].strip()]
-    if not keys and os.getenv("GROQ_API_KEY"):
-        keys = [os.environ["GROQ_API_KEY"]]
+    keys = [os.environ[k].strip() for k in numbered if real(os.environ[k])]
+    if not keys and real(os.getenv("GROQ_API_KEY")):
+        keys = [os.environ["GROQ_API_KEY"].strip()]
     if not keys:
-        raise ValueError("No Groq key: set GROQ_API_KEY_1 (..._2, ...) or GROQ_API_KEY in .env")
+        raise ValueError("No LLM key for the speculator: set GROQ_API_KEY (or GROQ_API_KEY_1, ...) in .env, or "
+                         "SPEC_BASE_URL for a local server (the UI: Setup -> LLM keys)")
     return keys
 
 

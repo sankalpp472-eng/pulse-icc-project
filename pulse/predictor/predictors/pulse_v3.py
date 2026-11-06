@@ -72,6 +72,9 @@ class PulseV3(Predictor):
         version = os.getenv("PULSE_MODEL_VERSION")          # pinned by GitOps (pulse-config); else latest
         uri = f"{MODEL_URI.rstrip('/')}/{version}" if MODEL_URI and version else MODEL_URI
         self.model_file = Path(model_store.fetch(uri)) if uri else Path(MODEL_PATH)
+        if not self.model_file.exists():
+            raise SystemExit(f"no pulse-v3 model at {self.model_file}: train it (python -m pulse.setup.train_models "
+                             "pulse_v3, or the UI: Setup -> Train pulse-v3) or set PULSE_MODEL_URI to the S3 registry")
         self.model_version = self.model_file.parent.name if uri else None
         self.pred = PulseV3Predictor.load(path=self.model_file,
                                           embedder=Embedder(timeout=float(os.getenv("PULSE_EMBED_TIMEOUT_S", "1.0"))))

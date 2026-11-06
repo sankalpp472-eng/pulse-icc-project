@@ -65,7 +65,9 @@ def _start(environment, **_):
     STATE["env"] = environment
     STATE["rec"] = common.Recorder(TARGET["name"], "locust", o.pulse_config,
                                    {"stages": [list(s) for s in stages(environment)], "seed": o.seed, "tasks": o.tasks,
-                                    "host": o.host, "predictor_url": o.predictor_url, "gap_scale": o.gap_scale})
+                                    "host": o.host, "predictor_url": o.predictor_url, "gap_scale": o.gap_scale,
+                                    "predictor": common.predictor_name(o.host if TARGET["name"] == "predictor"
+                                                                       else o.predictor_url)})
     STATE["dir"] = common.run_dir(TARGET["name"], "locust", o.pulse_config, o.label)
 
 

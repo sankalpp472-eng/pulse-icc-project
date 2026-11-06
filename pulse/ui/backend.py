@@ -424,7 +424,7 @@ def models_list(fam: str | None = None) -> dict:
     uri, base = f["uri"](), {"family": fam or "pulse_v3", "predictors": f["predictors"]}
     if not uri:
         return {**base, "uri": None, "versions": [], "error": f"{f['env']} is not set: start the UI with "
-                f"{f['env']}=s3://<bucket>/... (terraform -chdir=terraform output -raw {f['terraform']})"}
+                f"{f['env']}=s3://<bucket>/... (terraform -chdir=infra/terraform output -raw {f['terraform']})"}
     try:
         return {**base, "uri": uri, "versions": _store().versions(uri), "error": None}
     except ImportError as e:
@@ -657,7 +657,7 @@ class BatchRun:
                     self._say("• waiting for the predictor to load ...")
                     if not self.services.wait_predictor():
                         raise RuntimeError("the predictor did not start; see its log on the Predictor card")
-                    self._say(f"  predictor ready ({(self.services.health or {}).get('model')})")
+                    self._say(f"  predictor ready ({(self.services.health or {}).get('predictor')})")
                     continue
                 if callable(cmd):                       # a step done in Python (e.g. patch the tools' min-scale)
                     self._say(f"• {title}")
