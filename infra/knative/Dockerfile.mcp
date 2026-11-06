@@ -2,7 +2,7 @@
 # TOOLS=<one tool name> (and DOMAIN=retail for retail), so every tool is its own serverless function.
 # Built from the repository root (deploy.sh does it unless SKIP_BUILD=1):
 #   docker build -f infra/knative/Dockerfile.mcp -t <repo>/pulse-mcp-tools:<tag> .
-# Only the tool code goes in (Dockerfile.mcp.dockerignore). /home/app/mcp_server.py starts pulse.agent.mcp_server,
+# Only the tool code goes in (the repository's .dockerignore). /home/app/mcp_server.py starts pulse.agent.mcp_server,
 # so `python mcp_server.py [--seed]` works with this image and with the older published ones alike.
 FROM python:3.11-slim
 

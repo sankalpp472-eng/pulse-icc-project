@@ -43,18 +43,18 @@ def _groq_keys() -> list[str]:
     keys = [os.environ[k].strip() for k in numbered if is_key(os.environ[k])]
     if not keys and is_key(os.getenv("GROQ_API_KEY")):
         keys = [os.environ["GROQ_API_KEY"].strip()]
-    if not keys:
-        raise ValueError("No Groq key: set GROQ_API_KEY_1 (..._2, ...) or GROQ_API_KEY in .env")
     return keys
 
 
+# No key is not an error until an LLM is called (chat()), so everything that only imports the agent still works.
+NO_KEY = "No LLM key: set GROQ_API_KEY (or GROQ_API_KEY_1, ...) or OPEN_ROUTER_API_KEY in .env (the UI: Setup -> LLM keys)"
 if BACKEND == "groq":
     KEYS = _groq_keys()
-    BASE_URL, API_KEY, TIMEOUT = "https://api.groq.com/openai/v1", KEYS[0], 120
+    BASE_URL, API_KEY, TIMEOUT = "https://api.groq.com/openai/v1", (KEYS[0] if KEYS else None), 120
     DEFAULT_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 elif BACKEND == "openrouter":
-    BASE_URL, API_KEY, TIMEOUT = "https://openrouter.ai/api/v1", os.environ["OPEN_ROUTER_API_KEY"], 180
-    KEYS = [API_KEY]
+    BASE_URL, API_KEY, TIMEOUT = "https://openrouter.ai/api/v1", os.getenv("OPEN_ROUTER_API_KEY"), 180
+    KEYS = [API_KEY] if is_key(API_KEY) else []
     DEFAULT_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b")
 elif BACKEND == "ollama":
     BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434") + "/v1"
@@ -185,6 +185,8 @@ def _next_key(model: str, err: str) -> bool:
 
 def chat(messages: list[dict], tools: list[dict] | None = None,
          model: str | None = None, max_retries: int = 8) -> LLMResult:
+    if not _clients:
+        raise ValueError(NO_KEY)
     model = model or DEFAULT_MODEL
     waited, attempt = 0.0, 0
     while True:

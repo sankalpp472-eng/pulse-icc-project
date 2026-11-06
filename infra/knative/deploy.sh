@@ -40,9 +40,9 @@ done
 
 kubectl config use-context "${KUBE_CONTEXT:-kind-pulse-kn}"   # KUBE_CONTEXT=<eks context> for EKS
 
-# 1. Image (public on Docker Hub; Dockerfile.mcp.dockerignore lets only the tool code in)
+# 1. Image (public on Docker Hub; the repository's .dockerignore lets only the tool code in)
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
-  DOCKER_BUILDKIT=1 docker build -f Dockerfile.mcp -t "$IMAGE" "$ROOT"
+  docker build -f Dockerfile.mcp -t "$IMAGE" "$ROOT"
   docker push "$IMAGE"
 fi
 

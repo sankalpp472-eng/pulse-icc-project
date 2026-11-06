@@ -1,9 +1,0 @@
-# The tools' image needs only the tool code (Dockerfile.mcp); everything else stays out of the build context.
-*
-!pulse/__init__.py
-!pulse/paths.py
-!pulse/agent/__init__.py
-!pulse/agent/mcp_server.py
-!pulse/agent/tau_airline/
-!pulse/agent/tau_retail/
-**/__pycache__
