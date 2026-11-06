@@ -7,6 +7,9 @@ __pycache__/
 EKS_deployment/logs/
 baselines/*/data/
 pulse_pred/data/
+# tau-bench conversations, downloaded (not committed): locally and by CI's image build, whose tag would
+# otherwise say "-dirty" (build_image.sh checks git status)
+predictor/data/tau-bench/
 terraform/**/.terraform/
 terraform/**/*.tfstate*
 terraform/**/tfplan

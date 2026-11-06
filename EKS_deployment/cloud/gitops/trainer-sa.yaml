@@ -5,4 +5,4 @@ kind: ServiceAccount
 metadata:
   name: pulse-trainer
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/pulse-eks-pulse-trainer
+    eks.amazonaws.com/role-arn: arn:aws:iam::234612058031:role/pulse-eks-pulse-trainer
