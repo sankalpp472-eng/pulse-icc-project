@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
-from openai import OpenAI, RateLimitError
+from openai import BadRequestError, OpenAI, RateLimitError
 
 from pulse import paths
 
@@ -106,6 +106,8 @@ FIXED_TOKENS = int(os.getenv("LLM_FIXED_TOKENS", "2800"))   # system prompt + to
 CHARS_PER_TOKEN = 2.7                                       # conversation (measured on tool JSON; conservative)
 KEEP_LAST = 4                                               # newest messages never shrunk
 OMITTED = "[older tool result removed to save space]"
+TRUNCATE_CHARS = 4000            # last resort: a tool result longer than this is cut (the newest ones too)
+TRUNCATED = " [... result truncated to fit the model's request limit]"
 
 
 def est_tokens(messages: list[dict], tools: list[dict] | None = None) -> int:
@@ -149,6 +151,15 @@ def fit_context(messages: list[dict], tools: list[dict] | None = None,
             if new and new != out[i].get("content"):
                 out[i]["content"] = new
                 changed.add(i)
+    # 4. still too large: a huge tool result among the newest (e.g. a long flight search) -> its first part only,
+    #    longest first. Better than a request the provider rejects every time (HTTP 413).
+    for i in sorted(range(1, len(out)), key=lambda i: -len(out[i].get("content") or "")):
+        if est_tokens(out, tools) <= budget:
+            break
+        c = out[i].get("content") or ""
+        if out[i].get("role") == "tool" and len(c) > TRUNCATE_CHARS:
+            out[i]["content"] = c[:TRUNCATE_CHARS] + TRUNCATED
+            changed.add(i)
     return out, len(changed)
 
 
@@ -183,7 +194,8 @@ def _next_key(model: str, err: str) -> bool:
     if nxt is None:
         return False
     _active[model] = nxt
-    print(f"  [llm] key {cur + 1} hit its daily limit for {model} (org {_org(err)}); switching to key {nxt + 1}")
+    print(f"  [llm] key {cur + 1} hit its daily limit for {model} (org {_org(err)}); switching to key {nxt + 1}",
+          flush=True)
     return True
 
 
@@ -192,7 +204,7 @@ def chat(messages: list[dict], tools: list[dict] | None = None,
     if not _clients:
         raise ValueError(NO_KEY)
     model = model or DEFAULT_MODEL
-    waited, attempt = 0.0, 0
+    waited, attempt, bad_calls = 0.0, 0, 0
     while True:
         t0 = time.perf_counter()
         try:
@@ -200,12 +212,23 @@ def chat(messages: list[dict], tools: list[dict] | None = None,
                 model=model,
                 messages=messages,
                 tools=tools or None,
-                temperature=0.0,
+                temperature=0.0 if not bad_calls else 0.4,      # a retry after a malformed call samples anew
                 extra_body=EXTRA_BODY,
             )
             usage = getattr(resp, "usage", None)
             return LLMResult(resp.choices[0].message, time.perf_counter() - t0, waited,
                              getattr(usage, "prompt_tokens", None))
+        except BadRequestError as e:
+            # Groq checks the model's tool calls against the schemas ("tool call validation failed",
+            # tool_use_failed): a model sometimes emits a malformed one. Ask again (up to 3 times) instead of
+            # ending the episode; any other bad request is a real error.
+            msg = str(e).lower()
+            if bad_calls < 3 and ("tool call validation failed" in msg or "tool_use_failed" in msg
+                                  or "failed to call a function" in msg):
+                bad_calls += 1
+                print(f"  [llm] malformed tool call from {model}, asking again ({bad_calls}/3)", flush=True)
+                continue
+            raise
         except RateLimitError as e:
             # Groq tells us how long to wait; fall back to exponential backoff
             retry_after = e.response.headers.get("retry-after")
@@ -218,7 +241,7 @@ def chat(messages: list[dict], tools: list[dict] | None = None,
                                      f"{wait:.0f}s wait: {str(e)[:200]}") from e
             if attempt == max_retries:
                 raise
-            print(f"  [llm] rate limited, waiting {wait:.1f}s ({attempt + 1}/{max_retries})")
+            print(f"  [llm] rate limited, waiting {wait:.1f}s ({attempt + 1}/{max_retries})", flush=True)
             time.sleep(wait)
             waited += wait
             attempt += 1

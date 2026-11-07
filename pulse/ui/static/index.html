@@ -392,7 +392,7 @@
         <div class="card-head"><h3>Local cluster (kind)</h3><span class="pill" id="sKind">…</span></div>
         <div class="actions">
           <button data-act="kind_create">Create cluster</button>
-          <button data-act="retail_tools">Deploy the retail tools</button>
+          <button data-act="retail_tools" data-target="kind">Deploy the retail tools</button>
           <button data-act="image_build" data-target="kind">Build image for kind</button>
           <button class="ghost" data-act="kind_delete">Delete cluster</button>
         </div>
@@ -411,8 +411,10 @@
         <div class="actions">
           <button data-act="image_build" data-target="ecr">1. Build + push image</button>
           <button data-act="eks_create">2. Create cluster</button>
+          <button class="ghost" data-act="retail_tools" data-target="ecr" title="Builds the tools image, pushes it to your ECR (pulse-tools) and deploys the 16 retail tools next to the airline ones">Deploy the retail tools</button>
           <button class="ghost" data-act="eks_delete">Delete cluster</button>
           <button class="ghost" data-act="eks_leftovers">Check for leftovers</button>
+          <button class="ghost" data-act="registry_access" title="IRSA roles so the cluster's predictors read, and its training Jobs publish, the S3 model registry. Create cluster does this when the registry exists; use this button if you created the registry afterwards.">Model registry access</button>
         </div>
         <p class="muted small warn-text">An EKS cluster costs money by the hour until it is deleted. Delete it at the end of every
           session, then check for leftovers.</p>
@@ -458,6 +460,7 @@
         <div class="actions">
           <button data-act="registry_push_data">Upload training data</button>
           <button class="ghost" data-act="registry_publish">Publish local model</button>
+          <label class="check"><input type="checkbox" id="sPubLatest" checked> make it latest</label>
           <button data-act="gitops_configure">GitOps: set my AWS account</button>
           <button data-act="gitops_install">Install Argo CD</button>
         </div>

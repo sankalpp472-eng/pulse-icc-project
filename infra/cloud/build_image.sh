@@ -10,7 +10,8 @@
 # cloud_up.sh and run_cloud.sh read it.
 # What goes in: the pulse package (not the UI: it runs on the laptop), models/action_model.pkl, a locally trained
 # models/pulse_v3/predictor.pkl if there is one (then pulse_v3 works without the S3 registry), the tau-bench airline
-# trajectories (hint signals) and the replay traces. Never .env: LLM keys go in as a Secret (cloud_up.sh).
+# trajectories (hint signals) and the replay traces, and for retail runs (DOMAIN=retail) the retail trajectories and
+# models/action_model_retail.pkl when they are here. Never .env: LLM keys go in as a Secret (cloud_up.sh).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
@@ -34,6 +35,14 @@ if [ -f models/pulse_v3/predictor.pkl ]; then                     # pulse_v3 wit
   mkdir -p "$STAGE/app/models/pulse_v3" && cp models/pulse_v3/predictor.pkl "$STAGE/app/models/pulse_v3/"
 fi
 cp data/tau-bench/historical_trajectories/*airline.json "$STAGE/app/data/tau-bench/historical_trajectories/"
+# retail runs in the cluster: the conversations they replay, and the retail lightgbm + markov (train_models action_retail)
+cp data/tau-bench/historical_trajectories/*retail.json "$STAGE/app/data/tau-bench/historical_trajectories/" 2>/dev/null || \
+  echo "no retail conversations (download_data): retail runs in the cluster will not work"
+if [ -f models/action_model_retail.pkl ]; then
+  cp models/action_model_retail.pkl "$STAGE/app/models/"
+else
+  echo "no models/action_model_retail.pkl (Setup -> Train retail lightgbm + markov): retail C3 uses pulse_v3 only"
+fi
 cp data/traces/*.jsonl "$STAGE/app/data/traces/"
 cp "$HERE/cloud_entry.sh" "$STAGE/app/"
 cp "$HERE/requirements.txt" "$STAGE/"

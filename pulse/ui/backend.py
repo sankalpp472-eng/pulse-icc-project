@@ -898,8 +898,8 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     if cluster.domain == "retail":
         if mode == "live":
             raise ValueError("live runs use our airline agent: switch the domain to airline (top bar), or replay retail")
-        if where == "cluster":
-            raise ValueError("the in-cluster runner and predictor are airline only: run retail from the laptop")
+        if spec.get("predictor") == "speculator" and spec.get("config") == "C3":
+            raise ValueError("the speculator knows the airline tools only: pick lightgbm, markov or pulse_v3 for retail")
     if mode == "load":
         return build_load(spec, cluster, services, tasks)
     steps: list[tuple[str, list[str], dict]] = []
@@ -1053,6 +1053,8 @@ def summarize(d: Path) -> dict | None:
                 "p99": lat.get("p99"), "mean": lat.get("mean"), "pod_seconds": None,
                 "files": sorted(p.name for p in d.iterdir())}
     pred = ((cfg.get("prewarm") or {}).get("predictor") or {}).get("model")
+    if not isinstance(pred, str):          # pulse_v3 runs before the /healthz fix recorded its session stats here
+        pred = "pulse_v3" if isinstance(pred, dict) else None
     return {"name": d.name, "path": rel(d),
             "where": d.parent.name, "config": s.get("config") or cfg.get("config"),
             "mode": "live" if "W1-live" in d.name else "replay", "predictor": pred,

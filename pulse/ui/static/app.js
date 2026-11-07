@@ -101,7 +101,8 @@ async function loadSetup() {
 function setupParams(btn) {
   return { region: $("#sRegion").value.trim(), terraform: $("#sTerraform").checked, target: btn.dataset.target,
            predictor: $("#sPredictor").value, theta: Number($("#sTheta").value), github_repo: $("#sRepo").value.trim(),
-           family: $("#sFamily").value, version: $("#sVersion").value.trim(), revision: $("#sRevision").value.trim() };
+           family: $("#sFamily").value, version: $("#sVersion").value.trim(), revision: $("#sRevision").value.trim(),
+           latest: $("#sPubLatest").checked };
 }
 $("#tab-setup").addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-act]");
@@ -173,15 +174,14 @@ const domainSeg = seg("domainSeg", async (domain) => {
     domainSeg.set(state.cluster?.domain || "airline");
   }
 });
-// what the Experiments form offers for the domain: its task presets; retail has no live agent, speculator or run pod
+// what the Experiments form offers for the domain: its task presets; retail has no live agent or speculator
 function domainForm(domain) {
   const retail = domain === "retail";
   $$("#xTasksPreset option[data-domain]").forEach((o) => { o.hidden = o.disabled = o.dataset.domain !== domain; });
   const sel = $("#xTasksPreset");
   if (sel.selectedOptions[0]?.disabled) { sel.value = retail ? "r-heldout" : "heldout"; sel.onchange(); }
-  for (const [id, off] of [["#xMode button[data-v=live]", retail], ["#xWherePod", retail]]) $(id).disabled = off;
+  $("#xMode button[data-v=live]").disabled = retail;                 // the live agent is airline only
   if (retail && xMode.get() === "live") { xMode.set("replay"); expForm(); }
-  if (retail && xWhere.get() === "cluster") xWhere.set("laptop");
   const spec = $("#xPred option[value=speculator]");
   spec.disabled = retail;
   if (retail && $("#xPred").value === "speculator") { $("#xPred").value = "lightgbm"; expForm(); }
@@ -561,7 +561,8 @@ function renderEvent(ev) {
       }
       add(`<div class="stats">${stat(s.calls, "tool calls")}${stat(s.cold, "cold calls")}${stat(s.prewarmed_hits, "prewarmed")}` +
         `${stat(fmt(s.mean_ms), "mean latency ms")}${stat(fmt(s.cold_wait_s, 1), "s lost to cold starts")}` +
-        `${s.pod_seconds != null ? stat(fmt(s.pod_seconds), "pod-seconds") : ""}${stat(s.hints_answered + "/" + s.hints_sent, "hints answered")}</div>`, "step");
+        `${s.pod_seconds != null ? stat(fmt(s.pod_seconds), "pod-seconds") : ""}${stat(s.hints_answered + "/" + s.hints_sent, "hints answered")}` +
+        `${s.llm_wait_s ? stat(fmt(s.llm_wait_s, 0), "s waiting on LLM rate limits") : ""}</div>`, "step");
       break;
     }
   }

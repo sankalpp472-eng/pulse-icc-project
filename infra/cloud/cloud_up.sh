@@ -31,6 +31,17 @@ else
   echo "No .env: the speculator and live runs will have no Groq keys"
 fi
 
+# The model registry the cluster's predictors load from (ConfigMap pulse-config): from the UI's registry settings
+# (PULSE_MODEL_URI / ACTION_MODEL_URI). With GitOps, Argo CD owns pulse-config (infra/cloud/gitops/config.yaml): kept.
+if kubectl get configmap pulse-config -o jsonpath='{.metadata.annotations.argocd\.argoproj\.io/tracking-id}' 2>/dev/null \
+     | grep -q .; then
+  echo "ConfigMap pulse-config: managed by Argo CD (GitOps), kept"
+elif [ -n "${PULSE_MODEL_URI:-}${ACTION_MODEL_URI:-}" ]; then
+  kubectl create configmap pulse-config --from-literal=PULSE_MODEL_URI="${PULSE_MODEL_URI:-}" \
+    --from-literal=ACTION_MODEL_URI="${ACTION_MODEL_URI:-}" --dry-run=client -o yaml | kubectl apply -f -
+  echo "ConfigMap pulse-config: the model registry (${PULSE_MODEL_URI:-no pulse-v3} · ${ACTION_MODEL_URI:-no action})"
+fi
+
 sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__THETA__|${THETA:-0.3}|g" -e "s|value: lightgbm}|value: ${PREDICTOR:-lightgbm}}|" \
   "$HERE/pulse-cloud.yaml" | kubectl apply -f -
 kubectl delete deploy/pulse-speculator svc/pulse-speculator --ignore-not-found >/dev/null   # replaced by PREDICTOR=speculator

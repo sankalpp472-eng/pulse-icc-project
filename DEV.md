@@ -137,7 +137,9 @@ orders, users), the replay's traces (retail: built from tau-bench's recorded ret
 `replay.tau_traces()`), the hints' `domain` and `workflow_id`, the action predictor's model
 (`models/action_model_retail.pkl`) and the PrewarmRequests' service names (`retail-<tool>`). The retail tools are
 Knative services `retail-<tool>` reached with `MCP_HOST_TEMPLATE=retail-{svc}.default.example.com`. The UI sets all
-of it from the top bar's domain switch; the live agent, the speculator and the in-cluster runner stay airline.
+of it from the top bar's domain switch. Run pods (`infra/cloud/run_cloud.sh DOMAIN=retail`) get the same: the domain,
+`MCP_URL_TEMPLATE=http://retail-{svc}.default.svc.cluster.local/mcp`, and the cluster's predictor is switched to the
+domain too. The live agent and the speculator stay airline.
 
 ### 3.7 `pulse.loadtest`
 
@@ -173,7 +175,7 @@ names. `pulse/setup/` gets a fresh clone ready: `download_data.py` (tau-bench da
 | `knative/` | The tools' image (`Dockerfile.mcp`), `redis.yaml` (the shared database), `deploy.sh` (Redis + the tools as Knative Services, min-scale 0 or 1; `DOMAIN=retail` for the retail tools), `tools.yaml` / `tools-retail.yaml` (what `gen_services.py` last generated) |
 | `prewarm/` | The `PrewarmRequest` CRD: the contract between predictor (writes `.spec`) and controller (writes `.status`) |
 | `kind/` | Local cluster: kind + Knative + Kourier (NodePort on localhost:31080), `teardown.sh` |
-| `eks/` | `cluster.yaml` (eksctl: 2 worker nodes + 1 client node), `eks_up.sh` (cluster, Knative + Kourier with an AWS load balancer open to your IP only, the tools, the CRD, a cold/warm check), `eks_down.sh`, `setup_knative.sh`, `use_eks.sh` / `use_local.sh` (point a terminal's kubectl and tool URLs at EKS or back at kind) |
+| `eks/` | `cluster.yaml` (eksctl: 2 worker nodes + 1 client node), `eks_up.sh` (cluster, Knative + Kourier with an AWS load balancer open to your IP only, the tools, the CRD, a cold/warm check), `eks_down.sh`, `setup_knative.sh`, `registry_access.sh` (on an eksctl cluster: the cluster's OIDC provider and the IRSA roles `pulse-eks-pulse` / `pulse-eks-pulse-trainer`, the same names `infra/terraform/eks/irsa.tf` gives the Terraform cluster), `use_eks.sh` / `use_local.sh` (point a terminal's kubectl and tool URLs at EKS or back at kind) |
 | `cloud/` | The runner image (`Dockerfile`, `cloud_entry.sh`, `build_image.sh` → ECR or kind), `pulse-cloud.yaml` (RBAC, `pulse-predictor` with `PREDICTOR=…`, `pulse-embed`, `pulse-controller`), `cloud_up.sh` (deploy + the LLM-key Secret), `run_cloud.sh` (a run as a pod; results copied back), `kustomization.yaml` + `gitops/` (the same manifests for Argo CD, and the model pins in `config.yaml`) |
 | `monitoring/` | kube-prometheus-stack values (`values-kind.yaml` also scrapes the predictor, controller and runner on the laptop), PodMonitors for Pulse's components and Knative, the Grafana dashboards (`dashboards/build.py` generates them), `install.sh` (also turns on Knative's own metrics) |
 | `gitops/` | Argo CD: `apps.yaml` (pulse-system, pulse-crds, monitoring, monitoring-config), `install.sh`, `configure.sh` (writes the AWS account into the manifests) |
@@ -181,10 +183,12 @@ names. `pulse/setup/` gets a fresh clone ready: `download_data.py` (tau-bench da
 | `terraform/` | Three roots: `bootstrap/` (the state bucket), `.` (S3 model registry with versioning, encryption and TLS-only access, reader/publisher IAM policies, ECR, GitHub OIDC roles for CI), `eks/` (the same cluster as eksctl, as code, with IRSA roles) |
 
 **Images.** `pulse-runner` (`infra/cloud/Dockerfile`) runs the predictor, controller, run pods and training Jobs:
-the package, `models/action_model.pkl`, a locally trained pulse-v3 model if present, the airline trajectories and
-replay traces. The tools' image is built from `infra/knative/Dockerfile.mcp`; `deploy.sh` defaults to a published
-copy (airline only). The UI's *Deploy the retail tools* builds it locally, loads it into kind as
-`kind.local/pulse-mcp-tools:retail` (a registry Knative does not resolve) and runs `DOMAIN=retail deploy.sh`.
+the package, `models/action_model.pkl` (and `action_model_retail.pkl` if trained), a locally trained pulse-v3 model
+if present, the airline and retail trajectories and the replay traces. The tools' image is built from
+`infra/knative/Dockerfile.mcp`; `deploy.sh` defaults to a published copy (airline only). *Deploy the retail tools*
+(`infra/knative/deploy_retail.sh`) builds it here: on kind it loads it into the nodes as
+`kind.local/pulse-mcp-tools:retail` (a registry Knative does not resolve), on EKS it pushes it to the account's ECR
+repository `pulse-tools`; then `DOMAIN=retail deploy.sh`.
 
 **Cloud concepts used:** serverless scale-to-zero (Knative), a custom resource with a controller (CRD +
 reconcile loop), containers and registries (Docker, ECR), managed Kubernetes (EKS) and its networking (load
@@ -240,7 +244,9 @@ Argo CD does not manage the tools (experiments switch their min-scale at runtime
    `PULSE_MODEL_URI` / `ACTION_MODEL_URI` in `.env` (also *Fill in from Terraform*, or type them in *Model
    registry*). The UI uses them at once and passes them to everything it starts; set in the environment that
    starts the UI, they work too. Then *Upload training data* and *Publish local model* (or *Retrain* in the
-   Models tab).
+   Models tab). On EKS, the cluster's pods reach the registry through IRSA roles: *Create cluster* sets them up when
+   the registry exists (`infra/eks/registry_access.sh`); for a cluster made earlier, *AWS EKS → Model registry
+   access*. Without them the predictors use the models in the image and retraining Jobs cannot publish.
 4. **CI on your fork:** add the repository variables `AWS_IMAGE_ROLE_ARN` and `AWS_PLAN_ROLE_ARN` (output
    `ci_role_arns`) and `TF_STATE_BUCKET`. Until they exist, `image.yml` and `terraform.yml` are skipped, not failed.
 5. **GitOps:** Setup → *GitOps: set my AWS account* (`infra/gitops/configure.sh <account>`), commit and push, then

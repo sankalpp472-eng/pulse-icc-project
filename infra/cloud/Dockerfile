@@ -4,7 +4,7 @@
 #   pulse-embed       (its own image: llama.cpp)
 #   run pods          bash cloud_entry.sh replay|live <args>    (pulse.experiments.replay / live)
 #   training Jobs     python -m pulse.pulse_v3.train / pulse.predictor.train_action
-# Built from a staging folder by build_image.sh (code + trained models + tau-bench airline trajectories;
+# Built from a staging folder by build_image.sh (code + trained models + tau-bench airline and retail trajectories;
 # never .env: the Groq keys reach the pods as the Kubernetes Secret pulse-llm-keys).
 FROM python:3.11-slim
 

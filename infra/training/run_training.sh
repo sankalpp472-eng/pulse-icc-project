@@ -28,10 +28,9 @@ VERSION=${VERSION:-$(date +%Y-%m-%d_%H%M)}
 JOB="pulse-train-$([ "$MODEL" = action ] && echo "action-")$(echo "$VERSION" | tr '_A-Z' '-a-z')"
 
 if ! kubectl get serviceaccount pulse-trainer >/dev/null 2>&1; then
-  echo "No service account pulse-trainer. Create it once per cluster, bound to the publisher policy:"
-  echo "  eksctl create iamserviceaccount --cluster <cluster> --region ap-south-1 --namespace default \\"
-  echo "    --name pulse-trainer --attach-policy-arn \$(terraform -chdir=infra/terraform output -raw model_publisher_policy_arn) --approve"
-  echo "(or, with the Terraform cluster + GitOps: infra/terraform/eks/irsa.tf makes the role, infra/gitops/ the account)"
+  echo "No service account pulse-trainer (the training Job's access to the model registry). Give the cluster access:"
+  echo "  the UI: Setup -> AWS EKS -> Model registry access   (or: bash infra/eks/registry_access.sh)"
+  echo "(the Terraform cluster gets it from infra/terraform/eks/irsa.tf; infra/gitops/ creates the account)"
   exit 1
 fi
 

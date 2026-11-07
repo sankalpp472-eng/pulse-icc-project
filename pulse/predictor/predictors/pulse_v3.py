@@ -71,10 +71,17 @@ class PulseV3(Predictor):
     def __init__(self):
         version = os.getenv("PULSE_MODEL_VERSION")          # pinned by GitOps (pulse-config); else latest
         uri = f"{MODEL_URI.rstrip('/')}/{version}" if MODEL_URI and version else MODEL_URI
-        self.model_file = Path(model_store.fetch(uri)) if uri else Path(MODEL_PATH)
+        self.registry_error = None
+        try:
+            self.model_file = Path(model_store.fetch(uri)) if uri else Path(MODEL_PATH)
+        except Exception as e:      # no S3 access (e.g. a cluster without IRSA) or no such version: use the local file
+            self.registry_error = f"{type(e).__name__}: {str(e)[:200]}"
+            print(f"pulse_v3: {uri} unavailable ({self.registry_error}); using {MODEL_PATH}", flush=True)
+            uri, self.model_file = None, Path(MODEL_PATH)
         if not self.model_file.exists():
             raise SystemExit(f"no pulse-v3 model at {self.model_file}: train it (python -m pulse.setup.train_models "
-                             "pulse_v3, or the UI: Setup -> Train pulse-v3) or set PULSE_MODEL_URI to the S3 registry")
+                             "pulse_v3, or the UI: Setup -> Train pulse-v3) or set PULSE_MODEL_URI to the S3 registry"
+                             + (f" (the registry was not readable: {self.registry_error})" if self.registry_error else ""))
         self.model_version = self.model_file.parent.name if uri else None
         self.pred = PulseV3Predictor.load(path=self.model_file,
                                           embedder=Embedder(timeout=float(os.getenv("PULSE_EMBED_TIMEOUT_S", "1.0"))))
@@ -127,8 +134,10 @@ class PulseV3(Predictor):
 
     def health(self) -> dict:
         return {"model_uri": MODEL_URI, "model_file": str(self.model_file), "model_version": self.model_version,
-                "model_source": "registry" if self.model_version else "file", "sessions": len(self.episodes),
-                "embedding": "ok" if self.pred.embedding_ok else "unavailable", "predictor": self.pred.stats()}
+                "model_source": "registry" if self.model_version else
+                                ("file (registry unavailable)" if self.registry_error else "file"),
+                **({"registry_error": self.registry_error} if self.registry_error else {}), "sessions": len(self.episodes),
+                "embedding": "ok" if self.pred.embedding_ok else "unavailable", "session_stats": self.pred.stats()}
 
     @property
     def note(self):
