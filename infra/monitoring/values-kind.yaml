@@ -1,0 +1,16 @@
+# kind (laptop, Docker Desktop with ~4 GB): smaller Prometheus, and scrape the processes the laptop runs
+# (UI-started predictor, prewarm controller, replay runner) through host.docker.internal.
+prometheus:
+  prometheusSpec:
+    retention: 1d
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 768Mi}
+    additionalScrapeConfigs:
+      - job_name: laptop-predictor          # pulse/predictor/service.py, any predictor (port 8000, the UI's default)
+        metrics_path: /metrics/
+        static_configs: [{targets: ["host.docker.internal:8000"], labels: {component: laptop}}]
+      - job_name: laptop-controller         # pulse/controller/prewarm_controller.py (CONTROLLER_METRICS_PORT)
+        static_configs: [{targets: ["host.docker.internal:9102"], labels: {component: laptop}}]
+      - job_name: laptop-runner             # pulse/experiments/replay.py --metrics-port / PULSE_METRICS_PORT
+        static_configs: [{targets: ["host.docker.internal:9105"], labels: {component: laptop}}]

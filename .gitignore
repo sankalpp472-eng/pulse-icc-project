@@ -1,19 +1,35 @@
+# secrets and environments
 .env
+.venv/
 venv/
-.venv/
-.venv/
 __pycache__/
 *.pyc
-EKS_deployment/logs/
-baselines/*/data/
-pulse_pred/data/
-terraform/**/.terraform/
-terraform/**/*.tfstate*
-terraform/**/tfplan
+*.egg-info/
 
-# cloud runner image (EKS_deployment/cloud/build_image.sh)
-EKS_deployment/cloud/.build/
-EKS_deployment/cloud/.image-*
+# local editor / assistant settings
+.claude/launch.json
+CLAUDE.md
 
-# demo UI: logs of the processes it starts
-ui/.state/
+# downloads, caches and trained models (python -m pulse.setup.download_data / train_models);
+# models/action_model.pkl is the one model kept in git
+data/tau-bench/
+data/pulse_v3/
+data/speculator/
+models/pulse_v3/
+models/registry/
+models/action-model/
+# the retail model and its data (python -m pulse.setup.train_models action_retail)
+models/action_model_retail.pkl
+data/predictor/retail_*
+
+# outputs: experiment and load-test runs, logs, the UI's process logs
+results/
+.ui-state/
+infra/eks/logs/
+
+# infrastructure state and build output
+infra/terraform/**/.terraform/
+infra/terraform/**/*.tfstate*
+infra/terraform/**/tfplan
+infra/cloud/.build/
+infra/cloud/.image-*

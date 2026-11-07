@@ -1,0 +1,36 @@
+# Retraining lightgbm + markov (action_model.pkl) as a Kubernetes Job (infra/training/run_training.sh MODEL=action
+# fills in __IMAGE__, __URI__, __VERSION__, __PROMOTE__, __NOTES__). It runs pulse/predictor/train_action.py on the client
+# node, away from the tools: pull action_rows.csv from the S3 registry, train, evaluate against the current latest on
+# the same held-out tasks, publish (latest only if lightgbm's top-1 is better).
+#
+# AWS access: the service account pulse-trainer (IRSA, pulse-model-publisher policy), as for pulse-v3. No AWS keys.
+# No embedding sidecar: these models read tool names and numeric signals only. A minute or two on one CPU.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pulse-train-__VERSION__
+  namespace: default
+  labels: {app: pulse-train, pulse/role: training, pulse/model: action-model}
+spec:
+  backoffLimit: 0                      # a failed training is looked at, not retried blindly
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {app: pulse-train, pulse/role: training, pulse/model: action-model}
+    spec:
+      serviceAccountName: pulse-trainer
+      restartPolicy: Never
+      nodeSelector: {pulse/role: client}
+      tolerations: [{key: pulse/role, operator: Equal, value: client, effect: NoSchedule}]
+      containers:
+        - name: train
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "pulse.predictor.train_action", "--uri", "__URI__", "--version", "__VERSION__",
+                    "--promote", "__PROMOTE__", "--notes", "__NOTES__"]
+          env:
+            - {name: PULSE_DATA, value: /tmp/pulse-data}         # the image's folders are read-only
+            - {name: PULSE_MODELS, value: /tmp/pulse-models}
+            - {name: ACTION_RESULTS_DIR, value: /tmp/results}
+            - {name: PYTHONUNBUFFERED, value: "1"}
+          resources: {requests: {cpu: "1", memory: 1Gi}, limits: {memory: 3Gi}}

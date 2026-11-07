@@ -1,15 +1,14 @@
 # Continuous delivery: a push to main that changes the runner image's code builds the image, pushes it to ECR
-# (OIDC role, no stored keys) and writes its tag into the GitOps manifests (EKS_deployment/cloud/kustomization.yaml).
-# Argo CD (deploy/gitops/) then rolls the new image out to the cluster. Manual runs: Actions -> image -> Run.
+# (OIDC role, no stored keys) and writes its tag into the GitOps manifests (infra/cloud/kustomization.yaml).
+# Argo CD (infra/gitops/) then rolls the new image out to the cluster. Manual runs: Actions -> image -> Run.
 # Needs the repository variable AWS_IMAGE_ROLE_ARN (terraform output ci_role_arns, after -var github_repo=...).
 name: image
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [agent/**, predictor/**, pulse_pred/**, controller/**, ui/**, loadtest/**, test/test_knative/**,
-            baselines/**, EKS_deployment/cloud/Dockerfile, EKS_deployment/cloud/requirements.txt,
-            EKS_deployment/cloud/build_image.sh]
+    paths: [pulse/**, models/**, data/traces/**, infra/cloud/Dockerfile, infra/cloud/requirements.txt,
+            infra/cloud/build_image.sh, infra/cloud/cloud_entry.sh]
 
 permissions:
   id-token: write        # the OIDC token for AWS
@@ -19,7 +18,7 @@ concurrency: image
 
 jobs:
   build-push-deploy:
-    if: ${{ vars.AWS_IMAGE_ROLE_ARN != '' }}      # skipped until the AWS side is set up (docs/RUNNING.md, section 6)
+    if: ${{ vars.AWS_IMAGE_ROLE_ARN != '' }}      # skipped until the AWS side is set up (DEV.md, section 6)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,17 +27,13 @@ jobs:
           role-to-assume: ${{ vars.AWS_IMAGE_ROLE_ARN }}
           aws-region: ap-south-1
       - name: tau-bench conversations the image carries (MIT, sierra-research/tau-bench)
-        run: |
-          d=predictor/data/tau-bench/historical_trajectories; mkdir -p $d
-          for f in gpt-4o-airline.json sonnet-35-new-airline.json; do
-            curl -fsSL -o $d/$f https://raw.githubusercontent.com/sierra-research/tau-bench/main/historical_trajectories/$f
-          done
-      - name: build and push (EKS_deployment/cloud/build_image.sh)
-        run: bash EKS_deployment/cloud/build_image.sh
+        run: python -m pulse.setup.download_data
+      - name: build and push (infra/cloud/build_image.sh)
+        run: bash infra/cloud/build_image.sh
       - name: deploy by git (GitOps)
         run: |
-          IMAGE=$(cat EKS_deployment/cloud/.image-ecr)
-          sed -i "s|^\(\s*newTag:\).*|\1 ${IMAGE##*:}|" EKS_deployment/cloud/kustomization.yaml
+          IMAGE=$(cat infra/cloud/.image-ecr)
+          sed -i "s|^\(\s*newTag:\).*|\1 ${IMAGE##*:}|" infra/cloud/kustomization.yaml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "deploy: pulse-runner ${IMAGE##*:}" && git push || echo "image tag unchanged"

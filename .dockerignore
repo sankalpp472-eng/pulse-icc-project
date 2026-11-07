@@ -1,0 +1,10 @@
+# Build context of images built from the repository root: only the tools' image (infra/knative/Dockerfile.mcp)
+# is, and it needs only the tool code. (The runner image builds from its own staging folder, infra/cloud/.build.)
+*
+!pulse/__init__.py
+!pulse/paths.py
+!pulse/agent/__init__.py
+!pulse/agent/mcp_server.py
+!pulse/agent/tau_airline/
+!pulse/agent/tau_retail/
+**/__pycache__

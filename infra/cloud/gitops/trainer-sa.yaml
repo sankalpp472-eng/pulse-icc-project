@@ -1,0 +1,8 @@
+# The retraining Job's service account (infra/training/train-job.yaml): may publish models through IRSA
+# (infra/terraform/eks/irsa.tf). With GitOps this replaces `eksctl create iamserviceaccount`.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pulse-trainer
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::234612058031:role/pulse-eks-pulse-trainer
