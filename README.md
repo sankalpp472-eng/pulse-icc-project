@@ -58,9 +58,9 @@ actions and writes a `PrewarmRequest` for each likely tool. ③ The prewarm cont
 cluster. More in [DEV.md](DEV.md#1-architecture).
 
 It is built on [tau-bench](https://github.com/sierra-research/tau-bench)'s airline customer-service tasks (14
-tools; the retail domain's 16 tools can be replayed too), with a ReAct agent, an LLM-simulated customer, four interchangeable predictors, a prewarm controller,
-experiment runners and a demo UI. It runs on a simulated cluster (nothing to install), a local Knative cluster
-(kind), or AWS EKS. Everything is driven from the UI.
+tools; the retail domain's 16 tools can be replayed too), with a ReAct agent, an LLM-simulated customer, four
+interchangeable predictors, a prewarm controller, experiment runners and a demo UI. It runs on a simulated cluster
+(nothing to install), a local Knative cluster (kind), or AWS EKS. Everything is driven from the UI.
 
 DS252 Cloud Computing, IISc. Developer documentation: [DEV.md](DEV.md).
 
@@ -112,9 +112,9 @@ Setup → *Tools on this machine* shows which of these are installed.
 | This project | Download data · Train lightgbm + markov (they ship trained; this reproduces them, ~1 min) · Train retail lightgbm + markov (~1 min) · Start / stop the embedding server · Train pulse-v3 |
 | LLM keys and settings | Groq keys (*+ Add another key* for as many as you have: they are used in turn, which spreads Groq's per-minute limits), an OpenRouter key, the LLM backend, a local OpenAI-compatible server for the speculator. Saved to `.env`; values are never shown again |
 | Local cluster (kind) | Create cluster (kind + Knative + Kourier + Redis + the 14 tools at scale-to-zero, ~5 min) · Deploy the retail tools (the 16 retail tools next to them, ~3 min) · Build image for kind · Delete cluster |
-| AWS EKS | Region · Build + push image (to your ECR) · Create cluster (~25 min) · Delete cluster · Check for leftovers |
-| Pulse in the current cluster | Deploy Pulse's services (predictor, prewarm controller, embedding server) · Switch predictor · Install Prometheus + Grafana |
-| Cloud extras | Terraform plan / apply (S3 model registry, ECR, CI roles) · Upload training data · Publish local model · GitOps: set my AWS account · Install Argo CD |
+| AWS EKS | Region · Build + push image (to your ECR) · Create cluster (eksctl, or Terraform with the checkbox; ~20 min) · Delete cluster · Check for leftovers |
+| Pulse in the current cluster | Deploy Pulse's services (predictor, prewarm controller, embedding server; also copies your LLM keys into the cluster as a Secret) · Switch predictor · Install Prometheus + Grafana |
+| Cloud extras | Terraform plan / apply (S3 model registry, ECR, CI roles) · Upload training data · Publish local model · GitOps: set my AWS account · Install Argo CD. Optional; the one-time AWS setup they need is in [DEV.md §6](DEV.md#6-cicd-and-gitops) |
 
 Every action runs as a job with its log in the same tab; actions that cost money or delete something ask first.
 One job runs at a time.
@@ -146,7 +146,8 @@ inputs the running predictor reads (trajectory / signals / history) and its answ
 
 One episode at a time, on screen: the **live agent** with an AI or a human customer (needs LLM keys), a
 **recorded** tau-bench episode replayed with real timing, or one of your own live runs replayed exactly. Run the
-same task with prewarming **off (C0)** and **on (C3)** and compare end-to-end time, tool wait and cold calls.
+same task with prewarming **off (C0)** and **on (C3)** and compare end-to-end time, tool wait and cold calls. On
+Knative, *Background load* adds more replayed agents on the same tools while the episode runs.
 
 ### Experiments
 
@@ -161,7 +162,7 @@ Batch runs that write a result folder to `results/`:
 ### Results, Monitoring, Models
 
 - **Results**: every run with its latency percentiles, cold share and pod-seconds; tick runs to compare them and
-  make plots.
+  make plots; download a run folder as a zip.
 - **Monitoring**: Grafana's dashboards (predictor latency, prewarms, tool pods), and a link from any run to its
   time window. Needs *Install Prometheus + Grafana*.
 - **Models**: the S3 model registry, for pulse-v3 and for lightgbm + markov: versions with their held-out
@@ -214,7 +215,9 @@ PREDICTOR=lightgbm python -m uvicorn pulse.predictor.service:app --port 8000
 python -m pulse.controller.prewarm_controller
 python -m pulse.experiments.replay --fanout --predictor-url http://127.0.0.1:8000
 bash infra/kind/setup.sh && SKIP_BUILD=1 bash infra/knative/deploy.sh 0
+DOMAIN=retail python -m pulse.experiments.replay --fanout   # retail (MCP_HOST_TEMPLATE=retail-{svc}.default.example.com)
 bash infra/eks/eks_up.sh        |  bash infra/eks/eks_down.sh
+bash infra/monitoring/install.sh                          # Prometheus + Grafana in the current cluster
 bash infra/cloud/build_image.sh |  bash infra/cloud/cloud_up.sh  |  CONFIG=C3 bash infra/cloud/run_cloud.sh --fanout
 ```
 
@@ -238,5 +241,5 @@ Each module and script explains its options at the top of the file. [DEV.md](DEV
 ## Credits
 
 tau-bench's airline and retail tools, tasks and recorded conversations are © Sierra, MIT license
-(`pulse/agent/tau_airline/LICENSE`, `pulse/agent/tau_retail/LICENSE`). The tool image defaults to a published copy
-of the tools on Docker Hub.
+(`pulse/agent/tau_airline/LICENSE`, `pulse/agent/tau_retail/LICENSE`). The airline tools' image defaults to a
+published copy on Docker Hub; the retail tools' image is built on your machine (Setup → *Deploy the retail tools*).

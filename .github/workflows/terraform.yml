@@ -1,6 +1,6 @@
 # `terraform plan` for the long-lived AWS resources on every pull request that changes infra/terraform/, so reviewers
 # see what a merge would change. Read-only role (OIDC): CI never applies; a person runs `terraform apply`.
-# Needs the repository variables AWS_PLAN_ROLE_ARN and TF_STATE_BUCKET (infra/terraform/README.md); without them the
+# Needs the repository variables AWS_PLAN_ROLE_ARN and TF_STATE_BUCKET (DEV.md, section 6); without them the
 # job is skipped.
 name: terraform
 on:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   plan:
-    # skipped (not failed) until the AWS side is set up: docs/RUNNING.md, section 6
+    # skipped (not failed) until the AWS side is set up: DEV.md, section 6
     if: ${{ vars.AWS_PLAN_ROLE_ARN != '' && vars.TF_STATE_BUCKET != '' }}
     runs-on: ubuntu-latest
     steps:

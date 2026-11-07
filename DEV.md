@@ -13,7 +13,7 @@ What each part of the code does and how the parts fit together. For installing a
  runner / UI ──hint─┼─▶ predictor ──P ≥ θ──▶ PrewarmRequest (CRD) ◀──watch── prewarm controller                │
    (pulse.agent,    │   (pulse.predictor)                                            │ MCP ping (k times)       │
     .experiments)   │                                                                ▼                          │
-            ──tool call (MCP over HTTP)──▶ Kourier ingress ──▶ Knative Services: 14 tools, scale-to-zero        │
+            ──tool call (MCP over HTTP)──▶ Kourier ingress ──▶ Knative Services: 14 (16 retail) tools, to zero  │
                     │                                            (one pod per call in flight; shared Redis DB)  │
                     │   embedding server (pulse_v3) · Prometheus + Grafana · Argo CD · training Jobs           │
                     └──────────────────────────────────────────────────────────────────────────────────────────┘
@@ -42,8 +42,8 @@ What each part of the code does and how the parts fit together. For installing a
 | Path | Contents |
 |---|---|
 | `pulse/` | The Python package (installable: `pyproject.toml`, `pip install -e .`). Everything runs as `python -m pulse.<module>` |
-| `data/` | Inputs. In git: `predictor/` (training rows, task split), `traces/` (replay traces), `coldstart/` (cold/warm times measured on EKS, for the simulated cluster). Downloaded (gitignored): `tau-bench/` |
-| `models/` | Trained models. In git: `action_model.pkl` (lightgbm + markov). Gitignored: `pulse_v3/` (trained here), `registry/` (versions fetched from S3) |
+| `data/` | Inputs. In git: `predictor/` (training rows, task split), `traces/` (replay traces), `coldstart/` (cold/warm times measured on EKS, for the simulated cluster). Gitignored: `tau-bench/` (downloaded), `pulse_v3/` (its embedding cache), `speculator/`, `predictor/retail_*` (the retail rows and split) |
+| `models/` | Trained models. In git: `action_model.pkl` (lightgbm + markov). Gitignored: `action_model_retail.pkl`, `pulse_v3/` (trained here), `registry/` and `action-model/` (versions fetched from or published to S3) |
 | `infra/` | Everything that is not Python: container images, Kubernetes manifests, cluster scripts, Terraform, GitOps, monitoring, training Jobs |
 | `scripts/` | `setup.sh` (fresh clone → ready), `embed_server.sh` (pulse_v3's embedding server in Docker) |
 | `results/` | Output of experiments, load tests and training (gitignored) |
@@ -51,7 +51,8 @@ What each part of the code does and how the parts fit together. For installing a
 
 `pulse/paths.py` is the single place that knows where files live (`ROOT`, `DATA`, `MODELS`, `RESULTS`,
 `ENV_FILE`, `INFRA`, …). Pods and Jobs, whose image folders are read-only, redirect them with `PULSE_DATA`,
-`PULSE_MODELS`, `PULSE_REGISTRY_CACHE` and `PULSE_RESULTS_DIR`.
+`PULSE_MODELS`, `PULSE_REGISTRY_CACHE` and `PULSE_RESULTS_DIR` (pulse-v3's own folders: `PULSE_DATA_DIR`,
+`PULSE_MODELS_DIR`, in `pulse/pulse_v3/paths.py`).
 
 ---
 
@@ -79,7 +80,7 @@ What each part of the code does and how the parts fit together. For installing a
 |---|---|
 | `contract.py` | The one contract: `PredictRequest` (trajectory; optional `signals`, `history`, `domain`, `workflow_id`) → `PredictionOut` (`ranked` actions with probabilities, `prewarm` tools with k, `lookahead`, latency, inputs used) |
 | `service.py` | FastAPI app: `POST /predict`, `GET /info` (the predictor's inputs and capabilities), `/healthz`, `/metrics`. Loads the predictor named by `PREDICTOR` and applies the shared policy, audit log and PrewarmRequest writer |
-| `predictors/` | One file per predictor behind `base.Predictor` (`inputs`, `predict()`, `fanout()`, `lookahead()`, `health()`); `__init__.py` is the registry (`PREDICTOR=lightgbm|markov|speculator|pulse_v3`) |
+| `predictors/` | One file per predictor behind `base.Predictor` (`inputs`, `predict()`, `fanout()`, `lookahead()`, `health()`); `action.py` loads the pickle lightgbm and markov share (local file or the registry); `__init__.py` is the registry (`PREDICTOR=lightgbm|markov|speculator|pulse_v3`) |
 | `policy.py` | Which ranked actions become prewarms: θ threshold or top-k with a floor; never `RESPOND`/`END` |
 | `crd_writer.py` | Writes `PrewarmRequest` objects (`CRD_MODE=k8s`), or to a file (`dryrun`), on a background thread |
 | `client.py` | What hint senders share: `inputs(url)` from `/info`, `make_hint()`, `compact()` messages |
@@ -180,12 +181,12 @@ names. `pulse/setup/` gets a fresh clone ready: `download_data.py` (tau-bench da
 
 | Folder | Contents |
 |---|---|
-| `knative/` | The tools' image (`Dockerfile.mcp`), `deploy.sh` (Redis + the tools as Knative Services, min-scale 0 or 1) |
+| `knative/` | The tools' image (`Dockerfile.mcp`), `redis.yaml` (the shared database), `deploy.sh` (Redis + the tools as Knative Services, min-scale 0 or 1; `DOMAIN=retail` for the retail tools), `tools.yaml` / `tools-retail.yaml` (what `gen_services.py` last generated) |
 | `prewarm/` | The `PrewarmRequest` CRD: the contract between predictor (writes `.spec`) and controller (writes `.status`) |
-| `kind/` | Local cluster: kind + Knative + Kourier (NodePort on localhost:31080) |
-| `eks/` | `cluster.yaml` (eksctl: 2 worker nodes + 1 client node), `eks_up.sh` (cluster, Knative + Kourier with an AWS load balancer open to your IP only, the tools, the CRD, a cold/warm check), `eks_down.sh`, `setup_knative.sh` |
-| `cloud/` | The runner image (`Dockerfile`, `build_image.sh` → ECR or kind), `pulse-cloud.yaml` (RBAC, `pulse-predictor` with `PREDICTOR=…`, `pulse-embed`, `pulse-controller`), `cloud_up.sh` (deploy + the LLM-key Secret), `run_cloud.sh` (a run as a pod; results copied back), `kustomization.yaml` + `gitops/` (the same manifests for Argo CD) |
-| `monitoring/` | kube-prometheus-stack values, PodMonitors for Pulse's components, the Grafana dashboards (`dashboards/build.py` generates them), `install.sh` |
+| `kind/` | Local cluster: kind + Knative + Kourier (NodePort on localhost:31080), `teardown.sh` |
+| `eks/` | `cluster.yaml` (eksctl: 2 worker nodes + 1 client node), `eks_up.sh` (cluster, Knative + Kourier with an AWS load balancer open to your IP only, the tools, the CRD, a cold/warm check), `eks_down.sh`, `setup_knative.sh`, `use_eks.sh` / `use_local.sh` (point a terminal's kubectl and tool URLs at EKS or back at kind) |
+| `cloud/` | The runner image (`Dockerfile`, `cloud_entry.sh`, `build_image.sh` → ECR or kind), `pulse-cloud.yaml` (RBAC, `pulse-predictor` with `PREDICTOR=…`, `pulse-embed`, `pulse-controller`), `cloud_up.sh` (deploy + the LLM-key Secret), `run_cloud.sh` (a run as a pod; results copied back), `kustomization.yaml` + `gitops/` (the same manifests for Argo CD, and the model pins in `config.yaml`) |
+| `monitoring/` | kube-prometheus-stack values (`values-kind.yaml` also scrapes the predictor, controller and runner on the laptop), PodMonitors for Pulse's components and Knative, the Grafana dashboards (`dashboards/build.py` generates them), `install.sh` (also turns on Knative's own metrics) |
 | `gitops/` | Argo CD: `apps.yaml` (pulse-system, pulse-crds, monitoring, monitoring-config), `install.sh`, `configure.sh` (writes the AWS account into the manifests) |
 | `training/` | Retraining as Kubernetes Jobs: pulse-v3 (with an embedding sidecar) and lightgbm + markov; `run_training.sh` |
 | `terraform/` | Three roots: `bootstrap/` (the state bucket), `.` (S3 model registry with versioning, encryption and TLS-only access, reader/publisher IAM policies, ECR, GitHub OIDC roles for CI), `eks/` (the same cluster as eksctl, as code, with IRSA roles) |
@@ -238,9 +239,22 @@ Argo CD (in the cluster) ◀────────────── watches m
 
 Argo CD does not manage the tools (experiments switch their min-scale at runtime) or the LLM-key Secret
 (`cloud_up.sh` creates it). A model version or the cluster's predictor changes in production by a pull request to
-`infra/cloud/gitops/`. Using it from a fork: `infra/gitops/configure.sh <account>`, the CI roles from Terraform
-(`-var github_repo=<fork>`), and the repository variables `AWS_IMAGE_ROLE_ARN`, `AWS_PLAN_ROLE_ARN`,
-`TF_STATE_BUCKET`.
+`infra/cloud/gitops/`.
+
+**Setting up the AWS side once (per account; all optional: EKS runs work without it).**
+1. **Terraform state bucket:** `terraform -chdir=infra/terraform/bootstrap init && terraform -chdir=infra/terraform/bootstrap apply`
+   creates `pulse-tfstate-<account>`. The other roots (`infra/terraform/`, and `infra/terraform/eks/` when the
+   cluster is made with Terraform) keep their state there.
+2. **Registry, ECR, CI roles:** Setup → Cloud extras → *Terraform plan*, then *Terraform apply* (or
+   `terraform -chdir=infra/terraform init -backend-config="bucket=pulse-tfstate-<account>"` and `apply`). With
+   your fork in the form (`-var github_repo=<owner>/<repo>`) it also creates the two GitHub OIDC roles.
+3. **Use the registry:** restart the UI with `PULSE_MODEL_URI` and `ACTION_MODEL_URI` set to
+   `terraform -chdir=infra/terraform output -raw model_uri` / `action_model_uri`; then *Upload training data* and
+   *Publish local model* (or *Retrain* in the Models tab).
+4. **CI on your fork:** add the repository variables `AWS_IMAGE_ROLE_ARN` and `AWS_PLAN_ROLE_ARN` (output
+   `ci_role_arns`) and `TF_STATE_BUCKET`. Until they exist, `image.yml` and `terraform.yml` are skipped, not failed.
+5. **GitOps:** Setup → *GitOps: set my AWS account* (`infra/gitops/configure.sh <account>`), commit and push, then
+   *Install Argo CD* on the EKS cluster (it follows `main`, or the branch in the form).
 
 ---
 
@@ -254,7 +268,10 @@ Argo CD does not manage the tools (experiments switch their min-scale at runtime
 | `ACTION_MODEL_URI` / `ACTION_MODEL_VERSION` / `ACTION_MODEL_PATH` | lightgbm, markov |
 | `PREDICTOR_URL`, `TOOL_BACKEND`, `MCP_URL_TEMPLATE`, `MCP_HOST_TEMPLATE`, `KUBE_CONTEXT` | the agent and the runners |
 | `DOMAIN` (`airline` / `retail`) | the tools, the runners, the predictor (§3.6) |
-| `REGION`, `TARGET`, `USE_TERRAFORM`, `USE_GITOPS` | the cluster and image scripts |
+| `REGION`, `TARGET`, `USE_TERRAFORM`, `USE_GITOPS`, `TF_STATE_BUCKET` | the cluster and image scripts |
+| `UI_PORT`, `UI_PREDICTOR_PORT`, `UI_PREDICTOR` / `UI_AUTOSTART_PREDICTOR` (the predictor it starts with), `UI_GRAFANA_PORT`, `UI_ARGOCD_PORT`, `UI_STATE_DIR` | the UI |
+
+Each module lists its other, rarer settings at the top of its file.
 
 | Port | Service |
 |---|---|

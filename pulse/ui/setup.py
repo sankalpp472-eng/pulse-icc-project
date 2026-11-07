@@ -33,7 +33,7 @@ ACTIONS = {   # name: (what the button does, confirm text or None)
     "embed_start": ("Start the embedding server (Docker)", None),
     "embed_stop": ("Stop the embedding server", None),
     "train_pulse_v3": ("Train pulse-v3 (~45 min, needs the embedding server)", None),
-    "kind_create": ("Create the local kind cluster with Knative and the 14 tools (~10 min)", None),
+    "kind_create": ("Create the local kind cluster with Knative and the 14 tools (~5 min)", None),
     "kind_delete": ("Delete the local kind cluster", "Delete the kind cluster pulse-kn and everything in it?"),
     "retail_tools": ("Deploy the 16 retail tools into the kind cluster (~5 min)", None),
     "image_build": ("Build the runner image", None),

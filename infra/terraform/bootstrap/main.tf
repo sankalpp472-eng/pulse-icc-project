@@ -3,7 +3,7 @@
 #
 #   terraform -chdir=infra/terraform/bootstrap init && terraform -chdir=infra/terraform/bootstrap apply
 #
-# Then each root uses it (infra/terraform/README.md, "Remote state"). Locking is S3's own lock file (use_lockfile), so
+# Then each root uses it (DEV.md, section 6). Locking is S3's own lock file (use_lockfile), so
 # no DynamoDB table is needed.
 
 terraform {

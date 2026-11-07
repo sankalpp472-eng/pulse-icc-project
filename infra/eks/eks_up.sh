@@ -22,11 +22,11 @@ sed "s/^\(  region: \)ap-south-1/\1$REGION/" infra/eks/cluster.yaml > "$CLUSTER_
 CLUSTER_TOOL=$([ "${USE_TERRAFORM:-0}" = 1 ] && echo terraform || echo eksctl)
 
 for t in aws "$CLUSTER_TOOL" kubectl curl; do
-  command -v "$t" >/dev/null || { echo "$t is not installed (README.md, AWS EKS prerequisites)"; exit 1; }
+  command -v "$t" >/dev/null || { echo "$t is not installed (README.md, "What else, and when")"; exit 1; }
 done
 aws sts get-caller-identity >/dev/null || { echo "Not logged in to AWS: run aws configure"; exit 1; }
 
-if [ "$CLUSTER_TOOL" = terraform ]; then        # infrastructure as code: infra/terraform/eks/ (README there)
+if [ "$CLUSTER_TOOL" = terraform ]; then        # infrastructure as code: infra/terraform/eks/ (DEV.md, section 4)
   TF_STATE_BUCKET=${TF_STATE_BUCKET:-pulse-tfstate-$(aws sts get-caller-identity --query Account --output text)}
   terraform -chdir=infra/terraform/eks init -input=false -backend-config="bucket=$TF_STATE_BUCKET" >/dev/null
   echo "Creating / updating cluster $NAME with Terraform (15-20 min the first time) ..."
