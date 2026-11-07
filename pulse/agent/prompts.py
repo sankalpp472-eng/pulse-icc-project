@@ -1,17 +1,36 @@
-from pulse.agent.tau_airline import WIKI
+from pulse.agent.tools import package
 
-# Agent: the tau-bench airline policy plus ReAct-style working rules.
-AGENT_SYSTEM_PROMPT = WIKI + """
-
-# How you work
-- Work step by step: reason about what you know, call tools, read their results, then decide the next step.
+# ReAct-style working rules added after the domain's tau-bench policy (wiki), per domain.
+_RULES = {
+    "airline": """
 - When you need several lookups that do not depend on each other (e.g. the details of every reservation
   in the user's profile, or flights on several dates or routes), request them ALL in the same reply as
   parallel tool calls, not one per reply. Only batch calls whose arguments you already know.
 - Make changes (book, cancel, update, send) one at a time, each after the user confirms.
-- Never invent ids, flight numbers or prices -- look them up with tools.
+- Never invent ids, flight numbers or prices -- look them up with tools.""",
+    "retail": """
+- When you need several lookups that do not depend on each other (e.g. the details of every order
+  in the user's profile, or several products), request them ALL in the same reply as
+  parallel tool calls, not one per reply. Only batch calls whose arguments you already know.
+- Make changes (cancel, modify, return, exchange, update address) one at a time, each after the user confirms.
+- Never invent ids, item ids or prices -- look them up with tools.""",
+}
+
+
+def agent_system_prompt(domain: str | None = None) -> str:
+    """The agent's system prompt: the domain's tau-bench policy plus how to work (domain None = env DOMAIN)."""
+    pkg = package(domain)
+    rules = _RULES["retail" if pkg.__name__.endswith("retail") else "airline"]
+    return pkg.WIKI + """
+
+# How you work
+- Work step by step: reason about what you know, call tools, read their results, then decide the next step.""" \
+        + rules + """
 - When you need something from the user (or their confirmation), reply in plain text without a tool call.
 """
+
+
+AGENT_SYSTEM_PROMPT = agent_system_prompt()
 
 # User simulator: same prompt tau-bench uses for its LLM-simulated customer.
 USER_SIM_PROMPT = """You are a user interacting with an agent.

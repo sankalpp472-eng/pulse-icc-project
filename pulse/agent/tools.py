@@ -9,6 +9,7 @@ so the agent loop does not change:
 Pick with TOOL_BACKEND=local|mcp (run_tasks.py --tools does this for you).
 DOMAIN=airline|retail picks the tau-bench domain (default airline). For the retail tools on Knative
 use MCP_HOST_TEMPLATE=retail-{svc}.default.example.com (python -m pulse.agent.gen_services --domain retail).
+A process that serves both (the UI) passes domain= to the backends and uses package(), read_only(), load_tasks().
 """
 
 import asyncio
@@ -17,21 +18,38 @@ import json
 import os
 import time
 
-DOMAIN = os.getenv("DOMAIN", "airline")
-if DOMAIN == "retail":
-    from pulse.agent.tau_retail import ALL_TOOLS, load_data
-else:
-    from pulse.agent.tau_airline import ALL_TOOLS, load_data
+import pulse.agent.tau_airline as tau_airline
+import pulse.agent.tau_retail as tau_retail
+
+DOMAIN = "retail" if os.getenv("DOMAIN") == "retail" else "airline"
+
+
+def package(domain: str | None = None):
+    """The tau-bench domain package: its tools (ALL_TOOLS), data (load_data), tasks (load_tasks), policy (WIKI)."""
+    return tau_retail if (domain or DOMAIN) == "retail" else tau_airline
+
+
+ALL_TOOLS, load_data = package().ALL_TOOLS, package().load_data
 
 # Tools that end the conversation when called (same as tau-bench)
 TERMINATE_TOOLS = {"transfer_to_human_agents"}
 # Tools that only read the database: several calls of these can run at once
-READ_ONLY_TOOLS = {
+READ_ONLY = {
     "airline": {"get_user_details", "get_reservation_details", "search_direct_flight", "search_onestop_flight",
                 "list_all_airports", "calculate"},
     "retail": {"find_user_id_by_email", "find_user_id_by_name_zip", "get_user_details", "get_order_details",
                "get_product_details", "list_all_product_types", "calculate"},
-}[DOMAIN if DOMAIN == "retail" else "airline"]
+}
+READ_ONLY_TOOLS = READ_ONLY[DOMAIN]
+
+
+def read_only(domain: str | None = None) -> set:
+    return READ_ONLY["retail" if (domain or DOMAIN) == "retail" else "airline"]
+
+
+def load_tasks(domain: str | None = None) -> list[dict]:
+    """The domain's tau-bench tasks (airline 50, retail 115): instruction for the customer, gold actions."""
+    return package(domain).load_tasks()
 
 # Every MCP call, appended by MCPToolBackend: experiment runners read this to time calls
 # (absolute start time, latency) even when an episode stops midway. Clear it between episodes.
@@ -39,10 +57,11 @@ CALL_LOG: list[dict] = []
 
 
 class LocalToolBackend:
-    def __init__(self):
-        self.data = load_data()  # each episode gets its own fresh DB copy
-        self._tools = {t.get_info()["function"]["name"]: t for t in ALL_TOOLS}
-        self.schemas = [t.get_info() for t in ALL_TOOLS]
+    def __init__(self, domain: str | None = None):
+        pkg = package(domain)
+        self.data = pkg.load_data()  # each episode gets its own fresh DB copy
+        self._tools = {t.get_info()["function"]["name"]: t for t in pkg.ALL_TOOLS}
+        self.schemas = [t.get_info() for t in pkg.ALL_TOOLS]
 
     @property
     def names(self) -> list[str]:
@@ -76,7 +95,7 @@ class MCPToolBackend:
     The database lives in the servers, so there is no local data_hash (no scoring).
     """
 
-    def __init__(self):
+    def __init__(self, domain: str | None = None):
         # Import the MCP client here, not on the first call: the ~1 s import would
         # otherwise be added to the first tool call and look like a cold start.
         from mcp import ClientSession
@@ -84,7 +103,7 @@ class MCPToolBackend:
         self._ClientSession, self._make_http, self._transport = \
             ClientSession, create_mcp_http_client, streamable_http_client
 
-        self.schemas = [t.get_info() for t in ALL_TOOLS]
+        self.schemas = [t.get_info() for t in package(domain).ALL_TOOLS]
         self._names = {s["function"]["name"] for s in self.schemas}
         self.url_tpl = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:9000/{tool}/mcp")
         self.host_tpl = os.getenv("MCP_HOST_TEMPLATE") or None

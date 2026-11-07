@@ -174,14 +174,12 @@ const domainSeg = seg("domainSeg", async (domain) => {
     domainSeg.set(state.cluster?.domain || "airline");
   }
 });
-// what the Experiments form offers for the domain: its task presets; retail has no live agent or speculator
+// what the Experiments form offers for the domain: its task presets; retail has no speculator
 function domainForm(domain) {
   const retail = domain === "retail";
   $$("#xTasksPreset option[data-domain]").forEach((o) => { o.hidden = o.disabled = o.dataset.domain !== domain; });
   const sel = $("#xTasksPreset");
   if (sel.selectedOptions[0]?.disabled) { sel.value = retail ? "r-heldout" : "heldout"; sel.onchange(); }
-  $("#xMode button[data-v=live]").disabled = retail;                 // the live agent is airline only
-  if (retail && xMode.get() === "live") { xMode.set("replay"); expForm(); }
   const spec = $("#xPred option[value=speculator]");
   spec.disabled = retail;
   if (retail && $("#xPred").value === "speculator") { $("#xPred").value = "lightgbm"; expForm(); }
@@ -262,8 +260,19 @@ $("#simReset").onclick = async () => {
 };
 
 // ------------------------------------------------------------------ demo form
-let TASKS = [];
+let TASKS = [], tasksDomain = null;
 const kindSeg = seg("kindSeg", () => demoForm());
+// The demo's tau-bench domain: retail on the real cluster with the retail domain picked, else airline (the simulated
+// cluster has the airline tools only). Its tasks; the tau-bench recordings ("Replay recorded") are airline only.
+const demoDomain = () => state.cluster?.mode === "knative" && state.cluster?.domain === "retail" ? "retail" : "airline";
+async function loadTasks(domain) {
+  try { TASKS = await api(`/api/tasks?domain=${domain}`); } catch (e) { return toast("Could not load tasks: " + e.message); }
+  tasksDomain = domain;
+  const retail = domain === "retail";
+  $('#kindSeg button[data-v="replay"]').disabled = retail;
+  if (retail && kindSeg.get() === "replay") kindSeg.set("live");
+  demoForm();
+}
 const userSeg = seg("userSeg", () => demoForm());
 const predSeg = seg("predSeg", () => showEksPredictor());
 // Which predictor deploy/pulse-predictor runs (GET /api/eks_predictor: the Deployment's env + rollout), shown under
@@ -304,7 +313,8 @@ function demoForm() {
 // ---- recorded live runs (ui/.state/recordings): replayed with their exact messages, timing and tool calls
 let RECS = [];
 async function loadRecordings(select) {
-  try { RECS = await api("/api/recordings"); } catch (e) { return toast(e.message); }
+  try { RECS = (await api("/api/recordings")).filter((r) => r.domain === (tasksDomain || "airline")); }
+  catch (e) { return toast(e.message); }
   const cur = select || $("#recSel").value;
   $("#recSel").innerHTML = RECS.length
     ? RECS.map((r) => `<option value="${esc(r.id)}">${esc(r.created.slice(5, 16))} · task ${esc(r.task_id ?? "free")} · ` +
@@ -328,6 +338,7 @@ function fillTasks() {
   $("#taskSel").innerHTML = (human ? `<option value="">No task: free conversation</option>` : "") +
     list.map((t) => `<option value="${t.id}">Task ${t.id}${tag(t)} — ${esc(t.instruction.slice(0, 60))}…</option>`).join("");
   if ([...$("#taskSel").options].some((o) => o.value === cur)) $("#taskSel").value = cur;
+  else if (tasksDomain === "retail" && list.some((t) => t.heldout)) $("#taskSel").value = String(list.find((t) => t.heldout).id);
   else if (list.some((t) => t.id === 30)) $("#taskSel").value = "30";
   taskChanged();
 }
@@ -1052,6 +1063,7 @@ async function poll() {
     const c = s.cluster;
     clusterSeg.set(c.mode);
     if (c.domain && c.domain !== shownDomain) { shownDomain = c.domain; domainSeg.set(c.domain); domainForm(c.domain); }
+    if (tasksDomain && demoDomain() !== tasksDomain && !busyNow()) loadTasks(demoDomain());
     $("#ctxName").textContent = c.context ? `(${c.context.replace(/^.*@/, "")})` : "";
     $$(".sim-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "sim"));
     $$(".knative-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "knative"));
@@ -1109,8 +1121,7 @@ setInterval(checkVersion, 30000);
 
 (async function init() {
   checkVersion();
-  try { TASKS = await api("/api/tasks"); } catch (e) { toast("Could not load tasks: " + e.message); }
-  demoForm();
+  await loadTasks("airline");      // the poll switches to retail's tasks if the real cluster runs the retail domain
   expForm();
   policyForm();
   poll();
