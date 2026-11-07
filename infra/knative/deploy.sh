@@ -73,7 +73,11 @@ kubectl get ksvc -l pulse/role=$ROLE
 echo
 echo "Agent settings for these tools:"
 echo "  TOOL_BACKEND=mcp"
-echo "  MCP_URL_TEMPLATE=http://127.0.0.1:31080/mcp"
+if [[ "${KUBE_CONTEXT:-kind-pulse-kn}" == kind-* ]]; then
+  echo "  MCP_URL_TEMPLATE=http://127.0.0.1:31080/mcp"
+else
+  echo "  MCP_URL_TEMPLATE=http://<Kourier's load balancer>/mcp   (source infra/eks/use_eks.sh sets it)"
+fi
 if [ "$DOMAIN" = retail ]; then
   echo "  MCP_HOST_TEMPLATE=retail-{svc}.default.example.com"
 else

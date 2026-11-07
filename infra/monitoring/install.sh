@@ -48,6 +48,17 @@ helm upgrade --install "$REL" prometheus-community/kube-prometheus-stack -n "$NS
 
 kubectl apply -k "$DIR"          # scrape configs + dashboards as ConfigMaps (kustomization.yaml; Argo CD applies the same)
 
+# Knative (1.18+) exports no metrics unless asked: turn on its Prometheus endpoint (:9090, the knative-serving
+# PodMonitor). The activator and autoscaler read it only at start, so restart them the first time.
+if kubectl get ns knative-serving >/dev/null 2>&1; then
+  if [ "$(kubectl get cm config-observability -n knative-serving -o jsonpath='{.data.metrics-protocol}')" != prometheus ]; then
+    kubectl patch cm config-observability -n knative-serving --type merge -p '{"data":{"metrics-protocol":"prometheus"}}'
+    kubectl rollout restart deploy/activator deploy/autoscaler -n knative-serving
+    kubectl rollout status deploy/activator -n knative-serving --timeout=180s
+    kubectl rollout status deploy/autoscaler -n knative-serving --timeout=180s
+  fi
+fi
+
 helm list -n "$NS" --filter "^$REL\$"
 echo
 echo "Grafana: in the UI (Knative mode -> Monitoring tab), or"
