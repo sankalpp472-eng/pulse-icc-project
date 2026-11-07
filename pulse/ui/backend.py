@@ -361,6 +361,8 @@ class Services:
         self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
                                                                 "crd": "k8s" if crd else "off", "domain": domain,
                                                                 "model_version": model_version})
+        from pulse.predictor import client
+        client.forget()             # the live demo's hints must ask the NEW predictor what it reads (history?)
         self.health = None
         return self.status()
 
