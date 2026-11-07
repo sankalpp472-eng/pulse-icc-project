@@ -23,7 +23,8 @@ scikit-learn==1.9.1
 lightgbm==4.7.0
 prometheus-client
 kubernetes                     # PrewarmRequest objects (CRD_MODE=k8s), the controller, the runners' pod watcher
-boto3                          # the S3 model registry (pulse/registry.py)
+boto3>=1.34                    # the S3 model registry (pulse/registry.py). The floors matter: on a very new Python
+six>=1.16                      # pip once picked boto3 0.0.3 + six 1.7.3, whose six.moves breaks on Python 3.12+
 
 # load tests and plots
 locust>=2.20

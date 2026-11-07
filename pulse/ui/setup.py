@@ -18,7 +18,8 @@ from pulse.setup import download_data, train_models
 from pulse.ui import backend
 
 ENV_KEYS = ("LLM_BACKEND", "GROQ_API_KEY", "GROQ_MODEL", "OPEN_ROUTER_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_MODEL",
-            "USER_MODEL", "SPEC_BASE_URL", "SPEC_API_KEY", "SPEC_MODEL")
+            "USER_MODEL", "SPEC_BASE_URL", "SPEC_API_KEY", "SPEC_MODEL", *backend.REGISTRY_KEYS)
+S3_URI = re.compile(r"s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](/[\w./-]+)?")   # the model registry URIs
 GROQ_NUMBERED = re.compile(r"GROQ_API_KEY_(\d+)")   # any number of extra Groq keys: GROQ_API_KEY_1, _2, ...
 MAX_GROQ_KEYS = 20
 SECRET = re.compile(r"KEY")               # values of these names are never shown, only "set"
@@ -49,10 +50,14 @@ ACTIONS = {   # name: (what the button does, confirm text or None)
     "monitoring_install": ("Install Prometheus + Grafana into the current cluster", None),
     "gitops_configure": ("Write your AWS account into the GitOps manifests", None),
     "gitops_install": ("Install Argo CD and the GitOps applications", None),
+    "tf_bootstrap": ("Terraform state bucket (pulse-tfstate-<account>, once per AWS account)",
+                     "Create the S3 bucket pulse-tfstate-<account> for Terraform's state in your AWS account? "
+                     "Needed once, before Terraform plan / apply. It costs cents a month."),
     "tf_plan": ("Terraform plan: the S3 model registry, ECR, CI roles", None),
     "tf_apply": ("Terraform apply: the S3 model registry, ECR, CI roles",
                  "Apply the Terraform plan to your AWS account (S3 bucket, IAM policies, ECR repository)? "
                  "Review the plan in the log first."),
+    "registry_from_tf": ("Use the model registry Terraform created (fills in both URIs)", None),
     "registry_push_data": ("Upload the training data to the S3 registry", None),
     "registry_publish": ("Publish the local model as a registry version",
                          "Publish the local model file as a new version (and make it latest)?"),
@@ -104,6 +109,10 @@ def save_env(values: dict, groq_keys: list | None = None) -> dict:
     unknown = [k for k in values if k not in ENV_KEYS]
     if unknown:
         raise ValueError(f"not a known setting: {unknown}")
+    values = {k: str(v or "").strip() for k, v in values.items()}
+    bad = [k for k in backend.REGISTRY_KEYS if values.get(k) and not S3_URI.fullmatch(values[k])]
+    if bad:
+        raise ValueError(f"{', '.join(bad)}: an S3 URI is needed, like s3://pulse-models-<account>/pulse-v3")
     if not paths.ENV_FILE.exists():
         example = paths.ROOT / ".env.example"
         paths.ENV_FILE.write_text(example.read_text(encoding="utf-8") if example.exists() else "", encoding="utf-8")
@@ -133,7 +142,38 @@ def save_env(values: dict, groq_keys: list | None = None) -> dict:
         else:
             lines.append(f"{k}={v}")
     paths.ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    backend.set_registry({k: values[k] for k in backend.REGISTRY_KEYS if values.get(k)})   # live: no UI restart
     return env_status()
+
+
+def _tf_init(env: dict) -> tuple:
+    """The step that points Terraform at its state bucket (pulse-tfstate-<account>, infra/terraform/bootstrap)."""
+    acct = _aws_account()
+    if not acct:
+        raise ValueError("not logged in to AWS (aws configure)")
+    return ("terraform init (state bucket pulse-tfstate-<account>)",
+            ["terraform", "-chdir=infra/terraform", "init", "-input=false", f"-backend-config=bucket=pulse-tfstate-{acct}"],
+            env)
+
+
+def registry_from_terraform(say) -> None:
+    """Save the registry URIs Terraform created (outputs model_uri, action_model_uri) and use them right away."""
+    tf = paths.INFRA / "terraform"
+    vals, missing = {}, []
+    for key, output in (("PULSE_MODEL_URI", "model_uri"), ("ACTION_MODEL_URI", "action_model_uri")):
+        code, out = backend._run(["terraform", f"-chdir={tf}", "output", "-no-color", "-raw", output], 60)
+        if code == 0 and S3_URI.fullmatch(out.strip()):
+            vals[key] = out.strip()
+        else:                                   # e.g. an output added to the code after the last apply
+            missing.append(output)
+    if not vals:
+        raise RuntimeError(f"Terraform has no registry outputs ({', '.join(missing)}): run Terraform apply first")
+    save_env(vals)
+    for k, v in vals.items():
+        say(f"  {k}={v}")
+    say("  saved to .env and in use now (Models tab)")
+    if missing:
+        say(f"  not in Terraform's state yet: {', '.join(missing)}. Run Terraform apply to add it, or type it above")
 
 
 def _aws_account():
@@ -276,24 +316,39 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
     if name == "gitops_install":
         return [(title + " (infra/gitops/install.sh)", [_need_bash(), "infra/gitops/install.sh"],
                  {**env, **({"GITOPS_REVISION": p["revision"]} if p.get("revision") else {})})]
-    if name in ("tf_plan", "tf_apply"):
-        acct = _aws_account()
-        if not acct:
+    if name == "tf_bootstrap":                  # its own state stays local (gitignored): applied once per account
+        boot = ["terraform", f"-chdir={paths.INFRA / 'terraform' / 'bootstrap'}"]
+        if not _aws_account():
             raise ValueError("not logged in to AWS (aws configure)")
+        def apply(say):                         # skip if the bucket is there (made once, perhaps on another machine)
+            bucket = f"pulse-tfstate-{_aws_account()}"
+            if backend._run(["aws", "s3api", "head-bucket", "--bucket", bucket], 30)[0] == 0:
+                say(f"  {bucket} already exists: nothing to do")
+                return
+            code, out = backend._run([*boot, "apply", "-input=false", "-auto-approve", "-no-color",
+                                      "-var", f"region={region}"], 600)
+            for line in out.splitlines()[-12:]:
+                say("  " + line)
+            if code != 0:
+                raise RuntimeError("terraform apply failed (log above)")
+        return [("terraform init (infra/terraform/bootstrap)", boot + ["init", "-input=false", "-no-color"], env),
+                (title, apply, {})]
+    if name in ("tf_plan", "tf_apply"):
         tf = ["terraform", "-chdir=infra/terraform"]
         repo = str(p.get("github_repo") or "").strip()
         var = ["-var", f"github_repo={repo}"] if repo else []
-        steps = [("terraform init (state bucket pulse-tfstate-<account>)",
-                  tf + ["init", "-input=false", f"-backend-config=bucket=pulse-tfstate-{acct}"], env)]
+        steps = [_tf_init(env)]
         if name == "tf_plan":
             return steps + [(title, tf + ["plan", "-input=false", "-no-color", *var], env)]
-        return steps + [(title, tf + ["apply", "-input=false", "-auto-approve", "-no-color", *var], env)]
+        return steps + [(title, tf + ["apply", "-input=false", "-auto-approve", "-no-color", *var], env),
+                        ("use the model registry it created", registry_from_terraform, {})]
+    if name == "registry_from_tf":
+        return [_tf_init(env), (title, registry_from_terraform, {})]
     if name in ("registry_push_data", "registry_publish"):
         fam = p.get("family") if p.get("family") in backend.FAMILIES else "pulse_v3"
         uri = backend.FAMILIES[fam]["uri"]()
         if not uri:
-            raise ValueError(f"{backend.FAMILIES[fam]['env']} is not set: start the UI with it "
-                             f"(terraform -chdir=infra/terraform output -raw {backend.FAMILIES[fam]['terraform']})")
+            raise ValueError("No model registry set: fill in Model registry above (or Fill in from Terraform)")
         if name == "registry_push_data":
             return [(f"{title} ({fam})", [py, "-m", "pulse.registry", "data", "push", uri, "--family", fam], env)]
         model = paths.MODELS / ("action_model.pkl" if fam == "action" else "pulse_v3/predictor.pkl")

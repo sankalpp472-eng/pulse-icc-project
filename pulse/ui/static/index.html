@@ -440,15 +440,28 @@
           <label>Argo CD follows branch <input id="sRevision" placeholder="main"></label>
         </div>
         <div class="actions">
-          <button data-act="tf_plan">Terraform plan</button>
-          <button class="ghost" data-act="tf_apply">Terraform apply</button>
+          <button class="ghost" data-act="tf_bootstrap">1. Terraform state bucket (once)</button>
+          <button data-act="tf_plan">2. Terraform plan</button>
+          <button class="ghost" data-act="tf_apply">3. Terraform apply</button>
+        </div>
+        <div class="form-grid registry-grid">
+          <label>Model registry: pulse-v3 <input id="sRegPulse" data-reg="PULSE_MODEL_URI" placeholder="s3://pulse-models-<account>/pulse-v3"></label>
+          <label>Model registry: lightgbm + markov <input id="sRegAction" data-reg="ACTION_MODEL_URI" placeholder="s3://pulse-models-<account>/action-model"></label>
+        </div>
+        <div class="actions">
+          <button id="sRegSave">Save registry</button>
+          <button class="ghost" data-act="registry_from_tf">Fill in from Terraform</button>
+          <span class="muted small" id="sRegState"></span>
+        </div>
+        <div class="actions">
           <button data-act="registry_push_data">Upload training data</button>
           <button class="ghost" data-act="registry_publish">Publish local model</button>
           <button data-act="gitops_configure">GitOps: set my AWS account</button>
           <button data-act="gitops_install">Install Argo CD</button>
         </div>
-        <p class="muted small">Optional. The registry needs Terraform's state bucket once (infra/terraform/bootstrap). Start the UI
-          with PULSE_MODEL_URI / ACTION_MODEL_URI set to use the registry (Models tab).</p>
+        <p class="muted small">Optional (the predictors use local model files without it). Steps 1–3 create the S3 model
+          registry in your AWS account; <i>Terraform apply</i> then fills in the registry URIs itself (or type them,
+          or <i>Fill in from Terraform</i>). They are saved to .env and used at once: the Models tab lists the versions.</p>
       </div>
 
       <div class="card">

@@ -89,6 +89,11 @@ async function loadSetup() {
     (s.eks.context ? " · cluster context found" : "") + (s.images.ecr ? ` · image ${s.images.ecr.split(":").pop()}` : "");
   $("#sEks").className = "pill " + (s.eks.context ? "ok" : "");
   $("#sAccount").textContent = s.eks.account ? `AWS account ${s.eks.account}` : "";
+  // the model registry URIs in use (typed here, filled in from Terraform, or from the environment the UI started with)
+  const reg = s.registry || {};
+  for (const [id, v] of [["#sRegPulse", reg.pulse_v3], ["#sRegAction", reg.action]])
+    if (document.activeElement !== $(id)) $(id).value = v || "";
+  $("#sRegState").textContent = reg.pulse_v3 || reg.action ? "in use (Models tab)" : "not set: the predictors use local model files";
   $("#sClusterPred").textContent = s.cluster.knative ? `${s.cluster.context} · predictor ${s.cluster.predictor || "not deployed"}`
     : "switch the top bar to Knative";
   if (!$("#sPredictor").options.length) $("#sPredictor").innerHTML = s.predictors.map((p) => `<option>${p}</option>`).join("");
@@ -131,6 +136,18 @@ $("#sEnvSave").onclick = async () => {
     toast("Saved to .env. Restart the predictor (or the UI) for new keys to take effect.", 6000);
     loadSetup();
   } catch (err) { toast(err.message, 6000); }
+};
+// the model registry: saved to .env and used at once (no restart)
+$("#sRegSave").onclick = async () => {
+  const values = {};
+  $$("[data-reg]").forEach((el) => { if (el.value.trim()) values[el.dataset.reg] = el.value.trim(); });
+  if (!Object.keys(values).length) return toast("Type at least one registry URI (s3://…), or use Fill in from Terraform");
+  try {
+    await api("/api/setup/env", { values });
+    toast("Model registry saved and in use: see the Models tab", 5000);
+    loadSetup();
+    loadModels();
+  } catch (err) { toast(err.message, 7000); }
 };
 
 // ------------------------------------------------------------------ cluster switch

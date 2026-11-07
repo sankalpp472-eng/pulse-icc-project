@@ -117,7 +117,7 @@ UI also finds tools in `~/.arkade/bin`). Restart the UI afterwards, so it sees t
 | Local cluster (kind) | Create cluster (kind + Knative + Kourier + Redis + the 14 tools at scale-to-zero, ~5 min) · Deploy the retail tools (the 16 retail tools next to them, ~3 min) · Build image for kind · Delete cluster |
 | AWS EKS | Region · Build + push image (to your ECR) · Create cluster (eksctl, or Terraform with the checkbox; ~20 min) · Delete cluster · Check for leftovers |
 | Pulse in the current cluster | Deploy Pulse's services (predictor, prewarm controller, embedding server; also copies your LLM keys into the cluster as a Secret) · Switch predictor · Install Prometheus + Grafana |
-| Cloud extras | Terraform plan / apply (S3 model registry, ECR, CI roles) · Upload training data · Publish local model · GitOps: set my AWS account · Install Argo CD. Optional; the one-time AWS setup they need is in [DEV.md §6](DEV.md#6-cicd-and-gitops) |
+| Cloud extras | 1. Terraform state bucket (once per AWS account) · 2. Terraform plan · 3. Terraform apply (S3 model registry, ECR, CI roles; it then fills in the model registry URIs) · Model registry (the two URIs: type them, or *Fill in from Terraform*; saved to `.env`, used at once) · Upload training data · Publish local model · GitOps: set my AWS account · Install Argo CD. Optional; more in [DEV.md §6](DEV.md#6-cicd-and-gitops) |
 
 Every action runs as a job with its log in the same tab; actions that cost money or delete something ask first.
 One job runs at a time.
@@ -170,8 +170,8 @@ Batch runs that write a result folder to `results/`:
   time window. Needs *Install Prometheus + Grafana*.
 - **Models**: the S3 model registry, for pulse-v3 and for lightgbm + markov: versions with their held-out
   metrics, **Use** a version, **Promote** / roll back, **Pin in Git** (GitOps), **Retrain** here or as a Kubernetes
-  Job. A new version becomes *latest* only if it beats the current one on held-out tasks. Start the UI with
-  `PULSE_MODEL_URI` / `ACTION_MODEL_URI` set (Terraform prints them) to use it.
+  Job. A new version becomes *latest* only if it beats the current one on held-out tasks. Set up the registry
+  in Setup → Cloud extras (steps 1–3; *Terraform apply* fills in its URIs).
 
 ---
 
@@ -235,7 +235,7 @@ Each module and script explains its options at the top of the file. [DEV.md](DEV
 | A Setup button says *bash not found* | Install Git for Windows (Git Bash), or run the UI on Linux / macOS |
 | Predictor card stays *loading…* | LightGBM takes up to a minute to import; if it turns *exited*, its last log lines are on the card |
 | *No Groq key* when starting a live run or the speculator | Setup → LLM keys, then restart the predictor |
-| `pulse_v3` will not start | Train its model (Setup) or start the UI with `PULSE_MODEL_URI` |
+| `pulse_v3` will not start | Train its model (Setup → This project), or set the model registry (Setup → Cloud extras) |
 | Knative mode shows no tools | Create the cluster (Setup), or check `kubectl config current-context` |
 | EKS: *ImagePullBackOff* | Build + push the image first (Setup → AWS EKS, step 1) |
 
