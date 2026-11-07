@@ -99,7 +99,10 @@ account, and has no login.
 | AWS EKS | an AWS account (CLI logged in, not the root user), eksctl or Terraform, kubectl, Docker | Setup → AWS EKS |
 | Monitoring and GitOps | helm (and for GitOps a fork of this repository) | Setup, Monitoring tab |
 
-Setup → *Tools on this machine* shows which of these are installed.
+Setup → *Tools on this machine* shows which of these are installed. On Windows, install them with `winget`
+(`winget install Helm.Helm`, likewise `Kubernetes.kind`, `Kubernetes.kubectl`, `Amazon.AWSCLI`,
+`Hashicorp.Terraform`) or, in Git Bash, with [arkade](https://github.com/alexellis/arkade) (`arkade get helm`; the
+UI also finds tools in `~/.arkade/bin`). Restart the UI afterwards, so it sees the new PATH.
 
 ---
 

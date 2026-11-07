@@ -23,6 +23,11 @@ from pathlib import Path
 from pulse import paths
 
 ROOT = paths.ROOT
+# Tools installed with arkade (the usual way on Windows: arkade get kind|helm|kubectl ...) live in ~/.arkade/bin, which is
+# not on PATH: add it, so Setup's checks and every script the UI starts find them.
+_ARKADE = Path.home() / ".arkade" / "bin"
+if _ARKADE.is_dir() and str(_ARKADE) not in os.environ.get("PATH", "").split(os.pathsep):
+    os.environ["PATH"] = str(_ARKADE) + os.pathsep + os.environ.get("PATH", "")
 STATE = Path(os.getenv("UI_STATE_DIR") or ROOT / ".ui-state")   # logs of the processes the UI starts
 PY = sys.executable                             # the agent's Python (agent/.venv) runs the UI and everything it starts
 PREDICTOR_PORT = int(os.getenv("UI_PREDICTOR_PORT", "8000"))
