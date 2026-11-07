@@ -153,6 +153,12 @@ def predictor_start(p: PredictorIn):
     return st
 
 
+@app.get("/api/eks_predictor")
+def eks_predictor_info():
+    """Which predictor the cluster's deploy/pulse-predictor runs (the live demo's 'EKS predictor' option)."""
+    return services.eks_predictor_info()
+
+
 @app.post("/api/predictor/stop")
 def predictor_stop():
     services.stop("predictor")
@@ -171,13 +177,23 @@ def session_start(cfg: dict):
     if cfg["kind"] == "recorded" and not (RECORDINGS / f"{cfg.get('recording')}.json").exists():
         raise HTTPException(400, "pick a recorded live run (record one first: Live agent, then Start episode)")
     pred = None
-    if cfg.get("predictor"):
+    if cfg.get("predictor") and cfg.get("predictor_where") == "cluster":     # deploy/pulse-predictor in the cluster
+        try:
+            eks = services.eks_predictor()
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        pred = eks["url"]
+        cfg["predictor"], cfg["theta"] = f"{eks['name']} (EKS)", eks["theta"]
+        cfg["policy_label"] = backend.policy_label(eks["policy"], eks["theta"])
+    elif cfg.get("predictor"):
         if not services.wait_predictor(timeout=1 if services.predictor_ready() else 90):
             raise HTTPException(400, "Start the predictor first (Predictor card), or choose 'none (C0)'")
         pred = backend.PREDICTOR_URL
         info = services.procs["predictor"].info
         cfg["predictor"], cfg["theta"] = info["model"], info["theta"]
         cfg["policy_label"] = backend.policy_label(info.get("policy"), info["theta"])
+        if cluster.mode == "knative" and info.get("crd") == "k8s" and not services.controller_running():
+            services.start_controller()        # stopped by an episode with the EKS predictor
     if cluster.mode == "sim" and cfg.get("fresh", True):
         sim.set_min_scale(sim.min_scale)
     agents = int(cfg.get("bg_agents") or 0)

@@ -17,23 +17,35 @@ import urllib.request
 
 HISTORY_N = 10
 DEFAULT_INPUTS = ("trajectory", "signals")
-INFO_TTL_S = 10.0       # re-read /info this often: another predictor can be started on the same URL (the UI does)
-_INFO = {}              # url -> (time read, /info)
+INFO_TTL_S = 10          # a different predictor can be started at the same URL (the UI's Model switch)
+_INFO = {}               # url -> (time fetched, /info)
 
 
 def info(url: str, timeout: float = 2.0) -> dict:
-    """The predictor's GET /info, cached for INFO_TTL_S; {} if unreachable (retried on the next call)."""
+    """The predictor's GET /info, cached for INFO_TTL_S; {} if unreachable (retried on the next call).
+    Not cached forever: after the UI switches lightgbm -> speculator on the same URL, a stale answer would keep
+    the hints without history, and the speculator, seeing no conversation, answers RESPOND every time."""
     url = (url or "").rstrip("/")
     if not url:
         return {}
-    t, cached = _INFO.get(url, (0.0, None))
-    if cached is None or time.time() - t > INFO_TTL_S:
-        try:
-            with urllib.request.urlopen(url + "/info", timeout=timeout) as r:
-                _INFO[url] = (time.time(), json.loads(r.read()))
-        except Exception:
-            return cached or {}
+    hit = _INFO.get(url)
+    if hit and time.time() - hit[0] < INFO_TTL_S:
+        return hit[1]
+    try:
+        with urllib.request.urlopen(url + "/info", timeout=timeout) as r:
+            _INFO[url] = (time.time(), json.loads(r.read()))
+    except Exception:
+        _INFO.pop(url, None)
+        return {}
     return _INFO[url][1]
+
+
+def forget(url: str | None = None):
+    """Drop the cached /info (of one URL, or all): call it after starting a different predictor."""
+    if url:
+        _INFO.pop(url.rstrip("/"), None)
+    else:
+        _INFO.clear()
 
 
 def inputs(url: str) -> set:

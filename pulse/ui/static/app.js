@@ -265,7 +265,33 @@ $("#simReset").onclick = async () => {
 let TASKS = [];
 const kindSeg = seg("kindSeg", () => demoForm());
 const userSeg = seg("userSeg", () => demoForm());
-const predSeg = seg("predSeg");
+const predSeg = seg("predSeg", () => showEksPredictor());
+// Which predictor deploy/pulse-predictor runs (GET /api/eks_predictor: the Deployment's env + rollout), shown under
+// the 'EKS predictor' option while it is selected; refreshed every 20 s (a switch from Setup rolls out in ~1 min).
+let eksTimer = null;
+async function showEksPredictor() {
+  const el = $("#eksPredInfo"), btn = $('#predSeg button[data-v="eks"]');
+  clearTimeout(eksTimer);
+  if (predSeg.get() !== "eks") { el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  try {
+    const i = await api("/api/eks_predictor");
+    if (!i.deployed) {
+      el.innerHTML = `<span class="warn-text">${esc(i.detail)}</span>`;
+    } else {
+      const state = i.rolling ? `<span class="warn-text">switching, rollout in progress (${esc(i.pods)} ready)</span>`
+        : i.ready ? `${esc(i.pods)} pod ready` : `<span class="warn-text">no ready pod (${esc(i.pods)})</span>`;
+      el.innerHTML = `In the cluster: <b>${esc(i.label)}</b> (${esc(i.predictor)}) · ${esc(i.policy_label)}` +
+        `${i.model_version ? " · model " + esc(i.model_version) : ""} · ${state} · ` +
+        `<span title="pulse-runner image tag">${esc(i.image)}</span><br>Change it: Setup → Switch the cluster's predictor`;
+      btn.title = `deploy/pulse-predictor runs ${i.predictor} (${i.policy_label}); reached with kubectl port-forward, ` +
+        `the in-cluster pulse-controller prewarms`;
+    }
+  } catch (e) {
+    el.textContent = "Could not read the cluster's predictor: " + e.message;
+  }
+  eksTimer = setTimeout(showEksPredictor, 20000);
+}
 function demoForm() {
   const kind = kindSeg.get(), replay = kind === "replay", recorded = kind === "recorded";
   $$(".live-only").forEach((e) => e.classList.toggle("hidden", kind !== "live"));
@@ -332,11 +358,17 @@ const demoCfg = (predictorOn) => kindSeg.get() === "recorded" ? {
   trial: Number($("#trialSel").value || 0), speed: Number($("#speedSel").value), fanout: $("#fanoutChk").checked,
   predictor: predictorOn, seed: 252,
 });
+// mode: "on" = the Predictor card's predictor (laptop) · "eks" = deploy/pulse-predictor in the cluster · "off" = C0
+const demoCfgFor = (mode) => {
+  const c = demoCfg(mode !== "off");
+  if (mode === "eks") c.predictor_where = "cluster";
+  return c;
+};
 async function startEpisode(cfg) {
   if (cfg.kind === "live" && cfg.user === "ai" && !cfg.task_id) throw new Error("The AI customer needs a task");
   if (cfg.kind === "recorded" && !cfg.recording) throw new Error("Record a live run first (Live agent → Start episode)");
   cfg.bg_agents = state.cluster && state.cluster.mode === "knative" ? Number($("#bgAgents").value || 0) : 0;
-  if (cfg.predictor && !predictorMatchesCard()) {        // C3 always runs what the Predictor card shows
+  if (cfg.predictor && cfg.predictor_where !== "cluster" && !predictorMatchesCard()) {   // C3: the card's predictor
     await api("/api/predictor/start", cardPredictor());
     toast("Starting the predictor with the card's settings first (about a minute)…");
   }
@@ -344,7 +376,8 @@ async function startEpisode(cfg) {
 }
 $("#startBtn").onclick = async () => {
   $("#startBtn").disabled = true;
-  try { await startEpisode(demoCfg(predSeg.get() === "on")); } catch (e) { toast(e.message, 6000); }
+  if (predSeg.get() === "eks") toast("Connecting to the EKS predictor (kubectl port-forward)…");
+  try { await startEpisode(demoCfgFor(predSeg.get())); } catch (e) { toast(e.message, 6000); }
   finally { $("#startBtn").disabled = false; }
 };
 $("#stopBtn").onclick = () => { race.abort = true; api("/api/session/stop", {}); };
@@ -395,7 +428,7 @@ $("#raceBtn").onclick = async () => {
       await prepareCold(label);
       $("#raceStatus").textContent = `${label}: running…`;
       const prev = state.session?.id;
-      await startEpisode(demoCfg(on));
+      await startEpisode(demoCfgFor(on ? (predSeg.get() === "eks" ? "eks" : "on") : "off"));
       const s = await waitEpisodeEnd(prev);
       if (s.state !== "done") throw new Error(`${label} ended: ${s.state}`);
     }
@@ -1022,6 +1055,7 @@ async function poll() {
     $("#ctxName").textContent = c.context ? `(${c.context.replace(/^.*@/, "")})` : "";
     $$(".sim-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "sim"));
     $$(".knative-only").forEach((e) => e.classList.toggle("hidden", c.mode !== "knative"));
+    if (c.mode !== "knative" && predSeg.get() === "eks") { predSeg.set("on"); showEksPredictor(); }   // needs Knative
     minScaleSeg.set(String(s.sim_min_scale));
     const mf = (s.monitoring && s.monitoring.figures) || {};
     $("#podSec").textContent = c.mode === "sim" ? `${fmt(s.pod_seconds)} pod-s`

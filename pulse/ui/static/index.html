@@ -112,9 +112,11 @@
           <label class="replay-only hidden check"><input type="checkbox" id="fanoutChk" checked> Fan-out (parallel lookups)</label>
           <label>Prewarming
             <div class="seg" id="predSeg">
-              <button data-v="on" class="on">Predictor (C3)</button>
+              <button data-v="on" class="on" title="The predictor on the Predictor card, run on this machine">Predictor (C3)</button>
+              <button data-v="eks" class="knative-only hidden" title="The predictor deployed in the cluster (deploy/pulse-predictor), reached with kubectl port-forward; the in-cluster pulse-controller prewarms. Change it with Setup → Switch the cluster's predictor">EKS predictor (C3)</button>
               <button data-v="off">None (C0)</button>
             </div>
+            <span id="eksPredInfo" class="small muted hidden"></span>
           </label>
           <label class="knative-only hidden" title="More agents replaying recorded episodes on the same tools while this episode runs (loadtest/locust_episodes.py); they send hints too when prewarming is on">Background load (agents)
             <input type="number" id="bgAgents" min="0" max="50" value="0">

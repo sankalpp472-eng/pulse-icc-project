@@ -32,6 +32,7 @@ STATE = Path(os.getenv("UI_STATE_DIR") or ROOT / ".ui-state")   # logs of the pr
 PY = sys.executable                             # the agent's Python (agent/.venv) runs the UI and everything it starts
 PREDICTOR_PORT = int(os.getenv("UI_PREDICTOR_PORT", "8000"))
 PREDICTOR_URL = f"http://127.0.0.1:{PREDICTOR_PORT}"
+EKS_PREDICTOR_PORT = int(os.getenv("UI_EKS_PREDICTOR_PORT", "8010"))   # kubectl port-forward to deploy/pulse-predictor
 CONTROLLER_LOG = STATE / "controller.jsonl"
 RESULT_DIRS = {"local": paths.RESULTS / "local_runs", "cloud": paths.RESULTS / "cloud_runs",
                "load": paths.RESULTS / "load_runs"}
@@ -366,6 +367,8 @@ class Services:
         self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
                                                                 "crd": "k8s" if crd else "off", "domain": domain,
                                                                 "model_version": model_version})
+        from pulse.predictor import client
+        client.forget()             # the live demo's hints must ask the NEW predictor what it reads (history?)
         self.health = None
         return self.status()
 
@@ -395,6 +398,81 @@ class Services:
             cmd += ["--predictor-url", predictor_url]
         self.procs["bgload"] = Proc("bgload", cmd, env, {"agents": agents})
         return self.status()
+
+    def eks_predictor_info(self) -> dict:
+        """Which predictor deploy/pulse-predictor runs, from the Deployment itself (its env, with the service's
+        defaults: pulse/predictor/service.py) and whether its rollout is done. One kubectl call; for the label next to
+        the live demo's 'EKS predictor' option, so it is fetched when shown, not on every state poll."""
+        if self.cluster.mode != "knative" or not self.cluster.context:
+            return {"deployed": False, "detail": "switch to Knative (top bar) to use the cluster's predictor"}
+        code, out = _run(["kubectl", "--context", self.cluster.context, "get", "deploy", "pulse-predictor", "-o", "json",
+                          "--request-timeout=8s"], 12)
+        if code != 0:
+            return {"deployed": False, "detail": "deploy/pulse-predictor is not in this cluster: Setup → Pulse in the "
+                                                 "current cluster → Deploy Pulse's services"}
+        d = json.loads(out)
+        c = d["spec"]["template"]["spec"]["containers"][0]
+        env = {e["name"]: e.get("value") for e in c.get("env", []) if "value" in e}
+        theta = float(env.get("THETA", "0.3"))
+        policy = norm_policy({"policy": env.get("PREWARM_POLICY", "theta"), "top_k": env.get("TOP_K", "2"),
+                              "p_min": env.get("P_MIN", "0.1"), "lookahead": env.get("LOOKAHEAD", "0") == "1",
+                              "theta_next": env.get("THETA_NEXT", "0.4")})
+        st, want = d.get("status", {}), d["spec"].get("replicas", 1)
+        ready, updated = st.get("readyReplicas", 0), st.get("updatedReplicas", 0)
+        rolling = updated < want or st.get("replicas", 0) > want      # a switch (kubectl set env) still rolling out
+        name = env.get("PREDICTOR") or "lightgbm"
+        return {"deployed": True, "predictor": name, "label": self.MODELS.get(name, name), "theta": theta,
+                "policy_label": policy_label(policy, theta), "ready": ready >= 1 and not rolling,
+                "pods": f"{ready}/{want}", "rolling": rolling, "image": c.get("image", "").rsplit(":", 1)[-1],
+                "model_version": env.get("PULSE_MODEL_VERSION") or env.get("ACTION_MODEL_VERSION") or None}
+
+    def eks_predictor(self) -> dict:
+        """Live demo with the predictor DEPLOYED in the cluster (deploy/pulse-predictor, infra/cloud/pulse-cloud.yaml)
+        instead of one started here: a kubectl port-forward to it, kept up like the other processes. Its PrewarmRequests
+        are handled by the in-cluster pulse-controller, so the laptop's controller is stopped (two controllers would
+        both warm every request). Returns {url, name, theta, policy} from its /healthz."""
+        if self.cluster.mode != "knative" or not self.cluster.context:
+            raise ValueError("the EKS predictor needs the real cluster: switch to Knative (top bar) first")
+        for dep in ("pulse-predictor", "pulse-controller"):
+            code, out = _run(["kubectl", "--context", self.cluster.context, "get", "deploy", dep, "-o",
+                              "jsonpath={.status.readyReplicas}", "--request-timeout=8s"], 12)
+            if code != 0:
+                raise ValueError(f"deploy/{dep} is not in this cluster: Setup → Pulse in the current cluster → "
+                                 "Deploy Pulse's services")
+            if not out.strip() or int(out.strip()) < 1:
+                raise ValueError(f"deploy/{dep} has no ready pod yet (kubectl get pods -l app={dep})")
+        url = f"http://127.0.0.1:{EKS_PREDICTOR_PORT}"
+        pf = self.procs.get("eks_predictor")
+        if not (pf and pf.alive()):
+            self.stop("eks_predictor")
+            self.procs["eks_predictor"] = Proc(
+                "eks_predictor", ["kubectl", "--context", self.cluster.context, "port-forward", "svc/pulse-predictor",
+                                  f"{EKS_PREDICTOR_PORT}:8000"], {}, {"context": self.cluster.context, "url": url})
+        self.stop("controller")                         # the in-cluster pulse-controller warms instead
+        health, t0 = None, time.time()
+        while time.time() - t0 < 25:
+            try:
+                with urllib.request.urlopen(url + "/healthz", timeout=4) as r:
+                    health = json.loads(r.read())
+                break
+            except Exception:
+                if not self.procs["eks_predictor"].alive():
+                    break
+                time.sleep(0.5)
+        if not health:
+            tail = " / ".join(self.procs["eks_predictor"].tail(3))
+            self.stop("eks_predictor")
+            raise ValueError(f"the EKS predictor did not answer through kubectl port-forward: {tail or 'no output'}")
+        from pulse.predictor import client
+        client.forget(url)
+        pol = health.get("policy") or {}
+        theta = float(pol.get("theta", 0.3))
+        look = pol.get("lookahead") or {}
+        policy = norm_policy({k: v for k, v in {"policy": pol.get("name"), "top_k": pol.get("top_k"),
+                                                "p_min": pol.get("p_min"), "lookahead": look.get("on"),
+                                                "theta_next": look.get("theta_next")}.items() if v is not None})
+        self.procs["eks_predictor"].info.update(model=health.get("predictor"), theta=theta)
+        return {"url": url, "name": health.get("predictor"), "theta": theta, "policy": policy}
 
     def stop(self, name: str | None = None) -> dict:
         for n in ([name] if name else list(self.procs)):
