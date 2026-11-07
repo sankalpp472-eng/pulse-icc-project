@@ -60,7 +60,7 @@ ACTIONS = {   # name: (what the button does, confirm text or None)
     "registry_from_tf": ("Use the model registry Terraform created (fills in both URIs)", None),
     "registry_push_data": ("Upload the training data to the S3 registry", None),
     "registry_publish": ("Publish the local model as a registry version",
-                         "Publish the local model file as a new version (and make it latest)?"),
+                         "Publish the local model file as a new registry version (latest only if that box is ticked)?"),
 }
 
 
@@ -357,8 +357,10 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
         version = str(p.get("version") or "").strip()
         if not re.fullmatch(r"[\w.-]{1,40}", version):
             raise ValueError("a version name is needed (letters, digits, - _ .)")
-        return [(f"{title}: {fam} {version}", [py, "-m", "pulse.registry", "publish", str(model), uri,
-                                               "--version", version, "--notes", "published from the UI"], env)]
+        latest = p.get("latest", True) is not False           # unticked: a candidate (Models tab -> Promote later)
+        return [(f"{title}: {fam} {version}" + ("" if latest else " (candidate)"),
+                 [py, "-m", "pulse.registry", "publish", str(model), uri, "--version", version,
+                  "--notes", "published from the UI", *([] if latest else ["--no-latest"])], env)]
     raise ValueError(f"no steps for {name}")
 
 

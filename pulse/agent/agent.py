@@ -30,10 +30,9 @@ def emit_hint(episode_id: str, trajectory: list[str], messages: list[dict] | Non
     send_hint(episode_id, trajectory, messages)
 
 def _chat_within_limit(messages: list[dict], schemas: list[dict], scale: float = 1.0):
-    """chat() on a copy trimmed to the context budget, with two provider glitches handled:
-      HTTP 413 (request still too large: our estimate was low) -> trim harder and retry
-      HTTP 400 tool_use_failed (gpt-oss on Groq sometimes emits a malformed tool call) -> retry"""
-    budget, glitches = CONTEXT_BUDGET, 0
+    """chat() on a copy trimmed to the context budget. HTTP 413 (request still too large: our estimate was low)
+    -> trim harder and retry. (A malformed tool call, HTTP 400 tool_use_failed, is retried inside chat().)"""
+    budget = CONTEXT_BUDGET
     for _ in range(6):
         to_send, trimmed = fit_context(messages, schemas, budget=budget, scale=scale)
         try:
@@ -42,14 +41,10 @@ def _chat_within_limit(messages: list[dict], schemas: list[dict], scale: float =
                 _chat_within_limit.scale = r.prompt_tokens / max(1, est_tokens(to_send, schemas))
             return r, trimmed
         except APIStatusError as e:
-            if e.status_code == 400 and "tool_use_failed" in str(e) and glitches < 3:
-                glitches += 1
-                print(f"  [llm] malformed tool call from the model; retrying ({glitches}/3)")
-                continue
             if e.status_code != 413 or not budget:
                 raise
             budget = int(budget * 0.8)
-            print(f"  [llm] request too large; retrying with a smaller context budget ({budget} tokens)")
+            print(f"  [llm] request too large; retrying with a smaller context budget ({budget} tokens)", flush=True)
     to_send, trimmed = fit_context(messages, schemas, budget=budget, keep_last=1, scale=scale)
     return chat(to_send, tools=schemas), trimmed
 

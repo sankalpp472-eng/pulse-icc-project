@@ -89,6 +89,7 @@ class Session(threading.Thread):
         # end-to-end clock: from the first message of the conversation to the end of the episode (setup excluded)
         self.t_start = self.t_end = None
         self.tool_wait = 0.0                         # time the agent was blocked on tools (a parallel step = its slowest call)
+        self.llm_wait = 0.0                          # live: time the agent's LLM calls waited on the API's rate limits
         self.rng = random.Random(int(cfg.get("seed", 252)))
         self.pod_s0 = sim.live_pod_seconds() if sim else None
 
@@ -256,7 +257,7 @@ class Session(threading.Thread):
                 "pod_seconds": round(self.sim.live_pod_seconds() - self.pod_s0, 1) if self.sim else None,
                 "duration_s": round(time.time() - self.t0, 1),
                 "e2e_s": round(self.t_end - self.t_start, 2) if self.t_start and self.t_end else None,
-                "tool_wait_s": round(self.tool_wait, 2), "state": self.state,
+                "tool_wait_s": round(self.tool_wait, 2), "llm_wait_s": round(self.llm_wait, 1), "state": self.state,
                 "seed": self.cfg.get("seed", 252), "trial": self.cfg.get("trial"), "speed": self.cfg.get("speed"),
                 "kind": self.cfg["kind"], "user": self.cfg.get("user") if self.cfg["kind"] == "live" else None, "predictor": self.cfg.get("predictor") or "none",
                 "policy": self.cfg.get("policy_label") if self.cfg.get("predictor") else None,
@@ -332,6 +333,7 @@ class Session(threading.Thread):
             self.emit("thinking", step=step)
             r, _ = _chat_within_limit(messages, tools.schemas)
             m = r.message
+            self.llm_wait += r.rate_wait_s or 0.0           # in the end-to-end time, not in think_s (nor in a replay)
             st = {"step": step, "think_s": round(r.latency_s, 3), "signals": sig, "history": hist}
             self.rec["steps"].append(st)
             messages.append(_assistant_msg(m))

@@ -975,6 +975,8 @@ def summarize(d: Path) -> dict | None:
                 "p99": lat.get("p99"), "mean": lat.get("mean"), "pod_seconds": None,
                 "files": sorted(p.name for p in d.iterdir())}
     pred = ((cfg.get("prewarm") or {}).get("predictor") or {}).get("model")
+    if not isinstance(pred, str):          # pulse_v3 runs before the /healthz fix recorded its session stats here
+        pred = "pulse_v3" if isinstance(pred, dict) else None
     return {"name": d.name, "path": rel(d),
             "where": d.parent.name, "config": s.get("config") or cfg.get("config"),
             "mode": "live" if "W1-live" in d.name else "replay", "predictor": pred,

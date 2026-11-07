@@ -101,7 +101,8 @@ async function loadSetup() {
 function setupParams(btn) {
   return { region: $("#sRegion").value.trim(), terraform: $("#sTerraform").checked, target: btn.dataset.target,
            predictor: $("#sPredictor").value, theta: Number($("#sTheta").value), github_repo: $("#sRepo").value.trim(),
-           family: $("#sFamily").value, version: $("#sVersion").value.trim(), revision: $("#sRevision").value.trim() };
+           family: $("#sFamily").value, version: $("#sVersion").value.trim(), revision: $("#sRevision").value.trim(),
+           latest: $("#sPubLatest").checked };
 }
 $("#tab-setup").addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-act]");
@@ -528,7 +529,8 @@ function renderEvent(ev) {
       }
       add(`<div class="stats">${stat(s.calls, "tool calls")}${stat(s.cold, "cold calls")}${stat(s.prewarmed_hits, "prewarmed")}` +
         `${stat(fmt(s.mean_ms), "mean latency ms")}${stat(fmt(s.cold_wait_s, 1), "s lost to cold starts")}` +
-        `${s.pod_seconds != null ? stat(fmt(s.pod_seconds), "pod-seconds") : ""}${stat(s.hints_answered + "/" + s.hints_sent, "hints answered")}</div>`, "step");
+        `${s.pod_seconds != null ? stat(fmt(s.pod_seconds), "pod-seconds") : ""}${stat(s.hints_answered + "/" + s.hints_sent, "hints answered")}` +
+        `${s.llm_wait_s ? stat(fmt(s.llm_wait_s, 0), "s waiting on LLM rate limits") : ""}</div>`, "step");
       break;
     }
   }

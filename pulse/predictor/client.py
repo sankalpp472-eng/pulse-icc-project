@@ -17,19 +17,23 @@ import urllib.request
 
 HISTORY_N = 10
 DEFAULT_INPUTS = ("trajectory", "signals")
-_INFO = {}
+INFO_TTL_S = 10.0       # re-read /info this often: another predictor can be started on the same URL (the UI does)
+_INFO = {}              # url -> (time read, /info)
 
 
 def info(url: str, timeout: float = 2.0) -> dict:
-    """The predictor's GET /info, cached; {} if unreachable (retried on the next call)."""
+    """The predictor's GET /info, cached for INFO_TTL_S; {} if unreachable (retried on the next call)."""
     url = (url or "").rstrip("/")
-    if url and url not in _INFO:
+    if not url:
+        return {}
+    t, cached = _INFO.get(url, (0.0, None))
+    if cached is None or time.time() - t > INFO_TTL_S:
         try:
             with urllib.request.urlopen(url + "/info", timeout=timeout) as r:
-                _INFO[url] = json.loads(r.read())
+                _INFO[url] = (time.time(), json.loads(r.read()))
         except Exception:
-            return {}
-    return _INFO.get(url, {})
+            return cached or {}
+    return _INFO[url][1]
 
 
 def inputs(url: str) -> set:

@@ -86,7 +86,7 @@ async def info():
 
 @app.get("/healthz")
 async def healthz():
-    return {"status": "ok", "predictor": NAME, **PRED.health(), "policy": policy(),
+    return {"status": "ok", **PRED.health(), "predictor": NAME, "policy": policy(),    # the name wins over health()
             "crd": {"mode": WRITER.mode, **WRITER.stats, "last_error": WRITER.last_error}}
 
 
