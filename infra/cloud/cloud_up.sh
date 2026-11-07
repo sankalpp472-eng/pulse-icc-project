@@ -21,6 +21,7 @@ kubectl apply -f infra/prewarm/prewarmrequest-crd.yaml
 # Groq / OpenRouter keys from .env -> Secret pulse-llm-keys (values never printed or written to the repo)
 if [ -f .env ]; then
   TMP=$(mktemp)
+  command -v cygpath >/dev/null && TMP=$(cygpath -m "$TMP")   # Git Bash on Windows: a path kubectl.exe can open
   trap 'rm -f "$TMP"' EXIT
   grep -E '^(GROQ_API_KEY(_[0-9]+)?|OPEN_ROUTER_API_KEY|LLM_BACKEND|SPEC_BASE_URL|SPEC_API_KEY|SPEC_MODEL)=' .env | tr -d '\r' > "$TMP"
   echo "Secret pulse-llm-keys: $(wc -l < "$TMP") keys/settings from .env"

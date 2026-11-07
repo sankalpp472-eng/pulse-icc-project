@@ -39,4 +39,4 @@ kubectl wait ksvc/cold-tool --for=condition=Ready --timeout=300s
 
 echo
 echo "Ready. Ingress: http://127.0.0.1:31080  (Host: cold-tool.default.example.com)"
-echo "Run:   python c0_baseline.py --trials 10"
+echo "Next:  SKIP_BUILD=1 bash infra/knative/deploy.sh 0   (Redis + the 14 tools; the UI's Create cluster does it)"
