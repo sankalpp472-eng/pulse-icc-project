@@ -411,6 +411,7 @@
           <button data-act="eks_create">2. Create cluster</button>
           <button class="ghost" data-act="eks_delete">Delete cluster</button>
           <button class="ghost" data-act="eks_leftovers">Check for leftovers</button>
+          <button class="ghost" data-act="registry_access" title="IRSA roles so the cluster's predictors read, and its training Jobs publish, the S3 model registry. Create cluster does this when the registry exists; use this button if you created the registry afterwards.">Model registry access</button>
         </div>
         <p class="muted small warn-text">An EKS cluster costs money by the hour until it is deleted. Delete it at the end of every
           session, then check for leftovers.</p>

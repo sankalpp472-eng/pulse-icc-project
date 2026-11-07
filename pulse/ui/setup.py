@@ -47,6 +47,7 @@ ACTIONS = {   # name: (what the button does, confirm text or None)
                    "Delete the EKS cluster and everything in it (nodes, load balancer, VPC)? Runs in the cluster "
                    "are lost; result folders on this machine are kept."),
     "eks_leftovers": ("Check AWS for leftovers (clusters, instances, load balancers)", None),
+    "registry_access": ("Give the EKS cluster access to the model registry (IRSA roles)", None),
     "monitoring_install": ("Install Prometheus + Grafana into the current cluster", None),
     "gitops_configure": ("Write your AWS account into the GitOps manifests", None),
     "gitops_install": ("Install Argo CD and the GitOps applications", None),
@@ -291,6 +292,10 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
         return [(title + " (infra/eks/eks_down.sh)", [_need_bash(), "infra/eks/eks_down.sh"],
                  {**env, "USE_TERRAFORM": "1" if p.get("terraform") else "0"}),
                 ("check for leftovers", lambda say: leftovers(region, say), {})]
+    if name == "registry_access":
+        if not _eks_context():
+            raise ValueError("no EKS cluster yet (AWS EKS -> Create cluster); a new eksctl cluster gets this by itself")
+        return [(title + " (infra/eks/registry_access.sh)", [_need_bash(), "infra/eks/registry_access.sh"], env)]
     if name == "eks_leftovers":
         return [(f"{title} in {region}", lambda say: leftovers(region, say), {})]
     if name == "cloud_up":

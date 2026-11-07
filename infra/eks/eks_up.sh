@@ -44,6 +44,8 @@ fi
 CTX=$(kubectl config get-contexts -o name | grep -m1 "$NAME")
 kubectl config use-context "$CTX"
 kubectl get nodes
+# the Terraform cluster gets its registry roles from infra/terraform/eks/irsa.tf; the eksctl one from here
+[ "$CLUSTER_TOOL" = eksctl ] && REGION="$REGION" CLUSTER="$NAME" bash infra/eks/registry_access.sh
 
 ALLOW_CIDR="$(curl -s https://checkip.amazonaws.com)/32" KUBE_CONTEXT="$CTX" bash infra/eks/setup_knative.sh
 
