@@ -17,6 +17,8 @@ PY=${PYTHON:-python}
 REGION=${REGION:-ap-south-1}
 NAME=pulse-eks
 CLUSTER_YAML=$(mktemp)                          # infra/eks/cluster.yaml in the chosen region
+# Git Bash on Windows: /tmp/... exists only for bash; C:/Users/.../tmp.X works for bash and eksctl.exe alike
+command -v cygpath >/dev/null && CLUSTER_YAML=$(cygpath -m "$CLUSTER_YAML")
 trap 'rm -f "$CLUSTER_YAML"' EXIT
 sed "s/^\(  region: \)ap-south-1/\1$REGION/" infra/eks/cluster.yaml > "$CLUSTER_YAML"
 CLUSTER_TOOL=$([ "${USE_TERRAFORM:-0}" = 1 ] && echo terraform || echo eksctl)

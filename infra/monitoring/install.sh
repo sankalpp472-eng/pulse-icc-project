@@ -33,6 +33,7 @@ if [[ "$CTX" == kind-* ]]; then
   if ! docker exec "${CTX#kind-}-control-plane" getent hosts host.docker.internal >/dev/null 2>&1; then
     GW=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Gateway}} {{end}}' | tr ' ' '\n' | grep -m1 '\.')
     KIND_VALUES=$(mktemp)
+    command -v cygpath >/dev/null && KIND_VALUES=$(cygpath -m "$KIND_VALUES")   # Git Bash: a path helm.exe can open
     sed "s/host\.docker\.internal/$GW/g" "$DIR/values-kind.yaml" > "$KIND_VALUES"
     echo "no host.docker.internal: scraping the laptop at $GW"
   fi
