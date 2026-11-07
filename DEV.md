@@ -7,18 +7,7 @@ What each part of the code does and how the parts fit together. For installing a
 
 ## 1. Architecture
 
-```
-                    ┌─────────────────────────── Kubernetes: kind (laptop) or AWS EKS ─────────────────────────┐
- agent / replay     │                                                                                          │
- runner / UI ──hint─┼─▶ predictor ──P ≥ θ──▶ PrewarmRequest (CRD) ◀──watch── prewarm controller                │
-   (pulse.agent,    │   (pulse.predictor)                                            │ MCP ping (k times)       │
-    .experiments)   │                                                                ▼                          │
-            ──tool call (MCP over HTTP)──▶ Kourier ingress ──▶ Knative Services: 14 (16 retail) tools, to zero  │
-                    │                                            (one pod per call in flight; shared Redis DB)  │
-                    │   embedding server (pulse_v3) · Prometheus + Grafana · Argo CD · training Jobs           │
-                    └──────────────────────────────────────────────────────────────────────────────────────────┘
- AWS: S3 (model registry, Terraform state) · ECR (images) · IAM (IRSA, GitHub OIDC) · EKS · VPC     GitHub Actions: CI
-```
+<img width="2960" height="1900" alt="architecture" src="https://github.com/user-attachments/assets/874a4899-c8d0-4e5d-80ba-52056bbb768a" />
 
 **One step of an episode:**
 1. **Hint.** Before every LLM step the agent POSTs a hint to the predictor: the tools called so far, plus whatever
