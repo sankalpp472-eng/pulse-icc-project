@@ -453,8 +453,37 @@ class Services:
 
 
 # ====================================================================== models (the S3 model registry)
-MODEL_URI = os.getenv("PULSE_MODEL_URI", "")     # s3://<bucket>/pulse-v3 (pulse/registry.py)
-ACTION_URI = os.getenv("ACTION_MODEL_URI", "")   # s3://<bucket>/action-model: lightgbm + markov (train_action.py)
+# PULSE_MODEL_URI = s3://<bucket>/pulse-v3, ACTION_MODEL_URI = s3://<bucket>/action-model (pulse/registry.py). Set in
+# Setup -> Cloud extras (saved to .env, or filled in from Terraform); the environment the UI starts with also works.
+# They are kept in os.environ, so the predictor, training and the cluster scripts the UI starts all see them.
+REGISTRY_KEYS = ("PULSE_MODEL_URI", "ACTION_MODEL_URI")
+MODEL_URI = ACTION_URI = ""
+
+
+def _env_file(name: str) -> str:
+    """A value from .env ('' if not there or commented out)."""
+    try:
+        lines = paths.ENV_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    for line in lines:
+        k, sep, v = line.partition("=")
+        if sep and k.strip() == name and not line.lstrip().startswith("#"):
+            return v.strip().strip('"').strip("'")
+    return ""
+
+
+def set_registry(values: dict | None = None) -> None:
+    """Use these registry URIs from now on (none given: the environment, else .env)."""
+    global MODEL_URI, ACTION_URI
+    for k in REGISTRY_KEYS:
+        v = values[k] if values and k in values else (os.environ.get(k) or _env_file(k))
+        if v:
+            os.environ[k] = v
+    MODEL_URI, ACTION_URI = os.environ.get("PULSE_MODEL_URI", ""), os.environ.get("ACTION_MODEL_URI", "")
+
+
+set_registry()
 
 # the model families in the registry: what serves them, how they are trained, which number gates a release
 FAMILIES = {
@@ -491,8 +520,8 @@ def models_list(fam: str | None = None) -> dict:
     f = family(fam)
     uri, base = f["uri"](), {"family": fam or "pulse_v3", "predictors": f["predictors"]}
     if not uri:
-        return {**base, "uri": None, "versions": [], "error": f"{f['env']} is not set: start the UI with "
-                f"{f['env']}=s3://<bucket>/... (terraform -chdir=infra/terraform output -raw {f['terraform']})"}
+        return {**base, "uri": None, "versions": [], "error": "No model registry set: Setup -> Cloud extras -> Model "
+                "registry (type the URIs, or Fill in from Terraform after Terraform apply)"}
     try:
         return {**base, "uri": uri, "versions": _store().versions(uri), "error": None}
     except ImportError as e:
@@ -510,7 +539,7 @@ def build_retrain(spec: dict) -> list[tuple[str, list[str], dict]]:
     f = family(spec.get("family"))
     uri = f["uri"]()
     if not uri:
-        raise ValueError(f"{f['env']} is not set (see the Models tab)")
+        raise ValueError("No model registry set: Setup -> Cloud extras -> Model registry")
     promote, notes = spec.get("promote", "auto"), str(spec.get("notes") or "")
     if spec.get("where") == "cluster":
         b = bash()

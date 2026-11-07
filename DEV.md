@@ -231,15 +231,16 @@ Argo CD does not manage the tools (experiments switch their min-scale at runtime
 `infra/cloud/gitops/`.
 
 **Setting up the AWS side once (per account; all optional: EKS runs work without it).**
-1. **Terraform state bucket:** `terraform -chdir=infra/terraform/bootstrap init && terraform -chdir=infra/terraform/bootstrap apply`
-   creates `pulse-tfstate-<account>`. The other roots (`infra/terraform/`, and `infra/terraform/eks/` when the
-   cluster is made with Terraform) keep their state there.
-2. **Registry, ECR, CI roles:** Setup → Cloud extras → *Terraform plan*, then *Terraform apply* (or
-   `terraform -chdir=infra/terraform init -backend-config="bucket=pulse-tfstate-<account>"` and `apply`). With
-   your fork in the form (`-var github_repo=<owner>/<repo>`) it also creates the two GitHub OIDC roles.
-3. **Use the registry:** restart the UI with `PULSE_MODEL_URI` and `ACTION_MODEL_URI` set to
-   `terraform -chdir=infra/terraform output -raw model_uri` / `action_model_uri`; then *Upload training data* and
-   *Publish local model* (or *Retrain* in the Models tab).
+1. **Terraform state bucket:** Setup → Cloud extras → *1. Terraform state bucket* (`infra/terraform/bootstrap`:
+   creates `pulse-tfstate-<account>`; skipped if it exists). The other roots (`infra/terraform/`, and
+   `infra/terraform/eks/` when the cluster is made with Terraform) keep their state there.
+2. **Registry, ECR, CI roles:** *2. Terraform plan*, then *3. Terraform apply* (`infra/terraform`, state in that
+   bucket). With your fork in the form (`-var github_repo=<owner>/<repo>`) it also creates the two GitHub OIDC roles.
+3. **Use the registry:** *Terraform apply* ends by saving its outputs `model_uri` / `action_model_uri` as
+   `PULSE_MODEL_URI` / `ACTION_MODEL_URI` in `.env` (also *Fill in from Terraform*, or type them in *Model
+   registry*). The UI uses them at once and passes them to everything it starts; set in the environment that
+   starts the UI, they work too. Then *Upload training data* and *Publish local model* (or *Retrain* in the
+   Models tab).
 4. **CI on your fork:** add the repository variables `AWS_IMAGE_ROLE_ARN` and `AWS_PLAN_ROLE_ARN` (output
    `ci_role_arns`) and `TF_STATE_BUCKET`. Until they exist, `image.yml` and `terraform.yml` are skipped, not failed.
 5. **GitOps:** Setup → *GitOps: set my AWS account* (`infra/gitops/configure.sh <account>`), commit and push, then
