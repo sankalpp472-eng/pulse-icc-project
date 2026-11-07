@@ -1,8 +1,8 @@
 """
 LLM client -- Groq, OpenRouter or Ollama, all through the OpenAI-compatible API.
 
-Switch with LLM_BACKEND=groq|openrouter|ollama in .env (keys: GROQ_API_KEY_1..N
-or GROQ_API_KEY, OPEN_ROUTER_API_KEY). Native tool calling is used, so no regex
+Switch with LLM_BACKEND=groq|openrouter|ollama in .env (keys: GROQ_API_KEY and/or
+GROQ_API_KEY_1..N, OPEN_ROUTER_API_KEY). Native tool calling is used, so no regex
 parsing of "Action:" lines is needed.
 
 Groq key rotation: with several keys (GROQ_API_KEY_1, _2, ...), a key that hits its
@@ -37,19 +37,23 @@ def is_key(v) -> bool:
     return bool(v and v.strip() and not v.strip().startswith("your_"))
 
 
-def _groq_keys() -> list[str]:
+def groq_keys() -> list[str]:
+    """Every Groq key in .env, in order: GROQ_API_KEY, then GROQ_API_KEY_1, _2, ... (duplicates and placeholders
+    skipped). The agent rotates through them; so does the speculator (pulse/speculator/speculate.py)."""
     numbered = sorted((k for k in os.environ if re.fullmatch(r"GROQ_API_KEY_\d+", k)),
                       key=lambda k: int(k.rsplit("_", 1)[1]))
-    keys = [os.environ[k].strip() for k in numbered if is_key(os.environ[k])]
-    if not keys and is_key(os.getenv("GROQ_API_KEY")):
-        keys = [os.environ["GROQ_API_KEY"].strip()]
+    keys = []
+    for name in ["GROQ_API_KEY", *numbered]:
+        v = (os.getenv(name) or "").strip()
+        if is_key(v) and v not in keys:
+            keys.append(v)
     return keys
 
 
 # No key is not an error until an LLM is called (chat()), so everything that only imports the agent still works.
 NO_KEY = "No LLM key: set GROQ_API_KEY (or GROQ_API_KEY_1, ...) or OPEN_ROUTER_API_KEY in .env (the UI: Setup -> LLM keys)"
 if BACKEND == "groq":
-    KEYS = _groq_keys()
+    KEYS = groq_keys()
     BASE_URL, API_KEY, TIMEOUT = "https://api.groq.com/openai/v1", (KEYS[0] if KEYS else None), 120
     DEFAULT_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 elif BACKEND == "openrouter":

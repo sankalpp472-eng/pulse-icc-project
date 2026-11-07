@@ -17,9 +17,10 @@ from pulse import paths
 from pulse.setup import download_data, train_models
 from pulse.ui import backend
 
-ENV_KEYS = ("LLM_BACKEND", "GROQ_API_KEY", "GROQ_API_KEY_1", "GROQ_API_KEY_2", "GROQ_API_KEY_3", "GROQ_API_KEY_4",
-            "GROQ_MODEL", "OPEN_ROUTER_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_MODEL", "USER_MODEL",
-            "SPEC_BASE_URL", "SPEC_API_KEY", "SPEC_MODEL")
+ENV_KEYS = ("LLM_BACKEND", "GROQ_API_KEY", "GROQ_MODEL", "OPEN_ROUTER_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_MODEL",
+            "USER_MODEL", "SPEC_BASE_URL", "SPEC_API_KEY", "SPEC_MODEL")
+GROQ_NUMBERED = re.compile(r"GROQ_API_KEY_(\d+)")   # any number of extra Groq keys: GROQ_API_KEY_1, _2, ...
+MAX_GROQ_KEYS = 20
 SECRET = re.compile(r"KEY")               # values of these names are never shown, only "set"
 PREDICTORS = ("lightgbm", "markov", "speculator", "pulse_v3")
 CLOUD = paths.INFRA / "cloud"
@@ -72,27 +73,54 @@ def _env_values() -> dict:
     return vals
 
 
+def _real(v: str) -> bool:
+    return bool(v) and "your_" not in v                 # .env.example's placeholders are not keys
+
+
+def _groq_values(vals: dict) -> dict:
+    """The Groq keys .env has: GROQ_API_KEY and every GROQ_API_KEY_<n>, name -> value (real keys only)."""
+    return {k: v for k, v in vals.items() if (k == "GROQ_API_KEY" or GROQ_NUMBERED.fullmatch(k)) and _real(v)}
+
+
 def env_status() -> dict:
-    """Which settings .env has: secret ones only as set / not set; placeholders count as not set."""
+    """Which settings .env has: secret ones only as set / not set; placeholders count as not set. Groq keys only
+    as a count (groq_keys: distinct keys the agent and the speculator rotate through)."""
     vals = _env_values()
     out = {}
     for k in ENV_KEYS:
         v = vals.get(k, "")
-        ok = bool(v) and "your_" not in v
+        ok = _real(v)
         out[k] = ("set" if ok else "") if SECRET.search(k) else (v if ok else "")
-    llm_ready = any(out.get(k) for k in ENV_KEYS if k.startswith("GROQ_API_KEY")) or bool(out.get("SPEC_BASE_URL")) \
-        or bool(out.get("OPEN_ROUTER_API_KEY")) or out.get("LLM_BACKEND") == "ollama"
-    return {"exists": paths.ENV_FILE.exists(), "values": out, "llm_ready": llm_ready}
+    groq = len(set(_groq_values(vals).values()))
+    llm_ready = bool(groq) or bool(out.get("SPEC_BASE_URL")) or bool(out.get("OPEN_ROUTER_API_KEY")) \
+        or out.get("LLM_BACKEND") == "ollama"
+    return {"exists": paths.ENV_FILE.exists(), "values": out, "groq_keys": groq, "llm_ready": llm_ready}
 
 
-def save_env(values: dict) -> dict:
-    """Set the given names in .env (empty value = leave it); creates .env from .env.example if needed."""
+def save_env(values: dict, groq_keys: list | None = None) -> dict:
+    """Set the given names in .env (empty value = leave it); creates .env from .env.example if needed.
+    groq_keys: new Groq keys to add, each under the next free name (GROQ_API_KEY first, then GROQ_API_KEY_1, _2,
+    ...); a key .env already has is skipped."""
     unknown = [k for k in values if k not in ENV_KEYS]
     if unknown:
         raise ValueError(f"not a known setting: {unknown}")
     if not paths.ENV_FILE.exists():
         example = paths.ROOT / ".env.example"
         paths.ENV_FILE.write_text(example.read_text(encoding="utf-8") if example.exists() else "", encoding="utf-8")
+    values = dict(values)
+    have = _groq_values(_env_values())
+    taken, known = set(have), set(have.values())
+    for key in groq_keys or []:
+        key = str(key or "").strip()
+        if not key or "\n" in key or key in known:
+            continue
+        if len(known) >= MAX_GROQ_KEYS:
+            raise ValueError(f"at most {MAX_GROQ_KEYS} Groq keys")
+        name = "GROQ_API_KEY" if "GROQ_API_KEY" not in taken else \
+            f"GROQ_API_KEY_{next(n for n in range(1, 1000) if f'GROQ_API_KEY_{n}' not in taken)}"
+        values[name] = key
+        taken.add(name)
+        known.add(key)
     lines = paths.ENV_FILE.read_text(encoding="utf-8").splitlines()
     for k, v in values.items():
         v = str(v or "").strip()

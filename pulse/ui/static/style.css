@@ -82,6 +82,10 @@ aside label { margin-bottom: 10px; }
 .pill.wait { background: var(--warn-soft); color: var(--warn); }
 .pill.bad { background: var(--bad-soft); color: var(--bad); }
 .form-grid .wide { grid-column: span 2; }
+/* Setup -> LLM keys: one row per new Groq key */
+.groq-keys { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink2); font-weight: 550; }
+#sGroq { display: flex; flex-direction: column; gap: 6px; }
+.groq-keys > button { align-self: flex-start; }
 @media (max-width: 600px) { .form-grid .wide { grid-column: auto; } }
 .stale { background: var(--bad); color: #fff; padding: 10px 20px; font-weight: 600; }
 .stale code { background: rgba(255, 255, 255, .2); padding: 1px 6px; border-radius: 4px; }

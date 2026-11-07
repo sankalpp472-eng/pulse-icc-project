@@ -5,10 +5,57 @@ zero needs a **cold start** (1–3 s) before it can answer; a warm tool answers 
 agent's next tool call **before the agent makes it** and starts that tool's pod in advance, so the call finds it
 warm, without keeping every tool warm all the time.
 
+```mermaid
+flowchart TB
+  subgraph laptop["Your machine"]
+    UI["Pulse UI<br/>Setup · Experiments · Results · Monitoring"]
+    AG["Agent or replay runner<br/>(or a run pod on EKS)"]
+  end
+  LLM(["LLM API<br/>Groq · OpenRouter · Ollama"])
+
+  subgraph k8s["Kubernetes cluster: kind on the laptop, or AWS EKS"]
+    PR["Predictor<br/>lightgbm · markov · speculator · pulse_v3"]
+    CRD[/"PrewarmRequest<br/>custom resource"/]
+    CT["Prewarm controller"]
+    IN["Kourier ingress"]
+    subgraph kn["Knative Services: one per tool, scale-to-zero"]
+      T1["get_user_details"]
+      T2["get_reservation_details"]
+      T3["… 14 airline · 16 retail tools"]
+    end
+    DB[("Redis<br/>shared tool database")]
+    SIDE["Embedding server · Prometheus + Grafana · Argo CD"]
+  end
+
+  subgraph cloud["AWS and GitHub"]
+    S3[("S3 model registry")]
+    ECR[("ECR images")]
+    GH["GitHub Actions CI"]
+  end
+
+  UI -->|starts runs, deploys, trains| AG
+  AG -.->|live mode| LLM
+  AG -->|"① hint before each LLM step"| PR
+  PR -->|"② likely next tools"| CRD
+  CRD -->|"③ watched by"| CT
+  CT -->|"④ warm-up pings × k"| IN
+  AG ==>|"⑤ tool call, MCP over HTTP"| IN
+  IN --> T1 & T2 & T3
+  T1 & T2 & T3 --- DB
+  PR -.- SIDE
+  DB ~~~ GH
+  GH -->|builds| ECR
+  PR -.->|loads model versions| S3
+  k8s -.->|pulls images| ECR
 ```
-agent ──hint──▶ predictor ──"probably get_reservation_details next"──▶ PrewarmRequest ──▶ controller ──ping──▶ tool pod starts
-agent ─────────────────────────────── tool call (MCP) ─────────────────────────────────────────────────────▶ tool pod (warm)
-```
+
+**One step of an episode.** ① Before each LLM step the agent sends the predictor a hint: the tools called so far,
+plus whatever that predictor reads (numeric signals, or the recent messages). ② The predictor ranks the next
+actions and writes a `PrewarmRequest` for each likely tool. ③ The prewarm controller watches those objects and
+④ sends each tool k warm-up pings through the ingress (k = the parallel calls expected), so Knative starts k pods.
+⑤ The agent's real call finds a warm pod, or one already starting. Unused pods scale back to zero after Knative's
+60 s idle window. On kind the UI runs the predictor and controller on your machine; on EKS they run in the
+cluster. More in [DEV.md](DEV.md#1-architecture).
 
 It is built on [tau-bench](https://github.com/sierra-research/tau-bench)'s airline customer-service tasks (14
 tools; the retail domain's 16 tools can be replayed too), with a ReAct agent, an LLM-simulated customer, four interchangeable predictors, a prewarm controller,
@@ -63,7 +110,7 @@ Setup → *Tools on this machine* shows which of these are installed.
 | Card | Buttons |
 |---|---|
 | This project | Download data · Train lightgbm + markov (they ship trained; this reproduces them, ~1 min) · Train retail lightgbm + markov (~1 min) · Start / stop the embedding server · Train pulse-v3 |
-| LLM keys and settings | Groq / OpenRouter keys, the LLM backend, a local OpenAI-compatible server for the speculator. Saved to `.env`; values are never shown again |
+| LLM keys and settings | Groq keys (*+ Add another key* for as many as you have: they are used in turn, which spreads Groq's per-minute limits), an OpenRouter key, the LLM backend, a local OpenAI-compatible server for the speculator. Saved to `.env`; values are never shown again |
 | Local cluster (kind) | Create cluster (kind + Knative + Kourier + Redis + the 14 tools at scale-to-zero, ~5 min) · Deploy the retail tools (the 16 retail tools next to them, ~3 min) · Build image for kind · Delete cluster |
 | AWS EKS | Region · Build + push image (to your ECR) · Create cluster (~25 min) · Delete cluster · Check for leftovers |
 | Pulse in the current cluster | Deploy Pulse's services (predictor, prewarm controller, embedding server) · Switch predictor · Install Prometheus + Grafana |

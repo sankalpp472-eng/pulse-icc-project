@@ -78,7 +78,9 @@ async function loadSetup() {
     pill(m.pulse_v3, "pulse-v3 model", "models/pulse_v3/predictor.pkl (Train pulse-v3, or the S3 registry)") +
     pill(m.embed_server, "embedding server", "llama.cpp + nomic-embed-text on :8091 (pulse-v3)") +
     pill(env.llm_ready, env.llm_ready ? "LLM keys set" : "no LLM keys", "live runs, the AI customer, the speculator");
-  $("#sEnvState").textContent = Object.entries(env.values).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(" · ") || "nothing set yet";
+  $("#sEnvState").textContent = Object.entries(env.values).filter(([k, v]) => v && k !== "GROQ_API_KEY").map(([k, v]) => `${k}: ${v}`)
+    .concat(env.groq_keys ? [`Groq keys: ${env.groq_keys}`] : []).join(" · ") || "nothing set yet";
+  $("#sGroqCount").textContent = env.groq_keys ? `(${env.groq_keys} saved; add more below)` : "(none saved)";
   $("#sTools").innerHTML = Object.entries(s.tools).map(([t, ok]) => pill(ok, t)).join("");
   $("#sKind").textContent = s.kind.exists
     ? "cluster pulse-kn exists" + (s.kind.retail_tools ? ` · ${s.kind.retail_tools} retail tools` : "") : "no cluster";
@@ -111,12 +113,21 @@ $("#tab-setup").addEventListener("click", async (e) => {
 });
 $("#sRefresh").onclick = loadSetup;
 $("#sStop").onclick = () => api("/api/run/stop", {});
+// Groq keys: any number; each new one is saved under the next free name (GROQ_API_KEY, GROQ_API_KEY_1, ...)
+$("#sGroqAdd").onclick = () => {
+  const i = document.createElement("input");
+  Object.assign(i, { type: "password", className: "groq-key", autocomplete: "off", placeholder: "gsk_…" });
+  $("#sGroq").appendChild(i);
+  i.focus();
+};
 $("#sEnvSave").onclick = async () => {
   const values = {};
   $$("#sEnv [data-env]").forEach((el) => { if (el.value) values[el.dataset.env] = el.value; });
+  const groq_keys = $$("#sGroq .groq-key").map((el) => el.value.trim()).filter(Boolean);
   try {
-    await api("/api/setup/env", { values });
+    await api("/api/setup/env", { values, groq_keys });
     $$("#sEnv input[type=password]").forEach((el) => (el.value = ""));
+    $$("#sGroq .groq-key").slice(1).forEach((el) => el.remove());      // back to one empty row
     toast("Saved to .env. Restart the predictor (or the UI) for new keys to take effect.", 6000);
     loadSetup();
   } catch (err) { toast(err.message, 6000); }

@@ -367,8 +367,11 @@
         <div class="card-head"><h3>LLM keys and settings</h3><span class="muted small">saved to .env on this machine, never shown again</span></div>
         <div class="form-grid" id="sEnv">
           <label>LLM backend <select data-env="LLM_BACKEND"><option value="">(keep)</option><option>groq</option><option>openrouter</option><option>ollama</option></select></label>
-          <label>Groq API key <input type="password" data-env="GROQ_API_KEY" autocomplete="off"></label>
-          <label>Groq key 2 (optional) <input type="password" data-env="GROQ_API_KEY_2" autocomplete="off"></label>
+          <div class="groq-keys" title="Several keys are used in turn: Groq's per-minute limits apply per key">
+            <span>Groq API keys <span class="muted small" id="sGroqCount"></span></span>
+            <div id="sGroq"><input type="password" class="groq-key" autocomplete="off" placeholder="gsk_…"></div>
+            <button type="button" class="ghost small" id="sGroqAdd">+ Add another key</button>
+          </div>
           <label>OpenRouter key <input type="password" data-env="OPEN_ROUTER_API_KEY" autocomplete="off"></label>
           <label>Speculator: local server URL <input data-env="SPEC_BASE_URL" placeholder="http://127.0.0.1:11434/v1"></label>
           <label>Speculator: model <input data-env="SPEC_MODEL" placeholder="qwen3:8b"></label>

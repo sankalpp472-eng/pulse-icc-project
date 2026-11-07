@@ -392,9 +392,10 @@ def setup_run(body: dict):
 
 @app.post("/api/setup/env")
 def setup_env(body: dict):
-    """Write LLM keys / settings into .env. The answer says which are set, never their values."""
+    """Write LLM keys / settings into .env (groq_keys: new Groq keys, any number). The answer says which are set,
+    never their values."""
     try:
-        return setup_actions.save_env(body.get("values") or {})
+        return setup_actions.save_env(body.get("values") or {}, body.get("groq_keys") or [])
     except ValueError as e:
         raise HTTPException(400, str(e))
 
