@@ -41,8 +41,8 @@ TOOL_NAMES = ["book_reservation", "calculate", "cancel_reservation", "get_reserv
               "transfer_to_human_agents", "update_reservation_baggages", "update_reservation_flights",
               "update_reservation_passengers"]
 # The tau-bench domains on a real cluster (infra/knative/deploy.sh, DOMAIN=retail for retail): the label of their tool
-# services, the prefix of the retail services' names, and their tools. The live agent and the simulated cluster are
-# airline only; experiment runs (replay, load tests) take either.
+# services, the prefix of the retail services' names, and their tools. The simulated cluster is airline only; the live
+# agent and experiment runs (replay, live, load tests) take either.
 DOMAINS = {
     "airline": {"role": "pulse/role=mcp-tool", "prefix": "", "tools": TOOL_NAMES},
     "retail": {"role": "pulse/role=mcp-tool-retail", "prefix": "retail-",
@@ -896,8 +896,6 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     pred = Services.ALIASES.get(spec.get("predictor") or "lightgbm", spec.get("predictor") or "lightgbm")
     tasks = [str(int(t)) for t in spec.get("tasks") or []]
     if cluster.domain == "retail":
-        if mode == "live":
-            raise ValueError("live runs use our airline agent: switch the domain to airline (top bar), or replay retail")
         if spec.get("predictor") == "speculator" and spec.get("config") == "C3":
             raise ValueError("the speculator knows the airline tools only: pick lightgbm, markov or pulse_v3 for retail")
     if mode == "load":

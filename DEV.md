@@ -131,7 +131,8 @@ A run folder holds `calls.csv`, `pods.csv`, `episodes.jsonl`, `hints.jsonl` (C3)
 `summary.json` (latency percentiles, cold share, pod-seconds).
 
 **Domains.** `DOMAIN=airline` (default, workload W1) or `DOMAIN=retail` (W3). One variable switches every piece:
-the tools' backend and read-only set (`agent/tools.py`), the tool pods the runners watch (label
+the tools' backend and read-only set (`agent/tools.py`), the agent's prompt (the domain's tau-bench policy,
+`agent/prompts.py`) and tasks, the tool pods the runners watch (label
 `pulse/role=mcp-tool` / `mcp-tool-retail`), the Redis database reset between runs (DB 0: reservations, users; DB 1:
 orders, users), the replay's traces (retail: built from tau-bench's recorded retail conversations,
 `replay.tau_traces()`), the hints' `domain` and `workflow_id`, the action predictor's model
@@ -139,7 +140,10 @@ orders, users), the replay's traces (retail: built from tau-bench's recorded ret
 Knative services `retail-<tool>` reached with `MCP_HOST_TEMPLATE=retail-{svc}.default.example.com`. The UI sets all
 of it from the top bar's domain switch. Run pods (`infra/cloud/run_cloud.sh DOMAIN=retail`) get the same: the domain,
 `MCP_URL_TEMPLATE=http://retail-{svc}.default.svc.cluster.local/mcp`, and the cluster's predictor is switched to the
-domain too. The live agent and the speculator stay airline.
+domain too. The UI's Live demo serves both domains in one process, so it passes the domain explicitly
+(`tools.package(domain)`, `read_only(domain)`, `load_tasks(domain)`, `prompts.agent_system_prompt(domain)`,
+`LocalToolBackend(domain)` / `MCPToolBackend(domain)`). The live runner on retail defaults to the held-out retail
+tasks. The speculator and the tau-bench "Replay recorded" demo stay airline; the simulated cluster is airline.
 
 ### 3.7 `pulse.loadtest`
 

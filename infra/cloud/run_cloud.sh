@@ -10,8 +10,8 @@
 # Settings: MODE replay|live (replay) · CONFIG C0|C1|C3 (C3)
 #           PREDICTOR lightgbm|markov|speculator|pulse_v3 (lightgbm): switches deploy/pulse-predictor to it
 #           WORKLOAD heldout|taubench|none (heldout; replay only: --tasks 6 20 22 26 30 or all tau-bench runs)
-#           DOMAIN airline|retail (airline): retail replays the retail tools (Setup -> Deploy the retail tools; pass
-#           --tasks, e.g. the held-out retail tasks); live runs and the speculator are airline only
+#           DOMAIN airline|retail (airline): replay or live on the retail tools (Setup -> Deploy the retail tools;
+#           pass --tasks, e.g. the held-out retail tasks); the speculator is airline only
 #           LABEL (cloud) · PYTHON (for deploy.sh if the tools must be redeployed) · TARGET kind|ecr (auto)
 # Needs cloud_up.sh done. Results: results/cloud_runs/ (EKS) or results/local_runs/ (kind),
 # plus controller.jsonl for C3; the pod's log goes to infra/eks/logs/.
@@ -29,7 +29,6 @@ LABEL=${LABEL:-cloud}
 DOMAIN=${DOMAIN:-airline}
 if [ "$DOMAIN" = retail ]; then
   ROLE=mcp-tool-retail; PREFIX=retail-
-  [ "$MODE" = live ] && { echo "Live runs use the airline agent: DOMAIN=retail works for replays"; exit 1; }
   [ "$PREDICTOR" = speculator ] && [ "${CONFIG}" = C3 ] && { echo "The speculator knows the airline tools only"; exit 1; }
   [ "$WORKLOAD" = heldout ] && WORKLOAD=none          # the airline held-out tasks: give retail ones with --tasks
 else

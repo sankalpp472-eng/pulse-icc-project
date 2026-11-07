@@ -172,8 +172,9 @@ def session_start(cfg: dict):
         raise HTTPException(409, busy())
     if cfg.get("kind") not in ("live", "replay", "recorded"):
         raise HTTPException(400, "kind must be live, replay or recorded")
-    if cluster.mode == "knative" and cluster.domain != "airline":
-        raise HTTPException(400, "The live demo's agent works on the airline tools: switch the domain to airline (top bar)")
+    if cluster.mode == "knative" and cluster.domain == "retail" and cfg["kind"] == "replay":
+        raise HTTPException(400, "Replaying the tau-bench recordings here is airline only: for retail run a live "
+                                 "episode (then replay that recording), or use Experiments -> Replay")
     if cfg["kind"] == "recorded" and not (RECORDINGS / f"{cfg.get('recording')}.json").exists():
         raise HTTPException(400, "pick a recorded live run (record one first: Live agent, then Start episode)")
     pred = None
@@ -247,9 +248,11 @@ def demo_prepare():
         return {"pods": 0, "db": "fresh copy per episode"}
     code, out = backend._run(["kubectl", "get", "deploy", "redis", "-o", "name"], 10)
     db = "no shared database"
-    if code == 0:
-        for t in ("reservations", "users"):
-            c, o = backend._run(["kubectl", "exec", "deploy/redis", "--", "redis-cli", "COPY", f"seed:{t}", t, "REPLACE"], 20)
+    if code == 0:     # the tables the tools write: airline in Redis DB 0, retail in DB 1 (experiments/common.py)
+        n, tables = ("1", ("orders", "users")) if cluster.domain == "retail" else ("0", ("reservations", "users"))
+        for t in tables:
+            c, o = backend._run(["kubectl", "exec", "deploy/redis", "--", "redis-cli", "-n", n, "COPY", f"seed:{t}", t,
+                                 "REPLACE"], 20)
             if c != 0:
                 raise HTTPException(500, f"could not reset the database: {o[:200]}")
         db = "reset from seed"
@@ -269,18 +272,28 @@ def recordings():
         steps = r.get("steps", [])
         out.append({k: r.get(k) for k in ("id", "created", "task_id", "agent_model", "user", "config", "policy",
                                           "cluster", "live_e2e_s", "live_tool_wait_s", "live_cold", "live_calls", "state")}
-                   | {"tool_steps": sum(s.get("kind") == "tool" for s in steps), "steps": len(steps)})
+                   | {"domain": r.get("domain") or "airline", "tool_steps": sum(s.get("kind") == "tool" for s in steps), "steps": len(steps)})
     return out
 
 
 _TASKS: list | None = None
+_RETAIL_TASKS: list | None = None
 
 
 @app.get("/api/tasks")
-def tasks():
+def tasks(domain: str = "airline"):
     """The 50 airline tasks, with every recorded tau-bench run of each: calls, tool steps, customer turns and its
-    fan-out (the widest group of calls the replay fires at once, w1_replay.fanout_groups). Computed once."""
-    global _TASKS
+    fan-out (the widest group of calls the replay fires at once, w1_replay.fanout_groups). Computed once.
+    domain=retail: the 115 retail tasks for the live agent (held-out = the retail predictors never saw them)."""
+    global _TASKS, _RETAIL_TASKS
+    if domain == "retail":
+        if _RETAIL_TASKS is None:
+            from pulse.agent.tools import load_tasks as domain_tasks
+            held = set(backend.retail_heldout())
+            _RETAIL_TASKS = [{"id": t["id"], "instruction": t["instruction"], "gold": [a["name"] for a in t["actions"]],
+                              "recorded": 0, "runs": [], "fanout": False, "plain_runs": 0, "heldout": t["id"] in held}
+                             for t in domain_tasks("retail")]
+        return _RETAIL_TASKS
     if _TASKS is None:
         from pulse.agent.tau_airline import load_tasks
         import pulse.experiments.replay as w1_replay

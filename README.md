@@ -131,7 +131,9 @@ One job runs at a time.
   Setup → Local cluster or AWS EKS → *Deploy the retail tools*). With *Retail*, experiment runs (on this machine or
   as run pods) replay tau-bench's recorded retail conversations (workload W3) and lightgbm / markov use the retail
   model (Setup → *Train retail lightgbm + markov*, before *Build + push image* for EKS; it also picks the 23
-  held-out retail tasks the Experiments tab offers). Our live agent and the LLM speculator are airline only.
+  held-out retail tasks the Experiments tab offers). The live agent works on either: with *Retail* it gets the
+  retail policy, tools and tasks (Live demo → *Live agent*, or Experiments → *Live*), and its recordings can be
+  replayed (*Replay a live run*). The LLM speculator and *Replay recorded* (tau-bench's airline runs) are airline only.
 
 ### Predictor card (right side)
 

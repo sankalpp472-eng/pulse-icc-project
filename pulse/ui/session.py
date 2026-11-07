@@ -57,11 +57,11 @@ class SimTools:
 class KnativeTools:
     """The tools on the real cluster, over MCP (Knative's activator holds a call during a cold start)."""
 
-    def __init__(self, env: dict):
+    def __init__(self, env: dict, domain: str = "airline"):
         import os
         os.environ.update(env)
         from pulse.agent.tools import MCPToolBackend
-        self.mcp = MCPToolBackend()
+        self.mcp = MCPToolBackend(domain=domain)
         self.schemas = self.mcp.schemas
 
     def run(self, name: str, args: dict) -> dict:
@@ -74,6 +74,9 @@ class Session(threading.Thread):
     def __init__(self, cfg: dict, cluster, sim, predictor_url: str | None, record_dir: Path | None = None):
         super().__init__(daemon=True)
         self.cfg, self.cluster, self.sim, self.predictor_url = cfg, cluster, sim, predictor_url
+        # the tau-bench domain: the real cluster's (top bar); the simulated cluster has the airline tools only
+        self.domain = "retail" if not sim and getattr(cluster, "domain", "airline") == "retail" else "airline"
+        self.workflow = "W3" if self.domain == "retail" else "W1"
         self.record_dir = record_dir
         self.rec: dict | None = None              # live episodes: the trajectory with its timing, saved at the end
         self.events: list[dict] = []
@@ -130,8 +133,8 @@ class Session(threading.Thread):
         if not self.predictor_url:
             return
         # only the inputs this predictor reads (its GET /info): the conversation goes only to text readers
-        hint = client.make_hint(client.inputs(self.predictor_url), self.episode_id, trajectory, "W1",
-                                signals=signals, history=history)
+        hint = client.make_hint(client.inputs(self.predictor_url), self.episode_id, trajectory, self.workflow,
+                                domain=self.domain, signals=signals, history=history)
         self.hints["sent"] += 1
         self.emit("hint", step=step, kind=kind)
 
@@ -228,6 +231,7 @@ class Session(threading.Thread):
                  live_tool_wait_s=round(self.tool_wait, 2),
                  live_cold=sum(c["cold"] for c in self.calls), live_calls=len(self.calls),
                  config="C3" if self.cfg.get("predictor") else "C0", policy=self.cfg.get("policy_label"),
+                 domain=self.domain,
                  cluster="simulated" if self.sim else self.cluster.context)
         try:
             self.record_dir.mkdir(parents=True, exist_ok=True)
@@ -240,7 +244,7 @@ class Session(threading.Thread):
     def tools(self):
         if self.sim:
             return SimTools(self.sim)
-        return KnativeTools(self.cluster.tool_env())
+        return KnativeTools(self.cluster.tool_env(self.domain), self.domain)
 
     def summary(self) -> dict:
         n = len(self.calls)
@@ -262,26 +266,27 @@ class Session(threading.Thread):
                 "kind": self.cfg["kind"], "user": self.cfg.get("user") if self.cfg["kind"] == "live" else None, "predictor": self.cfg.get("predictor") or "none",
                 "policy": self.cfg.get("policy_label") if self.cfg.get("predictor") else None,
                 "cluster": "simulated" if self.sim else self.cluster.context, "task": self.cfg.get("task_id"),
+                "domain": self.domain,
                 "recording": self.cfg.get("recording") or getattr(self, "recording_id", None)}
 
     # ------------------------------------------------------------------ live: agent + customer
     def run_live(self):
         import pulse.agent.llm as llm
         from pulse.agent.agent import _assistant_msg, _chat_within_limit
-        from pulse.agent.prompts import AGENT_SYSTEM_PROMPT
-        from pulse.agent.tools import READ_ONLY_TOOLS, TERMINATE_TOOLS
+        from pulse.agent.prompts import agent_system_prompt
+        from pulse.agent.tools import TERMINATE_TOOLS, load_tasks, read_only
         from pulse.agent.user import STOP, SimulatedUser
         from pulse.predictor.signals import compute_signals, events_from_messages
-        from pulse.agent.tau_airline import load_tasks
 
         llm.DEFAULT_MODEL = self.cfg.get("agent_model") or llm.DEFAULT_MODEL
-        tasks = {t["id"]: t for t in load_tasks()}
+        READ_ONLY_TOOLS = read_only(self.domain)
+        tasks = {t["id"]: t for t in load_tasks(self.domain)}
         task = tasks.get(int(self.cfg["task_id"])) if self.cfg.get("task_id") not in (None, "") else None
         goal = task["instruction"] if task else (self.cfg.get("goal") or "")
         tools = self.tools()
         self.emit("info", text=f"Agent {llm.DEFAULT_MODEL} · customer: "
                                f"{'AI (' + self.cfg.get('user_model', '') + ')' if self.cfg['user'] == 'ai' else 'you'}"
-                               f" · tools: {'simulated cluster' if self.sim else self.cluster.context}")
+                               f" · tools: {'simulated cluster' if self.sim else self.cluster.context} ({self.domain})")
         if goal:
             self.emit("goal", text=goal, task_id=task["id"] if task else None,
                       gold=[a["name"] for a in task["actions"]] if task else None)
@@ -320,7 +325,7 @@ class Session(threading.Thread):
         first = say(None)
         self.rec.update(first_user_s=round(time.time() - self.t_start, 3), first_text=first)
         self.emit("customer", text=first)
-        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}, {"role": "user", "content": first}]
+        messages = [{"role": "system", "content": agent_system_prompt(self.domain)}, {"role": "user", "content": first}]
         trajectory: list[str] = []
         for step in range(1, int(self.cfg.get("max_steps", 30)) + 1):
             self.check()
@@ -377,6 +382,9 @@ class Session(threading.Thread):
 
     # ------------------------------------------------------------------ replay: a recorded episode
     def run_replay(self):
+        if self.domain == "retail":
+            raise ValueError("replaying the tau-bench recordings here is airline only: for retail use Experiments -> "
+                             "Replay, or a live run (and then replay that recording)")
         import pulse.experiments.replay as w1_replay
         task_id = int(self.cfg["task_id"])
         traces = [t for t in w1_replay.load_traces(None) if t["task_id"] == task_id and t["calls"]]
@@ -430,6 +438,9 @@ class Session(threading.Thread):
         if not path or not path.exists():
             raise ValueError(f"recording {self.cfg.get('recording')} not found")
         rec = json.loads(path.read_text(encoding="utf-8"))
+        if rec.get("domain", "airline") != self.domain:
+            raise ValueError(f"recording {rec['id']} is a {rec.get('domain', 'airline')} run: switch the domain "
+                             f"(top bar) to {rec.get('domain', 'airline')} to replay it")
         tools = self.tools()
         self.emit("info", text=f"Replaying live run {rec['id']} (task {rec.get('task_id')}, agent {rec.get('agent_model')}, "
                                f"customer {rec.get('user')}; recorded as {rec.get('config')}: "

@@ -34,6 +34,7 @@ load_dotenv(paths.ENV_FILE)   # .env (keys, PREDICTOR_URL, ...): this module is 
 
 PREDICTOR_URL = os.getenv("PREDICTOR_URL", "").rstrip("/")
 WORKFLOW_ID = os.getenv("WORKFLOW_ID") or None
+DOMAIN = "retail" if os.getenv("DOMAIN") == "retail" else "airline"
 TIMEOUT_S = float(os.getenv("HINT_TIMEOUT_S", "0.2"))
 HINT_LOG = os.getenv("HINT_LOG", "runs/hints.jsonl")
 _log_lock = threading.Lock()
@@ -93,5 +94,6 @@ def _send(episode_id, trajectory, messages):
         hint = {"workflow_id": WORKFLOW_ID, "episode_id": episode_id, "trajectory": trajectory[-8:],
                 "current_tool": trajectory[-1] if trajectory else "START", "ts": time.time()}
     else:
-        hint = client.make_hint(wanted, episode_id, trajectory, WORKFLOW_ID, signals=signals, history=history)
+        hint = client.make_hint(wanted, episode_id, trajectory, WORKFLOW_ID, domain=DOMAIN, signals=signals,
+                                history=history)
     _post(hint)

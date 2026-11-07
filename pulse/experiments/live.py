@@ -15,6 +15,8 @@ Run with the agent's Python, from the project root:
   python -m pulse.experiments.live --set safe      # 12 one-write tasks only
   python -m pulse.experiments.live --tasks 1 6     # specific tasks
   ... --agent-model openai/gpt-oss-120b --user-model openai/gpt-oss-20b    # choose the Groq models
+  DOMAIN=retail python -m pulse.experiments.live   # W3: the retail agent on the 16 retail tools (default tasks:
+                                                   # the retail held-out tasks; --set does not apply)
 
 Output: results/local_runs/ (kind) or results/cloud_runs/ (EKS), <date>_<time>_<config>_W1-live_<tasks>_<model>/  (e.g. 2026-10-21_1527_C0_W1-live_task9_gpt-oss-120b)
   run_config.json models, Knative settings (read from the cluster), image, database, git commit ...
@@ -58,7 +60,8 @@ def parse_args():
     ap.add_argument("--label", default="", help="extra text at the end of the result folder name (e.g. eks)")
     ap.add_argument("--predictor-url", help="C3: the agent sends hints to this predictor (e.g. http://127.0.0.1:8000); "
                                             "the prewarm controller must be running")
-    ap.add_argument("--workflow-id", default="W1", help="workflow id sent in hints")
+    ap.add_argument("--workflow-id", default="W3" if os.getenv("DOMAIN") == "retail" else "W1",
+                    help="workflow id sent in hints (default W1; retail W3)")
     ap.add_argument("--user-delay-median", type=float, default=8.0,
                     help="median seconds the simulated customer takes to read and answer (lognormal, as a "
                          "customer turn in w1_replay.py); 0 = answer as fast as the LLM (~0.75 s)")
@@ -79,7 +82,8 @@ os.environ["USER_DELAY_SIGMA"] = str(ARGS.user_delay_sigma)
 os.environ["USER_DELAY_SEED"] = str(ARGS.user_delay_seed)
 os.environ.setdefault("TOOL_BACKEND", "mcp")
 os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
-os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
+os.environ.setdefault("MCP_HOST_TEMPLATE",
+                      ("retail-" if os.getenv("DOMAIN") == "retail" else "") + "{svc}.default.example.com")
 # hints.py reads these at import: without --predictor-url no hints are sent (C0)
 os.environ["PREDICTOR_URL"] = ARGS.predictor_url or ""
 os.environ["WORKFLOW_ID"] = ARGS.workflow_id
@@ -87,9 +91,10 @@ os.environ["WORKFLOW_ID"] = ARGS.workflow_id
 import pulse.agent.hints as hints  # noqa: E402
 import pulse.agent.llm as llm  # noqa: E402
 from pulse.agent.agent import run_episode  # noqa: E402
-from pulse.agent.tau_airline import load_tasks  # noqa: E402
-from pulse.agent.tools import CALL_LOG  # noqa: E402
-from pulse.experiments.common import (COLD_LATENCY_S, PodWatcher, peak_pods, reset_db, run_config, run_dir,  # noqa: E402
+from pulse import paths  # noqa: E402
+from pulse.agent.tools import CALL_LOG, load_tasks  # noqa: E402
+from pulse.experiments.common import (COLD_LATENCY_S, N_TOOLS, RETAIL, WORKLOAD,  # noqa: E402
+                       PodWatcher, peak_pods, reset_db, run_config, run_dir,
                        predictor_info, save_predictor_health,
                        shared_db, tasks_tag, wait_all_zero)
 
@@ -110,15 +115,22 @@ def think_times(ep: dict | None) -> list[tuple[float, float]]:
 def main():
     a = ARGS
     tasks = {t["id"]: t for t in load_tasks()}
-    ids = (a.tasks or SETS[a.set]) * a.repeats
-    set_of = {i: name for name in ("safe", "multi") for i in SETS[name]}
+    if RETAIL:   # retail: the held-out tasks (the retail predictors never saw them), not the airline sets
+        default = json.loads((paths.PREDICTOR_DATA / "retail_split.json").read_text())["test_tasks"] \
+            if (paths.PREDICTOR_DATA / "retail_split.json").exists() else [0, 1, 2]
+        set_of = {}
+    else:
+        default = SETS[a.set]
+        set_of = {i: name for name in ("safe", "multi") for i in SETS[name]}
+    ids = (a.tasks or default) * a.repeats
     n_trimmed = 0
     par_widths: list[int] = []          # calls per reply that ran at once (parallel fan-out)
-    print(f"W1 live {'C3' if a.predictor_url else 'C0'} | tasks {ids} | agent {llm.DEFAULT_MODEL}, user sim {os.environ['USER_MODEL']} "
+    print(f"{WORKLOAD} live {'C3' if a.predictor_url else 'C0'} | tasks {ids} | agent {llm.DEFAULT_MODEL}, user sim {os.environ['USER_MODEL']} "
           f"| {llm.BACKEND}, {len(llm.KEYS)} key(s)")
 
     db = "redis (shared, reset per episode)" if shared_db() else "in-memory per pod (no shared DB!)"
-    cfg = run_config(ids, db, "W1 airline change/cancel (tau-bench), live agent",
+    cfg = run_config(ids, db, "W3 retail (tau-bench), live agent" if RETAIL else
+                     "W1 airline change/cancel (tau-bench), live agent",
                      {"backend": llm.BACKEND, "agent": llm.DEFAULT_MODEL, "user_simulator": os.environ["USER_MODEL"],
                       "api_keys_available": len(llm.KEYS)},
                      {"db_reset_per_episode": db.startswith("redis"), "repeats": a.repeats,
@@ -145,7 +157,7 @@ def main():
                           "mechanism": "Option A: controller sends an MCP ping per PrewarmRequest; "
                                        "TTL = Knative idle window",
                           "hints": "sent by the agent before every LLM step (agent/hints.py)"}
-    detail = (tasks_tag(ids) if a.tasks else a.set) + (f"-x{a.repeats}" if a.repeats > 1 else "")
+    detail = (tasks_tag(ids) if a.tasks or RETAIL else a.set) +(f"-x{a.repeats}" if a.repeats > 1 else "")
     out_dir = run_dir(cfg["config"], "live", f"{detail}_{llm.DEFAULT_MODEL.split('/')[-1]}", a.label)
     print(f"-> {out_dir}")
     (out_dir / "run_config.json").write_text(json.dumps(cfg, indent=2))
@@ -155,7 +167,7 @@ def main():
     watcher.start()
     wait_all_zero(watcher)
     watcher.forget()                    # pods from before the run (e.g. an old revision) are not part of it
-    print("all 14 tools at zero; starting\n")
+    print(f"all {N_TOOLS} tools at zero; starting\n")
 
     calls_f = open(out_dir / "calls.csv", "w", newline="", encoding="utf-8")
     calls_w = csv.DictWriter(calls_f, fieldnames=CALL_FIELDS)
@@ -165,7 +177,7 @@ def main():
 
     for n, tid in enumerate(ids, 1):
         CALL_LOG.clear()
-        episode = f"w1-task{tid}-{int(time.time())}"
+        episode = f"{WORKLOAD.lower()}-task{tid}-{int(time.time())}"
         print(f"[{n}/{len(ids)}] task {tid} ({set_of.get(tid, '?')})")
         ep, status = None, "ok"
         if db.startswith("redis"):
