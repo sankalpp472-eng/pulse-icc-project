@@ -8,8 +8,15 @@
 # Afterwards, in every new terminal:  export PY=<the path printed at the end>, then "$PY" -m pulse.ui.server
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PYTHON=${PYTHON:-$(command -v python3 || command -v python)}
-"$PYTHON" -c 'import sys; assert sys.version_info >= (3, 11), "Python 3.11+ needed"' \
+# The first Python 3.11+ that actually runs (on Windows `python3` is often the Microsoft Store placeholder)
+if [ -z "${PYTHON:-}" ]; then
+  for c in python3 python py; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; assert sys.version_info >= (3, 11)' >/dev/null 2>&1; then
+      PYTHON=$c; break
+    fi
+  done
+fi
+[ -n "${PYTHON:-}" ] && "$PYTHON" -c 'import sys; assert sys.version_info >= (3, 11)' >/dev/null 2>&1 \
   || { echo "Python 3.11+ needed (PYTHON=... bash scripts/setup.sh)"; exit 1; }
 
 [ -d .venv ] || "$PYTHON" -m venv .venv

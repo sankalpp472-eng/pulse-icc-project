@@ -1,0 +1,3 @@
+# Shell scripts keep Unix line endings on every checkout (Git for Windows would otherwise write CRLF, and Git Bash
+# then fails with "$'\r': command not found").
+*.sh text eol=lf
