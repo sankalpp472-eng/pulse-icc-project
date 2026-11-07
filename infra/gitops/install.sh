@@ -19,7 +19,9 @@ REVISION=${GITOPS_REVISION:-main}
 if grep -rq ACCOUNT_ID infra/cloud/kustomization.yaml infra/cloud/gitops/; then
   echo "infra/cloud still says ACCOUNT_ID: run bash infra/gitops/configure.sh, commit and push first"; exit 1
 fi
-command -v helm >/dev/null || { echo "helm not found (needed for the monitoring chart's version)"; exit 1; }
+export PATH="$HOME/.arkade/bin:$PATH"           # tools installed with arkade (arkade get helm)
+command -v helm >/dev/null || { echo "helm not found (needed for the monitoring chart's version). Install it" \
+  "(Windows: winget install Helm.Helm, then restart the UI; macOS: brew install helm; Linux: helm.sh) and try again"; exit 1; }
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update >/dev/null
 CHART_VERSION=${CHART_VERSION:-$(helm show chart prometheus-community/kube-prometheus-stack | sed -n 's/^version: //p')}
 

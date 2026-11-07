@@ -14,7 +14,9 @@ NS=monitoring
 REL=pulse-mon
 DIR=infra/monitoring
 
-command -v helm >/dev/null || { echo "helm not found: https://helm.sh/docs/intro/install/"; exit 1; }
+export PATH="$HOME/.arkade/bin:$PATH"           # tools installed with arkade (arkade get helm)
+command -v helm >/dev/null || { echo "helm not found. Install it (Windows: winget install Helm.Helm, then restart the UI;" \
+  "macOS: brew install helm; Linux: https://helm.sh/docs/intro/install/) and try again"; exit 1; }
 CTX=$(kubectl config current-context)
 
 if [ "${1:-}" = "uninstall" ]; then
