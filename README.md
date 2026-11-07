@@ -115,7 +115,7 @@ UI also finds tools in `~/.arkade/bin`). Restart the UI afterwards, so it sees t
 | This project | Download data · Train lightgbm + markov (they ship trained; this reproduces them, ~1 min) · Train retail lightgbm + markov (~1 min) · Start / stop the embedding server · Train pulse-v3 |
 | LLM keys and settings | Groq keys (*+ Add another key* for as many as you have: they are used in turn, which spreads Groq's per-minute limits), an OpenRouter key, the LLM backend, a local OpenAI-compatible server for the speculator. Saved to `.env`; values are never shown again |
 | Local cluster (kind) | Create cluster (kind + Knative + Kourier + Redis + the 14 tools at scale-to-zero, ~5 min) · Deploy the retail tools (the 16 retail tools next to them, ~3 min) · Build image for kind · Delete cluster |
-| AWS EKS | Region · Build + push image (to your ECR) · Create cluster (eksctl, or Terraform with the checkbox; ~20 min; with a model registry it also gives the cluster's pods access to it) · Delete cluster · Check for leftovers · Model registry access (if you set up the registry after creating the cluster) |
+| AWS EKS | Region · Build + push image (to your ECR) · Create cluster (eksctl, or Terraform with the checkbox; ~20 min; with a model registry it also gives the cluster's pods access to it) · Deploy the retail tools (their image goes to your ECR) · Delete cluster · Check for leftovers · Model registry access (if you set up the registry after creating the cluster) |
 | Pulse in the current cluster | Deploy Pulse's services (predictor, prewarm controller, embedding server; also copies your LLM keys into the cluster as a Secret) · Switch predictor · Install Prometheus + Grafana |
 | Cloud extras | 1. Terraform state bucket (once per AWS account) · 2. Terraform plan · 3. Terraform apply (S3 model registry, ECR, CI roles; it then fills in the model registry URIs) · Model registry (the two URIs: type them, or *Fill in from Terraform*; saved to `.env`, used at once) · Upload training data · Publish local model · GitOps: set my AWS account · Install Argo CD. Optional; more in [DEV.md §6](DEV.md#6-cicd-and-gitops) |
 
@@ -127,11 +127,11 @@ One job runs at a time.
 - **Simulated cluster** (default): pods, cold starts and the 60 s idle window are simulated, with cold-start times
   measured on EKS (`data/coldstart/`). No cluster needed.
 - **Knative**: the real tools on the current kubectl context (kind or EKS). The bar also shows monitoring and
-  GitOps status, and the **domain**: *Airline* (14 tools, the default) or *Retail* (16 tools; deploy them first,
-  Setup → Local cluster). With *Retail*, experiment runs replay tau-bench's recorded retail conversations
-  (workload W3) and lightgbm / markov use the retail model (Setup → *Train retail lightgbm + markov*; it also
-  picks the 23 held-out retail tasks the Experiments tab offers). Our live agent, the LLM speculator and in-cluster
-  runs are airline only.
+  GitOps status, and the **domain**: *Airline* (14 tools, the default) or *Retail* (16 tools; deploy them first:
+  Setup → Local cluster or AWS EKS → *Deploy the retail tools*). With *Retail*, experiment runs (on this machine or
+  as run pods) replay tau-bench's recorded retail conversations (workload W3) and lightgbm / markov use the retail
+  model (Setup → *Train retail lightgbm + markov*, before *Build + push image* for EKS; it also picks the 23
+  held-out retail tasks the Experiments tab offers). Our live agent and the LLM speculator are airline only.
 
 ### Predictor card (right side)
 

@@ -820,8 +820,8 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     if cluster.domain == "retail":
         if mode == "live":
             raise ValueError("live runs use our airline agent: switch the domain to airline (top bar), or replay retail")
-        if where == "cluster":
-            raise ValueError("the in-cluster runner and predictor are airline only: run retail from the laptop")
+        if spec.get("predictor") == "speculator" and spec.get("config") == "C3":
+            raise ValueError("the speculator knows the airline tools only: pick lightgbm, markov or pulse_v3 for retail")
     if mode == "load":
         return build_load(spec, cluster, services, tasks)
     steps: list[tuple[str, list[str], dict]] = []

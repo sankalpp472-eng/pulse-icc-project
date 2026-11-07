@@ -137,7 +137,9 @@ orders, users), the replay's traces (retail: built from tau-bench's recorded ret
 `replay.tau_traces()`), the hints' `domain` and `workflow_id`, the action predictor's model
 (`models/action_model_retail.pkl`) and the PrewarmRequests' service names (`retail-<tool>`). The retail tools are
 Knative services `retail-<tool>` reached with `MCP_HOST_TEMPLATE=retail-{svc}.default.example.com`. The UI sets all
-of it from the top bar's domain switch; the live agent, the speculator and the in-cluster runner stay airline.
+of it from the top bar's domain switch. Run pods (`infra/cloud/run_cloud.sh DOMAIN=retail`) get the same: the domain,
+`MCP_URL_TEMPLATE=http://retail-{svc}.default.svc.cluster.local/mcp`, and the cluster's predictor is switched to the
+domain too. The live agent and the speculator stay airline.
 
 ### 3.7 `pulse.loadtest`
 
@@ -181,10 +183,12 @@ names. `pulse/setup/` gets a fresh clone ready: `download_data.py` (tau-bench da
 | `terraform/` | Three roots: `bootstrap/` (the state bucket), `.` (S3 model registry with versioning, encryption and TLS-only access, reader/publisher IAM policies, ECR, GitHub OIDC roles for CI), `eks/` (the same cluster as eksctl, as code, with IRSA roles) |
 
 **Images.** `pulse-runner` (`infra/cloud/Dockerfile`) runs the predictor, controller, run pods and training Jobs:
-the package, `models/action_model.pkl`, a locally trained pulse-v3 model if present, the airline trajectories and
-replay traces. The tools' image is built from `infra/knative/Dockerfile.mcp`; `deploy.sh` defaults to a published
-copy (airline only). The UI's *Deploy the retail tools* builds it locally, loads it into kind as
-`kind.local/pulse-mcp-tools:retail` (a registry Knative does not resolve) and runs `DOMAIN=retail deploy.sh`.
+the package, `models/action_model.pkl` (and `action_model_retail.pkl` if trained), a locally trained pulse-v3 model
+if present, the airline and retail trajectories and the replay traces. The tools' image is built from
+`infra/knative/Dockerfile.mcp`; `deploy.sh` defaults to a published copy (airline only). *Deploy the retail tools*
+(`infra/knative/deploy_retail.sh`) builds it here: on kind it loads it into the nodes as
+`kind.local/pulse-mcp-tools:retail` (a registry Knative does not resolve), on EKS it pushes it to the account's ECR
+repository `pulse-tools`; then `DOMAIN=retail deploy.sh`.
 
 **Cloud concepts used:** serverless scale-to-zero (Knative), a custom resource with a controller (CRD +
 reconcile loop), containers and registries (Docker, ECR), managed Kubernetes (EKS) and its networking (load

@@ -36,7 +36,7 @@ ACTIONS = {   # name: (what the button does, confirm text or None)
     "train_pulse_v3": ("Train pulse-v3 (~45 min, needs the embedding server)", None),
     "kind_create": ("Create the local kind cluster with Knative and the 14 tools (~5 min)", None),
     "kind_delete": ("Delete the local kind cluster", "Delete the kind cluster pulse-kn and everything in it?"),
-    "retail_tools": ("Deploy the 16 retail tools into the kind cluster (~5 min)", None),
+    "retail_tools": ("Deploy the 16 retail tools (~3 min)", None),
     "image_build": ("Build the runner image", None),
     "eks_create": ("Create the EKS cluster, Knative and the tools (~25 min)",
                    "Create an EKS cluster in your AWS account? It costs money by the hour (about $0.10 for the "
@@ -270,17 +270,18 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
     if name == "kind_delete":
         return [(title, [_need_bash(), "infra/kind/teardown.sh"], env)]
     if name == "retail_tools":
-        if not _kind_exists():
-            raise ValueError("create the kind cluster first (Local cluster -> Create cluster)")
-        # The published tools image predates the retail tools: build it here and load it into kind. kind.local/ is a
-        # registry Knative never looks up (registries-skipping-tag-resolving), so the nodes' copy is used.
-        b, image = _need_bash(), "kind.local/pulse-mcp-tools:retail"
-        return [("build the tools image (infra/knative/Dockerfile.mcp)",
-                 ["docker", "build", "-f", "infra/knative/Dockerfile.mcp", "-t", image, "."], env),
-                ("load it into the kind nodes", ["kind", "load", "docker-image", image, "--name", "pulse-kn"], env),
-                ("Redis DB 1 + the 16 retail tools at scale-to-zero (DOMAIN=retail infra/knative/deploy.sh)",
-                 [b, "infra/knative/deploy.sh", "0"],
-                 {**env, "DOMAIN": "retail", "SKIP_BUILD": "1", "IMAGE": image, "KUBE_CONTEXT": "kind-pulse-kn"})]
+        # The published tools image predates the retail tools: infra/knative/deploy_retail.sh builds it, loads it into
+        # kind or pushes it to ECR for EKS, and deploys the 16 retail tools (DOMAIN=retail deploy.sh)
+        if p.get("target") == "ecr":
+            ctx = _eks_context()
+            if not ctx:
+                raise ValueError("no EKS cluster yet (AWS EKS -> Create cluster)")
+        else:
+            if not _kind_exists():
+                raise ValueError("create the kind cluster first (Local cluster -> Create cluster)")
+            ctx = "kind-pulse-kn"
+        return [(f"{title} on {ctx} (infra/knative/deploy_retail.sh)", [_need_bash(), "infra/knative/deploy_retail.sh"],
+                 {**env, "KUBE_CONTEXT": ctx})]
     if name == "image_build":
         target = p.get("target") if p.get("target") in ("ecr", "kind") else "ecr"
         return [(f"{title} for {target} (infra/cloud/build_image.sh)", [_need_bash(), "infra/cloud/build_image.sh"],
@@ -307,7 +308,11 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
         pred = p.get("predictor")
         if pred not in PREDICTORS:
             raise ValueError(f"predictor must be one of {PREDICTORS}")
-        return [(f"pulse-predictor -> {pred}", ["kubectl", "set", "env", "deploy/pulse-predictor", f"PREDICTOR={pred}"], env),
+        domain = cluster.domain if cluster.mode == "knative" else "airline"     # the top bar's domain
+        if domain == "retail" and pred == "speculator":
+            raise ValueError("the speculator knows the airline tools only: pick lightgbm, markov or pulse_v3 for retail")
+        return [(f"pulse-predictor -> {pred} ({domain})",
+                 ["kubectl", "set", "env", "deploy/pulse-predictor", f"PREDICTOR={pred}", f"DOMAIN={domain}"], env),
                 ("wait for the new predictor", ["kubectl", "rollout", "status", "deploy/pulse-predictor",
                                                 "--timeout=300s"], env)]
     if name == "monitoring_install":

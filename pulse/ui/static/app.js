@@ -174,15 +174,14 @@ const domainSeg = seg("domainSeg", async (domain) => {
     domainSeg.set(state.cluster?.domain || "airline");
   }
 });
-// what the Experiments form offers for the domain: its task presets; retail has no live agent, speculator or run pod
+// what the Experiments form offers for the domain: its task presets; retail has no live agent or speculator
 function domainForm(domain) {
   const retail = domain === "retail";
   $$("#xTasksPreset option[data-domain]").forEach((o) => { o.hidden = o.disabled = o.dataset.domain !== domain; });
   const sel = $("#xTasksPreset");
   if (sel.selectedOptions[0]?.disabled) { sel.value = retail ? "r-heldout" : "heldout"; sel.onchange(); }
-  for (const [id, off] of [["#xMode button[data-v=live]", retail], ["#xWherePod", retail]]) $(id).disabled = off;
+  $("#xMode button[data-v=live]").disabled = retail;                 // the live agent is airline only
   if (retail && xMode.get() === "live") { xMode.set("replay"); expForm(); }
-  if (retail && xWhere.get() === "cluster") xWhere.set("laptop");
   const spec = $("#xPred option[value=speculator]");
   spec.disabled = retail;
   if (retail && $("#xPred").value === "speculator") { $("#xPred").value = "lightgbm"; expForm(); }
