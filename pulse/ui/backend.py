@@ -11,6 +11,7 @@ Nothing here prints secrets: processes inherit .env.
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -238,6 +239,33 @@ def policy_label(p: dict | None, theta: float | None = None) -> str:
     return s + (f" + lookahead {p['theta_next']:g}" if p["lookahead"] else "")
 
 
+NEW_GROUP = os.name != "nt"     # Popen(start_new_session=...): on Linux/macOS a child and its children share a group
+
+
+def kill_tree(p: subprocess.Popen, wait: float = 8):
+    """Stop a process and everything it started. terminate() alone is not enough: a step such as train_models runs
+    the real work in a child process, and on Windows the .venv's python.exe is a launcher whose child is the real
+    interpreter. A surviving child keeps the output pipe (and ports) open, so the job would never end."""
+    if p.poll() is not None:
+        return
+    if os.name == "nt":
+        _run(["taskkill", "/PID", str(p.pid), "/T", "/F"], 15)
+    else:
+        try:
+            os.killpg(p.pid, signal.SIGTERM)
+        except OSError:
+            p.terminate()
+    try:
+        p.wait(wait)
+    except subprocess.TimeoutExpired:
+        if os.name != "nt":
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except OSError:
+                pass
+        p.kill()
+
+
 class Proc:
     def __init__(self, name: str, cmd: list[str], env: dict, info: dict):
         self.name, self.cmd, self.info = name, cmd, info
@@ -248,7 +276,8 @@ class Proc:
         self._kill_leftover()
         self.p = subprocess.Popen(cmd, cwd=ROOT, env={**os.environ, **env, "PYTHONUNBUFFERED": "1",
                                                       "PYTHONIOENCODING": "utf-8", "PYTHONPATH": str(ROOT)},
-                                  stdout=self.fh, stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
+                                  stdout=self.fh, stderr=subprocess.STDOUT, creationflags=NO_WINDOW,
+                                  start_new_session=NEW_GROUP)
         self.pidfile.write_text(str(self.p.pid))
         self.started = time.time()
 
@@ -271,12 +300,7 @@ class Proc:
         return self.p.poll() is None
 
     def stop(self):
-        if self.alive():
-            self.p.terminate()
-            try:
-                self.p.wait(8)
-            except subprocess.TimeoutExpired:
-                self.p.kill()
+        kill_tree(self.p)
         self.fh.close()
         self.pidfile.unlink(missing_ok=True)
 
@@ -709,7 +733,10 @@ class BatchRun:
                                                               "PYTHONUNBUFFERED": "1", "PYTHONPATH": str(ROOT),
                                                               "PYTHONIOENCODING": "utf-8", "MSYS_NO_PATHCONV": "1"},
                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                          encoding="utf-8", errors="replace", creationflags=NO_WINDOW)
+                                          encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
+                                          start_new_session=NEW_GROUP)
+                if self.stop_flag:                      # Stop pressed while this step was starting
+                    kill_tree(self.p)
                 for line in self.p.stdout:
                     line = line.rstrip("\n")
                     self._say(line)
@@ -740,8 +767,9 @@ class BatchRun:
 
     def stop(self):
         self.stop_flag = True
-        if self.p and self.p.poll() is None:
-            self.p.terminate()
+        if self.p:
+            self._say("• stopping ...")
+            kill_tree(self.p)
 
     def view(self, after: int = 0) -> dict:
         return {"state": self.state, "spec": self.spec, "lines": self.lines[after:], "n": len(self.lines),
