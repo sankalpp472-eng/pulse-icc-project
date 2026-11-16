@@ -30,3 +30,15 @@ TAU_BENCH = DATA / "tau-bench"
 TRAJECTORIES = TAU_BENCH / "historical_trajectories"
 SCHEMAS = TAU_BENCH / "schemas"
 REGISTRY_CACHE = Path(os.getenv("PULSE_REGISTRY_CACHE") or MODELS / "registry")
+
+
+def shown(p) -> str:
+    """A file's path as services report it (e.g. GET /healthz): models/... or relative to the repository, never the
+    machine's absolute path (it names the user's home and the directory layout)."""
+    p = Path(p).resolve()
+    for base, prefix in ((MODELS, "models/"), (ROOT, "")):
+        try:
+            return prefix + p.relative_to(Path(base).resolve()).as_posix()
+        except ValueError:
+            pass
+    return p.name

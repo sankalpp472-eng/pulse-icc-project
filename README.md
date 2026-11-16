@@ -86,7 +86,8 @@ Start the UI and open **http://127.0.0.1:8765**:
 ```
 
 The UI listens on this machine only (127.0.0.1): it can start runs, create clusters and spend money in your AWS
-account, and has no login.
+account, and has no login. So do the processes it starts (the predictor on :8000, the controller's and runs'
+metrics on :9102 / :9105); `PULSE_BIND` changes that, see `pulse/net.py` (only for Prometheus in kind on Linux).
 
 ### What else, and when
 

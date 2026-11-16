@@ -51,7 +51,7 @@ def load_action_model():
                 "action (or set ACTION_MODEL_URI)"
             raise SystemExit(f"{path} is missing: python -m pulse.setup.train_models {how}")
         _CACHE["m"] = compat.load(path)
-        _CACHE["info"] = {"model_file": str(path), "model_source": source, "model_version": version,
+        _CACHE["info"] = {"model_file": paths.shown(path), "model_source": source, "model_version": version,
                           "model_uri": ACTION_URI or None, **({"registry_error": error} if error else {})}
     return _CACHE["m"]
 

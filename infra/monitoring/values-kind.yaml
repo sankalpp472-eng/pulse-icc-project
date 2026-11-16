@@ -1,5 +1,8 @@
 # kind (laptop, Docker Desktop with ~4 GB): smaller Prometheus, and scrape the processes the laptop runs
 # (UI-started predictor, prewarm controller, replay runner) through host.docker.internal.
+# Those processes listen on 127.0.0.1 only (pulse/net.py). Docker Desktop reaches that through host.docker.internal;
+# native Docker on Linux / WSL does not: start the UI with PULSE_BIND=<the docker0 address, e.g. 172.17.0.1>
+# (`ip -4 addr show docker0`) to let Prometheus scrape them without opening the ports to the local network.
 prometheus:
   prometheusSpec:
     retention: 1d
