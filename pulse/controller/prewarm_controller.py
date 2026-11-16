@@ -214,12 +214,13 @@ class Controller:
 
     def run(self):
         ctx = "in-cluster" if os.getenv("KUBERNETES_SERVICE_HOST") else config.list_kube_config_contexts()[1]["name"]
+        from pulse.net import bind_host
         print(f"prewarm controller (Option A) | context {ctx} | "
               f"namespace {NS} | ingress {URL_TPL} | log {LOG}")
         if METRICS_PORT:
             try:
-                start_http_server(METRICS_PORT)
-                print(f"metrics: http://0.0.0.0:{METRICS_PORT}/metrics")
+                start_http_server(METRICS_PORT, addr=bind_host())     # this machine only on a laptop (pulse/net.py)
+                print(f"metrics: http://{bind_host()}:{METRICS_PORT}/metrics")
             except OSError as e:     # e.g. a second controller on the same laptop: run without metrics
                 print(f"metrics port {METRICS_PORT} not available ({e}); no /metrics")
         threading.Thread(target=self.sweep, daemon=True).start()

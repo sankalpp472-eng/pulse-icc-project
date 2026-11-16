@@ -21,6 +21,7 @@ import urllib.request
 from pathlib import Path
 
 from pulse import paths
+from pulse.net import bind_host
 
 ROOT = paths.ROOT
 # Tools installed with arkade (the usual way on Windows: arkade get kind|helm|kubectl ...) live in ~/.arkade/bin, which is
@@ -361,8 +362,8 @@ class Services:
             model_version = model_version or os.getenv("ACTION_MODEL_VERSION") or None  # pinned by GitOps (pulse-config)
             if ACTION_URI and domain == "airline":                                       # the registry: airline only
                 env.update(ACTION_MODEL_URI=ACTION_URI, ACTION_MODEL_VERSION=model_version or "")
-        # 0.0.0.0 (like the controller's metrics): Prometheus in kind scrapes it from the Docker network
-        cmd = [PY, "-m", "uvicorn", "pulse.predictor.service:app", "--host", "0.0.0.0",
+        # this machine only (127.0.0.1) on a laptop, the pod's IP in the cluster: pulse/net.py (PULSE_BIND)
+        cmd = [PY, "-m", "uvicorn", "pulse.predictor.service:app", "--host", bind_host(),
                "--port", str(PREDICTOR_PORT), "--log-level", "warning"]
         self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
                                                                 "crd": "k8s" if crd else "off", "domain": domain,

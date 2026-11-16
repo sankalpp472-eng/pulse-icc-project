@@ -11,6 +11,8 @@ run counts the first call too.
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
+from pulse.net import bind_host
+
 LATENCY_BUCKETS = (0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5, 7.5, 10, 15, 20, 30, 60)
 
 TOOL_CALL_SECONDS = Histogram(
@@ -42,7 +44,7 @@ class RunMetrics:
         if not self.on:
             return
         try:
-            start_http_server(port)
+            start_http_server(port, addr=bind_host())     # this machine only on a laptop (pulse/net.py)
         except OSError as e:       # port taken (another run): the run goes on without live metrics
             print(f"metrics port {port} not available ({e}); no live metrics for this run")
             self.on = False

@@ -20,7 +20,7 @@ from pathlib import Path
 
 from pulse.predictor.contract import END, PredictRequest  # noqa: E402
 from pulse.predictor.predictors.base import Predictor  # noqa: E402
-from pulse import registry as model_store  # noqa: E402
+from pulse import paths, registry as model_store  # noqa: E402
 from pulse.pulse_v3.contract.hints import Call, End, Hint as SessionHint  # noqa: E402
 from pulse.pulse_v3.predictors.base import PredictorError  # noqa: E402
 from pulse.pulse_v3.predictors.pulse_v3.embed import Embedder  # noqa: E402
@@ -133,7 +133,7 @@ class PulseV3(Predictor):
         return out
 
     def health(self) -> dict:
-        return {"model_uri": MODEL_URI, "model_file": str(self.model_file), "model_version": self.model_version,
+        return {"model_uri": MODEL_URI, "model_file": paths.shown(self.model_file), "model_version": self.model_version,
                 "model_source": "registry" if self.model_version else
                                 ("file (registry unavailable)" if self.registry_error else "file"),
                 **({"registry_error": self.registry_error} if self.registry_error else {}), "sessions": len(self.episodes),
