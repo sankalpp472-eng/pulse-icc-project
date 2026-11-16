@@ -100,6 +100,9 @@ def plot_python() -> str:
 
 
 # ====================================================================== cluster
+POD_TAIL_TIMEOUT_S = 900       # stop waiting for an episode's pods to scale down after this (window is 60 s)
+
+
 class Cluster:
     """Where the tools are: a real Knative cluster (current kubectl context: kind or EKS) or the simulated one."""
 
@@ -113,6 +116,12 @@ class Cluster:
         self.pods_at = 0.0
         self.events: list[dict] = []           # controller actions (tailed from its log)
         self._log_pos = 0
+        # knative mode: when each tool pod was first / last seen (pod name -> [first, last]), and the episodes
+        # whose pod-seconds wait for their pods to scale down (see track_episode)
+        self.pod_life: dict[str, list[float]] = {}
+        self.pending: list[dict] = []
+        self.last_episode_start = 0.0
+        self._plock = threading.Lock()
         threading.Thread(target=self._poll, daemon=True).start()
 
     def detect(self) -> dict:
@@ -192,8 +201,11 @@ class Cluster:
                 code, out = _run(["kubectl", "get", "pods", "-l", self.role, "-o", "json",
                                   "--request-timeout=4s"], 6)
                 if code == 0:
+                    now = time.time()
                     counts = {t: {"tool": t, "ready": 0, "starting": 0, "busy": 0} for t in DOMAINS[self.domain]["tools"]}
-                    for p in json.loads(out).get("items", []):
+                    items = json.loads(out).get("items", [])
+                    self._pods_seen(items, now)
+                    for p in items:
                         if p["metadata"].get("deletionTimestamp"):
                             continue
                         t = p["metadata"].get("labels", {}).get("pulse/tool")
@@ -205,6 +217,55 @@ class Cluster:
                     self.pods, self.pods_at = list(counts.values()), time.time()
                 self._tail_controller()
             time.sleep(1.0)
+
+    # -------------------------------------------------------------- pod-seconds (knative mode)
+    def _pods_seen(self, items: list[dict], now: float) -> None:
+        """One pod listing: extend each pod's life to now (a terminating pod still holds its resources, as in
+        the experiment runners' PodWatcher), then settle the episodes whose pods are gone."""
+        with self._plock:
+            for p in items:
+                name = p["metadata"]["name"]
+                life = self.pod_life.setdefault(name, [now, now])
+                life[1] = now
+            for name in [n for n, (_, last) in self.pod_life.items() if now - last > 3600]:
+                del self.pod_life[name]             # long gone; no episode can still need it
+            per_tool: dict[str, int] = {}
+            for p in items:
+                t = p["metadata"].get("labels", {}).get("pulse/tool")
+                per_tool[t] = per_tool.get(t, 0) + 1
+            floor = self.min_scale or 0             # C1 keeps min-scale pods: "down" = nothing above that
+            down = all(n <= floor for n in per_tool.values())
+            for ep in list(self.pending):
+                why = "scaled down" if down else                     "next episode started" if self.last_episode_start > ep["t_end"] else                     "timed out" if now - ep["t_end"] > POD_TAIL_TIMEOUT_S else None
+                if why:
+                    until = min(now, self.last_episode_start) if why == "next episode started" else now
+                    self._settle(ep, until, why)
+                    self.pending.remove(ep)
+
+    def _overlap(self, a: float, b: float) -> float:
+        return sum(max(0.0, min(last, b) - max(first, a)) for first, last in self.pod_life.values())
+
+    def _settle(self, ep: dict, until: float, why: str) -> None:
+        s = ep["summary"]
+        during = self._overlap(ep["t_from"], ep["t_end"])
+        after = self._overlap(ep["t_end"], until)
+        s.update(pod_seconds=round(during + after, 1), pod_seconds_during=round(during, 1),
+                 pod_seconds_after=round(after, 1), pod_seconds_pending=False,
+                 scaled_down_after_s=round(until - ep["t_end"], 1), pod_seconds_note=why)
+
+    def episode_started(self, t: float) -> None:
+        """A new episode: an earlier one still waiting for scale-down stops counting here (no double counting)."""
+        with self._plock:
+            self.last_episode_start = t
+
+    def track_episode(self, summary: dict, t_from: float, t_end: float) -> None:
+        """Pod-seconds of a Knative episode: every tool pod's time inside [t_from, scale-down]. The pods are
+        polled about once a second, so this is exact to ~1 s per pod. The summary dict (the history row) is
+        filled in once the tools have scaled down (or the next episode starts / POD_TAIL_TIMEOUT_S passes)."""
+        summary.update(pod_seconds=None, pod_seconds_pending=True, pod_seconds_during=None, pod_seconds_after=None,
+                       scaled_down_after_s=None, pod_seconds_note=None)   # every key now: the row is read while it fills
+        with self._plock:
+            self.pending.append({"summary": summary, "t_from": t_from, "t_end": t_end})
 
     def _tail_controller(self):
         if not CONTROLLER_LOG.exists():

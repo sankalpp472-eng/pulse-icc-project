@@ -95,6 +95,8 @@ class Session(threading.Thread):
         self.llm_wait = 0.0                          # live: time the agent's LLM calls waited on the API's rate limits
         self.rng = random.Random(int(cfg.get("seed", 252)))
         self.pod_s0 = sim.live_pod_seconds() if sim else None
+        if not sim:                                  # Knative: an earlier episode's pod tail stops counting here
+            cluster.episode_started(self.t0)
 
     # ------------------------------------------------------------------ plumbing
     def emit(self, type_: str, **kw):
@@ -213,14 +215,17 @@ class Session(threading.Thread):
         except Stopped:
             self.state = "stopped"
             self.emit("info", text="Stopped.")
-        except Exception as e:
+        except (Exception, SystemExit) as e:   # the runners' helpers raise SystemExit (e.g. tau-bench data missing)
             self.state = "failed"
             self.emit("error", text=f"{type(e).__name__}: {e}"[:600])
         finally:
             if self.t_start and not self.t_end:
                 self.t_end = time.time()
             self.save_recording()
-            self.emit("end", summary=self.summary())
+            summ = self.summary()
+            if not self.sim:                         # Knative: filled in once the tools have scaled down
+                self.cluster.track_episode(summ, self.t0, time.time())
+            self.emit("end", summary=summ)
 
     def save_recording(self):
         """A live episode with at least one tool call -> record_dir/<id>.json, replayable with kind=recorded."""
@@ -251,6 +256,10 @@ class Session(threading.Thread):
         lat = sorted(c["latency_ms"] for c in self.calls)
         cold = [c for c in self.calls if c["cold"]]
         rtt = sorted(self.hints["rtt_ms"])
+        # pod time the episode caused: during the episode, plus the idle window its pods still live through
+        # before they scale down (issue #15: the table used to stop at the end of the episode)
+        during = round(self.sim.live_pod_seconds() - self.pod_s0, 1) if self.sim else None
+        after = round(self.sim.pending_pod_seconds(), 1) if self.sim else None
         return {"calls": n, "cold": len(cold), "cold_share": round(len(cold) / n, 3) if n else None,
                 "prewarmed_hits": sum(c["prewarmed"] for c in self.calls),
                 "cold_wait_s": round(sum(c["latency_ms"] for c in cold) / 1000, 2),
@@ -258,7 +267,8 @@ class Session(threading.Thread):
                 "p95_ms": lat[min(n - 1, int(0.95 * n))] if n else None,
                 "hints_sent": self.hints["sent"], "hints_answered": self.hints["answered"],
                 "hint_rtt_p50_ms": rtt[len(rtt) // 2] if rtt else None,
-                "pod_seconds": round(self.sim.live_pod_seconds() - self.pod_s0, 1) if self.sim else None,
+                "pod_seconds": round(during + after, 1) if self.sim else None,
+                "pod_seconds_during": during, "pod_seconds_after": after,
                 "duration_s": round(time.time() - self.t0, 1),
                 "e2e_s": round(self.t_end - self.t_start, 2) if self.t_start and self.t_end else None,
                 "tool_wait_s": round(self.tool_wait, 2), "llm_wait_s": round(self.llm_wait, 1), "state": self.state,

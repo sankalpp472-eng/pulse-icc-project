@@ -572,7 +572,7 @@ function renderEvent(ev) {
       }
       add(`<div class="stats">${stat(s.calls, "tool calls")}${stat(s.cold, "cold calls")}${stat(s.prewarmed_hits, "prewarmed")}` +
         `${stat(fmt(s.mean_ms), "mean latency ms")}${stat(fmt(s.cold_wait_s, 1), "s lost to cold starts")}` +
-        `${s.pod_seconds != null ? stat(fmt(s.pod_seconds), "pod-seconds") : ""}${stat(s.hints_answered + "/" + s.hints_sent, "hints answered")}` +
+        `${s.pod_seconds != null ? stat(fmt(s.pod_seconds), "pod-seconds (incl. scale-down)") : s.pod_seconds_pending ? stat("…", "pod-seconds: counted once the pods scale down (History)") : ""}${stat(s.hints_answered + "/" + s.hints_sent, "hints answered")}` +
         `${s.llm_wait_s ? stat(fmt(s.llm_wait_s, 0), "s waiting on LLM rate limits") : ""}</div>`, "step");
       break;
     }
@@ -994,7 +994,7 @@ function renderHistory(h) {
     <td>${esc(s.task || "free")}${s.kind === "replay" && s.trial != null ? " #" + (s.trial + 1) : ""}</td><td>${esc(prewarmLabel(s))}</td><td>${esc(s.cluster)}</td>
     <td><b>${secs(s.e2e_s)}</b></td><td>${secs(s.tool_wait_s)}</td>
     <td>${s.calls}</td><td>${s.cold}</td><td>${s.prewarmed_hits}</td><td>${fmt(s.mean_ms)} ms</td><td>${fmt(s.cold_wait_s, 1)} s</td>
-    <td>${fmt(s.pod_seconds)}</td><td>${s.hint_rtt_p50_ms != null ? fmt(s.hint_rtt_p50_ms, 1) + " ms" : "–"}</td></tr>`).join("") ||
+    <td title="${s.pod_seconds_pending ? "counting: waiting for this episode's tool pods to scale down (idle window)" : s.pod_seconds_after != null ? `${fmt(s.pod_seconds_during)} during the episode + ${fmt(s.pod_seconds_after)} until its pods scaled down${s.scaled_down_after_s != null ? ` (${fmt(s.scaled_down_after_s)} s after the end` + (s.pod_seconds_note && s.pod_seconds_note !== "scaled down" ? `; ${s.pod_seconds_note}` : "") + ")" : ""}` : ""}">${s.pod_seconds_pending ? "…" : fmt(s.pod_seconds)}</td><td>${s.hint_rtt_p50_ms != null ? fmt(s.hint_rtt_p50_ms, 1) + " ms" : "–"}</td></tr>`).join("") ||
     `<tr><td colspan="13" class="muted">None yet.</td></tr>`;
 }
 
