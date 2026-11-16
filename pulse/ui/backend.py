@@ -375,6 +375,42 @@ class Services:
     def controller_running(self) -> bool:
         return bool(self.procs.get("controller") and self.procs["controller"].alive())
 
+    def match_cluster(self) -> bool:
+        """Make the running predictor fit where the tools run now (issue #19). It writes PrewarmRequests only when
+        it was started for Knative (CRD_MODE=k8s), and serves one domain: after a switch between the simulated
+        cluster and Knative it is restarted with the same model / theta / policy / version, and on Knative the
+        controller that turns those requests into warm pods is started. True if the predictor was restarted."""
+        cur = self.procs.get("predictor")
+        if not (cur and cur.alive()):
+            return False
+        knative = self.cluster.mode == "knative"
+        info = cur.info
+        domain = self.cluster.domain if knative else "airline"
+        restart = info.get("crd") != ("k8s" if knative else "off") or info.get("domain") != domain
+        if restart:
+            try:
+                self.start_predictor(info["model"], float(info["theta"]), knative, info.get("policy"),
+                                     model_version=info.get("model_version"))
+            except ValueError:              # this predictor can't serve here (e.g. the speculator with retail)
+                self.stop("predictor")
+                return True
+        if knative and not self.controller_running():
+            self.start_controller()
+        return restart
+
+    def prewarm_problem(self) -> str | None:
+        """Why a C3 episode with the laptop's predictor would not prewarm the cluster's tools, or None."""
+        if self.cluster.mode != "knative":
+            return None
+        cur = self.procs.get("predictor")
+        if not (cur and cur.alive()):
+            return "the predictor is not running"
+        if cur.info.get("crd") != "k8s":
+            return "the predictor does not write prewarm requests to the cluster (CRDs off)"
+        if not self.controller_running():
+            return "the prewarm controller is not running"
+        return None
+
     def start_controller(self) -> dict:
         self.stop("controller")
         if CONTROLLER_LOG.exists():

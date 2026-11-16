@@ -104,6 +104,7 @@ def set_cluster(body: dict):
             raise HTTPException(400, f"Knative cluster not usable: {info['detail']}")
     services.stop("controller")
     cluster.mode = mode
+    services.match_cluster()            # the running predictor follows: CRDs + controller on Knative, off in the sim
     return cluster.info()
 
 
@@ -187,14 +188,17 @@ def session_start(cfg: dict):
         cfg["predictor"], cfg["theta"] = f"{eks['name']} (EKS)", eks["theta"]
         cfg["policy_label"] = backend.policy_label(eks["policy"], eks["theta"])
     elif cfg.get("predictor"):
+        services.match_cluster()            # e.g. started on the simulated cluster, then switched to Knative (#19)
         if not services.wait_predictor(timeout=1 if services.predictor_ready() else 90):
             raise HTTPException(400, "Start the predictor first (Predictor card), or choose 'none (C0)'")
+        why = services.prewarm_problem()
+        if why:                             # never run a "C3" episode that can't prewarm anything
+            raise HTTPException(400, f"Prewarming is not active: {why}. Click Start in the Predictor card, "
+                                     "or choose 'none (C0)'")
         pred = backend.PREDICTOR_URL
         info = services.procs["predictor"].info
         cfg["predictor"], cfg["theta"] = info["model"], info["theta"]
         cfg["policy_label"] = backend.policy_label(info.get("policy"), info["theta"])
-        if cluster.mode == "knative" and info.get("crd") == "k8s" and not services.controller_running():
-            services.start_controller()        # stopped by an episode with the EKS predictor
     if cluster.mode == "sim" and cfg.get("fresh", True):
         sim.set_min_scale(sim.min_scale)
     agents = int(cfg.get("bg_agents") or 0)
