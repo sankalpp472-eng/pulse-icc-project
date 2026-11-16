@@ -68,8 +68,11 @@ class SimCluster:
                     break
                 if not p["busy"] and now - max(p["last_used"], p["ready_at"]) > self.window_s:
                     pods.remove(p)
-                    self.pod_seconds += now - p["created"]
-                    self.events.append({"time": now, "event": "scaled_down", "tool": t, "source": "sim",
+                    # the pod ended when its idle window ran out, not when this check noticed it (the checks follow
+                    # the UI's polling), so its pod time stops there: exact, like the per-episode figure
+                    end = max(p["last_used"], p["ready_at"]) + self.window_s
+                    self.pod_seconds += end - p["created"]
+                    self.events.append({"time": end, "event": "scaled_down", "tool": t, "source": "sim",
                                         "pods_after": len(pods)})
 
     def snapshot(self) -> list[dict]:
@@ -84,6 +87,19 @@ class SimCluster:
         now = time.time()
         with self.lock:
             return self.pod_seconds + sum(now - p["created"] for ps in self.pods.values() for p in ps)
+
+    def pending_pod_seconds(self) -> float:
+        """Pod time still to come if no traffic arrives: every pod that will scale down lives on until its idle
+        window has passed (the same rule as _reap). Added to an episode's pod-seconds, it gives the pod time the
+        episode caused. The min_scale pods each tool keeps (C1) are not counted: they never scale down."""
+        now = time.time()
+        with self.lock:
+            total = 0.0
+            for pods in self.pods.values():
+                # _reap removes the longest-idle pods first and keeps the min_scale most recently used ones
+                ends = sorted((max(p["last_used"], p["ready_at"]) + self.window_s for p in pods), reverse=True)
+                total += sum(max(0.0, end - now) for end in ends[self.min_scale:])
+            return total
 
     # ------------------------------------------------------------------ the controller
     def prewarm(self, tool: str, k: int = 1, probability: float | None = None) -> dict | None:
