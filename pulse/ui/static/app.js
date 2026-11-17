@@ -543,8 +543,10 @@ function renderEvent(ev) {
       c.className = "call" + (ev.cold ? " cold" : "");
       c.innerHTML = `<span class="name">${esc(ev.tool)}</span>
         <span class="meta">${ev.parallel > 1 ? `<span class="badge par">∥ ${ev.parallel}</span>` : ""}
-          ${ev.prewarmed ? `<span class="badge hit">prewarmed ✓</span>` : ""}
-          ${ev.wait_ms > 0 ? `<span class="muted small" title="time this call waited for a pod to start">waited ${ev.wait_ms} ms${ev.prewarmed ? " (prewarm landed late)" : ""}</span>` : ""}
+          ${ev.prewarmed ? `<span class="badge hit" title="served warm by a pod the predictor prewarmed">prewarmed ✓</span>` : ""}
+          ${ev.prewarm_late ? `<span class="badge late" title="the predictor prewarmed this tool, but the pod was not ready in time">prewarm late</span>` : ""}
+          ${ev.prewarm_k && !ev.prewarmed && !ev.prewarm_late ? `<span class="muted small" title="this step called the tool more often than the pods prewarmed">beyond the ×${ev.prewarm_k} prewarmed</span>` : ""}
+          ${ev.wait_ms > 0 ? `<span class="muted small" title="time this call waited for a pod to start">waited ${ev.wait_ms} ms${ev.prewarm_late ? " (prewarm landed late)" : ""}</span>` : ""}
           <span class="badge ${ev.cold ? "cold" : "warm"}">${ev.cold ? "cold" : "warm"}</span>
           <b>${fmt(ev.latency_ms)} ms</b></span>
         <span class="args">${esc(JSON.stringify(ev.args))}</span>
@@ -570,7 +572,7 @@ function renderEvent(ev) {
           <span class="muted small">same customer messages, think and reply times and tool calls; only prewarming differs</span>`, "replay-offer");
         b.querySelector("button").onclick = () => raceRecording(s.recording);
       }
-      add(`<div class="stats">${stat(s.calls, "tool calls")}${stat(s.cold, "cold calls")}${stat(s.prewarmed_hits, "prewarmed")}` +
+      add(`<div class="stats">${stat(s.calls, "tool calls")}${stat(s.cold, "cold calls")}${stat(s.prewarmed_hits, "served by a prewarm")}${s.prewarm_late ? stat(s.prewarm_late, "prewarms too late") : ""}` +
         `${stat(fmt(s.mean_ms), "mean latency ms")}${stat(fmt(s.cold_wait_s, 1), "s lost to cold starts")}` +
         `${s.pod_seconds != null ? stat(fmt(s.pod_seconds), "pod-seconds (incl. scale-down)") : s.pod_seconds_pending ? stat("…", "pod-seconds: counted once the pods scale down (History)") : ""}${stat(s.hints_answered + "/" + s.hints_sent, "hints answered")}` +
         `${s.llm_wait_s ? stat(fmt(s.llm_wait_s, 0), "s waiting on LLM rate limits") : ""}</div>`, "step");
@@ -993,7 +995,7 @@ function renderHistory(h) {
   $("#historyTbl tbody").innerHTML = h.map((s) => `<tr><td>${s.kind === "recorded" ? "replay of live run" : esc(s.kind)}${s.user && s.kind === "live" ? " · " + esc(s.user) : ""}</td>
     <td>${esc(s.task || "free")}${s.kind === "replay" && s.trial != null ? " #" + (s.trial + 1) : ""}</td><td>${esc(prewarmLabel(s))}</td><td>${esc(s.cluster)}</td>
     <td><b>${secs(s.e2e_s)}</b></td><td>${secs(s.tool_wait_s)}</td>
-    <td>${s.calls}</td><td>${s.cold}</td><td>${s.prewarmed_hits}</td><td>${fmt(s.mean_ms)} ms</td><td>${fmt(s.cold_wait_s, 1)} s</td>
+    <td>${s.calls}</td><td>${s.cold}</td><td title="${s.prewarm_requested_calls != null ? `${s.prewarm_requested_calls} calls were to a tool the predictor prewarmed; ${s.prewarmed_hits} of them were served warm by a prewarmed pod${s.prewarm_late ? `, ${s.prewarm_late} prewarm(s) came too late` : ""}` : ""}">${s.prewarmed_hits}</td><td>${fmt(s.mean_ms)} ms</td><td>${fmt(s.cold_wait_s, 1)} s</td>
     <td title="${s.pod_seconds_pending ? "counting: waiting for this episode's tool pods to scale down (idle window)" : s.pod_seconds_after != null ? `${fmt(s.pod_seconds_during)} during the episode + ${fmt(s.pod_seconds_after)} until its pods scaled down${s.scaled_down_after_s != null ? ` (${fmt(s.scaled_down_after_s)} s after the end` + (s.pod_seconds_note && s.pod_seconds_note !== "scaled down" ? `; ${s.pod_seconds_note}` : "") + ")" : ""}` : ""}">${s.pod_seconds_pending ? "…" : fmt(s.pod_seconds)}</td><td>${s.hint_rtt_p50_ms != null ? fmt(s.hint_rtt_p50_ms, 1) + " ms" : "–"}</td></tr>`).join("") ||
     `<tr><td colspan="13" class="muted">None yet.</td></tr>`;
 }
