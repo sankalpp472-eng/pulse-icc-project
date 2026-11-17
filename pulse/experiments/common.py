@@ -60,13 +60,102 @@ def tasks_tag(task_ids: list) -> str:
     return "tasks" + "-".join(map(str, ids)) if len(ids) <= 5 else f"tasks{len(ids)}"
 
 
+def _ts(s: str | None) -> float | None:
+    """Kubernetes RFC 3339 time (1 s resolution) -> epoch seconds."""
+    if not s:
+        return None
+    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+
+
+def _go_duration(s: str) -> float:
+    """kubelet durations such as '1.234s', '567ms', '1m2.3s', '850µs' -> seconds."""
+    total = 0.0
+    for num, unit in re.findall(r"([\d.]+)(ms|µs|us|ns|h|m|s)", s):
+        total += float(num) * {"h": 3600, "m": 60, "s": 1, "ms": 1e-3, "µs": 1e-6, "us": 1e-6, "ns": 1e-9}[unit]
+    return total
+
+
+def _startup_times(p: dict) -> dict:
+    """When this pod was scheduled, its containers started, and it became Ready (each once known)."""
+    st = p.get("status", {})
+    cond = {c["type"]: c for c in st.get("conditions", []) if c.get("status") == "True"}
+    started = [_ts(c.get("state", {}).get("running", {}).get("startedAt")) for c in st.get("containerStatuses", [])]
+    out = {"node": p.get("spec", {}).get("nodeName")}
+    for key, ctype in (("scheduled", "PodScheduled"), ("initialized", "Initialized"), ("ready", "Ready")):
+        if ctype in cond:
+            out[key] = _ts(cond[ctype].get("lastTransitionTime"))
+    if started and all(started):              # every container (the tool + Knative's queue-proxy) is running
+        out["containers_started"] = max(started)
+    return {k: v for k, v in out.items() if v is not None}
+
+
+# pods.csv columns (live.py / replay.py). Times are epoch seconds; Kubernetes records them to the second.
+POD_FIELDS = ["pod", "tool", "node", "created", "scheduled", "initialized", "containers_started", "ready",
+              "image_pull_s", "image_cached", "first_seen", "last_seen", "deleting_seen",
+              "scheduling_s", "init_s", "readiness_s", "startup_s"]
+
+
+def startup_breakdown(r: dict) -> dict:
+    """Where a new pod's startup time went (E1), from its timestamps and the kubelet's image-pull events:
+      scheduling  created -> scheduled to a node
+      image_pull  pulling the images (0 when 'already present on machine')
+      init        scheduled -> every container running, minus the pull (sandbox, network, container start)
+      readiness   containers running -> Ready (the tool server's own start-up until its readiness probe passes)
+    Kubernetes keeps these times to the second, so single pods are coarse; medians over many pods are fine."""
+    c, s, cs, rd = (r.get(k) for k in ("created", "scheduled", "containers_started", "ready"))
+    if None in (c, s, cs, rd):
+        return {}
+    pull = float(r.get("image_pull_s") or 0.0)
+    return {"scheduling_s": round(max(0.0, s - c), 3), "image_pull_s": round(pull, 3),
+            "init_s": round(max(0.0, cs - s - pull), 3), "readiness_s": round(max(0.0, rd - cs), 3),
+            "startup_s": round(max(0.0, rd - c), 3)}
+
+
+def startup_summary(pods: list[dict], t0: float | None = None) -> dict:
+    """Medians / means of the startup breakdown over the pods that started during the run (created >= t0)."""
+    rows = [b for p in pods if (t0 is None or (p.get("created") or 0) >= t0 - 1) for b in [startup_breakdown(p)] if b]
+    if not rows:
+        return {"pods": 0}
+    out = {"pods": len(rows), "pods_pulling_images": sum(r["image_pull_s"] > 0 for r in rows)}
+    for k in ("scheduling_s", "image_pull_s", "init_s", "readiness_s", "startup_s"):
+        v = sorted(r[k] for r in rows)
+        out[k] = {"median": v[len(v) // 2], "mean": round(sum(v) / len(v), 3), "p95": v[min(len(v) - 1, int(0.95 * len(v)))]}
+    return out
+
+
 class PodWatcher(threading.Thread):
-    """Polls the tool pods every second and remembers when each was first and last seen."""
+    """Polls the tool pods every second and remembers when each was first and last seen, plus the timestamps
+    of its start-up (scheduled, containers started, Ready) and the kubelet's image pulls (for E1)."""
+
+    EVENTS_EVERY_S = 15.0       # kubelet events live ~1 h, so they are read during the run
 
     def __init__(self, interval: float = POD_POLL_S):
         super().__init__(daemon=True)
         self.interval, self.pods, self.lock, self.stop_flag = interval, {}, threading.Lock(), False
         self.forgot_at = 0.0
+        self.pulls: dict[str, dict] = {}      # pod -> {"seconds": total pull time, "cached": all images present}
+        self._events_at = 0.0
+
+    def _read_pull_events(self):
+        """'Pulled' events: 'Container image "…" already present on machine' or 'Successfully pulled image "…" in
+        1.234s (…)'. One per container of the pod (the tool and Knative's queue-proxy); pulls add up."""
+        out = subprocess.run(["kubectl", "get", "events", "-o", "json", "--field-selector", "reason=Pulled"],
+                             capture_output=True, text=True)
+        if out.returncode != 0:
+            return
+        seen: dict[str, dict] = {}
+        for e in json.loads(out.stdout).get("items", []):
+            pod = e.get("involvedObject", {}).get("name")
+            msg = e.get("message", "")
+            if not pod:
+                continue
+            rec = seen.setdefault(pod, {"seconds": 0.0, "cached": True})
+            m = re.search(r"Successfully pulled image .*? in ([^\s(]+)", msg)
+            if m:
+                rec["seconds"] += _go_duration(m.group(1))
+                rec["cached"] = False
+        with self.lock:
+            self.pulls.update(seen)
 
     def snapshot(self) -> list[dict]:
         out = subprocess.run(["kubectl", "get", "pods", "-l", ROLE, "-o", "json"],
@@ -89,6 +178,14 @@ class PodWatcher(threading.Thread):
                     rec["last_seen"] = now
                     if p["metadata"].get("deletionTimestamp") and "deleting_seen" not in rec:
                         rec["deleting_seen"] = now
+                    for k, v in _startup_times(p).items():
+                        rec.setdefault(k, v)              # the first value seen (e.g. the first time Ready)
+            if now - self._events_at >= self.EVENTS_EVERY_S:
+                self._events_at = now
+                try:
+                    self._read_pull_events()
+                except (ValueError, OSError):
+                    pass
             time.sleep(self.interval)
 
     def new_pod_during(self, tool: str, t0: float, t1: float, slack: float = 1.5) -> str | None:
@@ -117,8 +214,22 @@ class PodWatcher(threading.Thread):
         return len(self.snapshot())
 
     def pod_rows(self) -> list[dict]:
+        """Every pod seen, with its image pulls and its startup breakdown (POD_FIELDS)."""
+        try:
+            self._read_pull_events()             # the last pulls of the run
+        except (ValueError, OSError):
+            pass
         with self.lock:
-            return [dict(r) for r in self.pods.values()]
+            rows = []
+            for r in self.pods.values():
+                r = dict(r)
+                pull = self.pulls.get(r["pod"])
+                if pull:
+                    r["image_pull_s"], r["image_cached"] = round(pull["seconds"], 3), pull["cached"]
+                b = startup_breakdown(r)
+                r.update({k: v for k, v in b.items() if k != "image_pull_s"})
+                rows.append(r)
+            return rows
 
 
 def peak_pods(pods: list[dict]) -> dict:
@@ -241,6 +352,30 @@ def wait_all_ready(n_tools: int = N_TOOLS, timeout: float = 600) -> None:
         print(f"  waiting for all tools to be warm ({len(ready)}/{n_tools} ready)...", end="\r")
         time.sleep(5)
     raise SystemExit(f"Not all {n_tools} tools became ready within {timeout:.0f}s")
+
+
+def wait_scaled_down(watcher: PodWatcher, timeout: float = 600) -> float:
+    """After the last call: keep watching until every tool pod has scaled down, so the run's pod-seconds include
+    the idle window (and any scale-down-delay) its pods still live through (issue #15). Returns the seconds waited;
+    never fails the run (on timeout the pods still up are counted until then)."""
+    t0 = time.time()
+    while (n := watcher.running()) and time.time() - t0 < timeout:
+        print(f"  counting pod time until the tools scale down ({n} pods left)...", end="\r")
+        time.sleep(2)
+    print(" " * 70, end="\r")
+    time.sleep(2)                     # one more poll, so every pod's last_seen is its last moment
+    return round(time.time() - t0, 1)
+
+
+def pod_seconds(pods: list[dict], until: float | None = None) -> float:
+    """Pod time from each pod's first to last sighting (optionally cut at `until`, e.g. the end of the run)."""
+    total = 0.0
+    for p in pods:
+        a, b = float(p["first_seen"]), float(p["last_seen"])
+        if until is not None:
+            b = min(b, until)
+        total += max(0.0, b - a)
+    return round(total, 0)
 
 
 def wait_all_zero(watcher: PodWatcher, timeout: float = 600) -> None:

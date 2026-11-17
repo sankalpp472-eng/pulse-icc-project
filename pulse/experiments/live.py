@@ -22,7 +22,7 @@ Output: results/local_runs/ (kind) or results/cloud_runs/ (EKS), <date>_<time>_<
   run_config.json models, Knative settings (read from the cluster), image, database, git commit ...
   calls.csv       one row per tool call (cold/warm, latency, idle gap, think time ...)
   episodes.jsonl  one agent episode per line (full trace: steps, tool sequence, timings)
-  pods.csv        every tool pod seen (tool, created, first/last seen)
+  pods.csv        every tool pod seen (tool, created, first/last seen, and its startup breakdown for E1)
   summary.json    headline numbers
 """
 
@@ -94,8 +94,8 @@ from pulse.agent.agent import run_episode  # noqa: E402
 from pulse import paths  # noqa: E402
 from pulse.agent.tools import CALL_LOG, load_tasks  # noqa: E402
 from pulse.experiments.common import (COLD_LATENCY_S, N_TOOLS, RETAIL, WORKLOAD,  # noqa: E402
-                       PodWatcher, peak_pods, reset_db, run_config, run_dir,
-                       predictor_info, save_predictor_health,
+                       POD_FIELDS, PodWatcher, peak_pods, pod_seconds, reset_db, run_config, run_dir,
+                       predictor_info, save_predictor_health, startup_summary, wait_scaled_down,
                        shared_db, tasks_tag, wait_all_zero)
 
 CALL_FIELDS = ["episode", "task_id", "task_set", "call_idx", "tool", "t_start", "latency_ms", "cold",
@@ -167,6 +167,7 @@ def main():
     watcher.start()
     wait_all_zero(watcher)
     watcher.forget()                    # pods from before the run (e.g. an old revision) are not part of it
+    t_live = time.time()                # pods created from here on started during the run (startup breakdown)
     print(f"all {N_TOOLS} tools at zero; starting\n")
 
     calls_f = open(out_dir / "calls.csv", "w", newline="", encoding="utf-8")
@@ -220,12 +221,15 @@ def main():
         if status == "quota_exhausted":
             break
 
+    t_run_end = time.time()
+    scaled_down_after_s = wait_scaled_down(watcher)   # count the pods' idle window after the last call (issue #15)
     watcher.stop_flag = True
     calls_f.close()
+    pods = watcher.pod_rows()
     with open(out_dir / "pods.csv", "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=["pod", "tool", "created", "first_seen", "last_seen", "deleting_seen"])
+        w = csv.DictWriter(f, fieldnames=POD_FIELDS, extrasaction="ignore")
         w.writeheader()
-        w.writerows(watcher.pods.values())
+        w.writerows(pods)
 
     ok = [r for r in all_calls if r["transport_ok"]]
     cold = [r["latency_ms"] for r in ok if r["cold"]]
@@ -242,13 +246,18 @@ def main():
         "cold_p50_ms": statistics.median(cold) if cold else None,
         "warm_p50_ms": statistics.median(warm) if warm else None,
         "all_calls_p50_ms": statistics.median([r["latency_ms"] for r in ok]) if ok else None,
+        "startup": startup_summary(pods, t_live),   # E1: scheduling / image pull / init / readiness of new pods
+        "pods_started": len(pods), "pod_seconds_seen": pod_seconds(pods),
+        "pod_seconds_during_run": pod_seconds(pods, t_run_end),
+        "pod_seconds_after_run": round(pod_seconds(pods) - pod_seconds(pods, t_run_end), 0),
+        "scaled_down_after_s": scaled_down_after_s,
         "signals_agree": sum(r["cold_by_pod"] == r["cold_by_latency"] for r in ok),
         "per_tool": per_tool, "agent_model": llm.DEFAULT_MODEL, "user_model": os.environ["USER_MODEL"], "database": db,
         "config": cfg["config"], "tool_window": cfg["knative"]["tool_window"], "tool_images": cfg["tool_images"],
         "api_keys_available": len(llm.KEYS), "key_switches": llm.KEY_LOG,
         "tool_results_trimmed_from_context": n_trimmed,
         "parallel_steps": {"replies": len(par_widths), "calls": sum(par_widths), "widths": par_widths,
-                           "peak_pods_per_tool": peak_pods(watcher.pod_rows())},
+                           "peak_pods_per_tool": peak_pods(pods)},
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     save_predictor_health(a.predictor_url, out_dir)

@@ -34,7 +34,8 @@ Output: results/local_runs/ (kind) or results/cloud_runs/ (EKS), <date>_<time>_<
   run_config.json  replay parameters + Knative/cluster settings (read from the cluster), code version
   calls.csv        one row per tool call
   episodes.jsonl   one row per episode (trace source, planned gaps, timings)
-  pods.csv         every tool pod seen (tool, created, first/last seen)
+  pods.csv         every tool pod seen (tool, created, first/last seen, and its startup: scheduled, image pull,
+                   containers started, Ready -> scheduling / init / readiness seconds; summary.json "startup")
   summary.json     cold share, latency percentiles, per-tool cold share, pod-seconds
 """
 
@@ -58,8 +59,9 @@ os.environ.setdefault("TOOL_BACKEND", "mcp")
 os.environ.setdefault("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 os.environ.setdefault("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
 
-from pulse.experiments.common import (COLD_LATENCY_S, DOMAIN, N_TOOLS, RETAIL, WORKLOAD,  # noqa: E402
+from pulse.experiments.common import (COLD_LATENCY_S, DOMAIN, N_TOOLS, POD_FIELDS, RETAIL, WORKLOAD,  # noqa: E402
                        PodWatcher, peak_pods, reset_db, run_config, run_dir, predictor_info, save_predictor_health,
+                       pod_seconds, startup_summary, wait_scaled_down,
                        shared_db, tasks_tag, wait_all_ready, wait_all_zero)
 from pulse.experiments.metrics import RunMetrics  # noqa: E402
 from pulse.agent.tools import READ_ONLY_TOOLS as READ_TOOLS, LocalToolBackend, MCPToolBackend  # noqa: E402
@@ -558,6 +560,7 @@ def main():
                           "user_model": "replay", "database": db.split(" ")[0]})
     rp = Replay(a.predictor_url, a.workflow_id, out_dir / "hints.jsonl" if a.predictor_url else None,
                 a.hint_context, a.hint_timeout, metrics if metrics.on else None)
+    t_run = time.time()                 # pods created from here on started during the run (startup breakdown)
     if a.sequential:                    # one conversation at a time, each starting from the same state
         for k, e in enumerate(episodes):
             if k and scale_to_zero:
@@ -574,6 +577,10 @@ def main():
         for th in threads:
             th.join()
     time.sleep(3)              # let the watcher see the last pods
+    t_run_end = time.time()
+    # C0 / C3: the run's pods live on for their idle window after the last call; that is pod time the run caused,
+    # so keep counting until they have scaled down (C1's pods never do)
+    scaled_down_after_s = wait_scaled_down(watcher) if scale_to_zero else None
     watcher.stop_flag = True
 
     # ---- label calls: cold/warm and idle gap (needs the full pod history and all calls)
@@ -608,7 +615,7 @@ def main():
                                 "tool_time_s": round(sum(r["latency_s"] for r in mine), 2)}) + "\n")
     pods = watcher.pod_rows()
     with open(out_dir / "pods.csv", "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=["pod", "tool", "created", "first_seen", "last_seen", "deleting_seen"])
+        w = csv.DictWriter(f, fieldnames=POD_FIELDS, extrasaction="ignore")
         w.writeheader()
         w.writerows(pods)
 
@@ -634,8 +641,13 @@ def main():
         "cold_start_time_added_s": round(sum(c - warm_p50 for c in cold) / 1000, 1),
         "signals_agree": sum(r["cold_by_pod"] == r["cold_by_latency"] for r in ok),
         "pods_started": len(pods),
-        "pod_seconds_seen": round(sum(p["last_seen"] - p["first_seen"] for p in pods), 0),
+        # pod time the run caused, until its pods scaled down (C0 / C3); the part during the run and after it
+        "pod_seconds_seen": pod_seconds(pods),
+        "pod_seconds_during_run": pod_seconds(pods, t_run_end),
+        "pod_seconds_after_run": round(pod_seconds(pods) - pod_seconds(pods, t_run_end), 0),
+        "scaled_down_after_s": scaled_down_after_s,
         "peak_pods_per_tool": peak_pods(pods),
+        "startup": startup_summary(pods, t_run),     # E1: scheduling / image pull / init / readiness of new pods
         "per_tool": dict(sorted(per_tool.items(), key=lambda kv: -kv[1]["calls"])),
         "config": cfg["config"], "tool_window": cfg["knative"]["tool_window"], "database": db,
         "replay": params,

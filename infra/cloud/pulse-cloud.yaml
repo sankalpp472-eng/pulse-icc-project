@@ -27,6 +27,9 @@ rules:
   - apiGroups: [""]                                 # pod watcher, cold/warm labels, controller's pod count
     resources: ["pods", "pods/log"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]                                 # E1 startup breakdown: the kubelet's image-pull events
+    resources: ["events"]
+    verbs: ["get", "list"]
   - apiGroups: [""]                                 # Redis reset between runs (kubectl exec deploy/redis)
     resources: ["pods/exec"]
     verbs: ["create", "get"]
