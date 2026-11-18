@@ -23,16 +23,7 @@ WARM_S = 0.04            # warm call overhead (measured in-cluster: ~40 ms)
 DEFAULT_COLD_S = 1.6
 
 
-def measured_cold_s() -> dict[str, float]:
-    """Per-tool cold-start seconds from the newest EKS cold/warm check (fallback: 1.6 s for all)."""
-    files = sorted(paths.COLDSTART.glob("*_tools-cold-warm.csv"))
-    for f in reversed(files):
-        try:
-            rows = list(csv.DictReader(open(f, encoding="utf-8")))
-            return {r["tool"]: float(r["cold_ms"]) / 1000 for r in rows if r.get("cold_ms")}
-        except (OSError, KeyError, ValueError):
-            continue
-    return {}
+from pulse.controller.leases import measured_cold_s  # noqa: E402  (per-tool cold starts measured on EKS)
 
 
 INF = float("inf")

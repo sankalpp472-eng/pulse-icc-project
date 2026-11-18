@@ -66,7 +66,7 @@ from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 GROUP, VERSION, PLURAL = "pulse.iisc.ac.in", "v1alpha1", "prewarmrequests"
 from pulse import paths  # noqa: E402
-from pulse.controller.leases import LeaseBook, LeaseConfig  # noqa: E402
+from pulse.controller.leases import LeaseBook, LeaseConfig, measured_cold_s  # noqa: E402
 NS = os.getenv("CRD_NAMESPACE", "default")
 URL_TPL = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 HOST_TPL = os.getenv("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
@@ -132,8 +132,7 @@ class Controller:
         self.lock = threading.Lock()
         LOG.parent.mkdir(parents=True, exist_ok=True)
         # lease mode
-        from pulse.ui.sim_cluster import measured_cold_s     # the cold-start times a lease's value is weighed by
-        self.book = LeaseBook(LEASE_CFG, cold_s=measured_cold_s())
+        self.book = LeaseBook(LEASE_CFG, cold_s=measured_cold_s())   # a lease's value is weighed by cold starts
         self.objects: dict[str, tuple[str, str]] = {}         # tool -> (PrewarmRequest name, Knative service)
         self._free: tuple[float, int] = (0.0, 0)              # (when read, free pod slots), cached for 2 s
 
@@ -250,6 +249,7 @@ class Controller:
         nodes = self.core.list_node(label_selector=TOOL_NODES).items
         if not nodes:                               # no labelled tool nodes (kind): every untainted node
             nodes = [n for n in self.core.list_node().items if not n.spec.taints]
+        nodes = [n for n in nodes if not n.spec.unschedulable]     # a cordoned node takes no new pods
         names = {n.metadata.name for n in nodes}
         pods_alloc = sum(int(n.status.allocatable.get("pods", "110")) for n in nodes)
         cpu_alloc = sum(parse_cpu_m(n.status.allocatable.get("cpu", "0")) for n in nodes)

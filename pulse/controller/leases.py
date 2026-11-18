@@ -33,8 +33,24 @@ that ends, or a tool a real call just used, keeps a low-value idle lease for idl
 first and all shed the moment room gets tight: warmth when it is free, none when it would cost p99.
 """
 
+import csv
 import math
 from dataclasses import dataclass, field
+
+from pulse import paths
+
+
+def measured_cold_s() -> dict[str, float]:
+    """Per-tool cold-start seconds from the newest EKS cold/warm check (data/coldstart/*_tools-cold-warm.csv);
+    {} if there is none (every tool then counts as 1.6 s). Here, not in the UI package: the controller's image has
+    no pulse/ui."""
+    for f in reversed(sorted(paths.COLDSTART.glob("*_tools-cold-warm.csv"))):
+        try:
+            rows = list(csv.DictReader(open(f, encoding="utf-8")))
+            return {r["tool"]: float(r["cold_ms"]) / 1000 for r in rows if r.get("cold_ms")}
+        except (OSError, KeyError, ValueError):
+            continue
+    return {}
 
 
 @dataclass
