@@ -10,6 +10,7 @@ No cluster, Docker or LLM needed.
 
 import importlib
 import json
+import threading
 
 import pytest
 import redis
@@ -49,11 +50,12 @@ class FakePipe:
         self.ops.append(("hset", a, kw))
 
     def execute(self):
-        if self.watched and any(self.r.version.get(k, 0) != v for k, v in self.watched.items()):
-            self.ops = []
-            raise redis.exceptions.WatchError("Watched variable changed.")
-        for op, a, kw in self.ops:
-            getattr(self.r, op)(*a, **kw)
+        with self.r.lock:                    # EXEC is atomic: check the watched keys and apply, as one step
+            if self.watched and any(self.r.version.get(k, 0) != v for k, v in self.watched.items()):
+                self.ops = []
+                raise redis.exceptions.WatchError("Watched variable changed.")
+            for op, a, kw in self.ops:
+                getattr(self.r, op)(*a, **kw)
         self.ops, self.watched = [], None
         return []
 
@@ -63,6 +65,8 @@ class FakeRedis:
 
     def __init__(self):
         self.h, self.kv, self.version, self.hooks, self.watches = {}, {}, {}, {}, 0
+        self.lock = threading.RLock()
+        self.after_read = None               # called as after_read(table, key) by every HGET (thread tests)
 
     def fire(self, when):
         if when == "watch":
@@ -75,7 +79,10 @@ class FakeRedis:
         self.version[name] = self.version.get(name, 0) + 1
 
     def hget(self, name, key):
-        out = self.h.get(name, {}).get(key)
+        with self.lock:
+            out = self.h.get(name, {}).get(key)
+        if self.after_read:                  # the value is already read: a barrier here leaves it stale
+            self.after_read(name, key)
         if name == "users":
             self.fire("read")
         return out
@@ -90,11 +97,12 @@ class FakeRedis:
         return len(self.h.get(name, {}))
 
     def hset(self, name, key=None, value=None, mapping=None):
-        d = self.h.setdefault(name, {})
-        if key is not None:
-            d[key] = value
-        d.update(mapping or {})
-        self._bump(name)
+        with self.lock:
+            d = self.h.setdefault(name, {})
+            if key is not None:
+                d[key] = value
+            d.update(mapping or {})
+            self._bump(name)
 
     def delete(self, *keys):
         for k in keys:
@@ -190,3 +198,47 @@ def test_gives_up_with_a_clear_error_when_it_never_wins(server, monkeypatch):
     with pytest.raises(server.WriteConflict, match="gave up after 3 attempts"):
         add_bag(server, RES_A)
     assert balance(server) == 98
+
+
+def test_issue_reproduction_threads_with_both_reads_before_either_write(server):
+    """The issue's own scenario: two calls change DIFFERENT fields of the SAME reservation, on two threads, and a
+    barrier holds each call right after its first read of it until both have read it. 100 rounds: neither change may be lost."""
+    r = server._R
+    pristine = r.hget("reservations", RES_A)
+    gate, mine = threading.Barrier(2), threading.local()
+
+    def hold_first_read(table, key):         # each thread, having read the record, waits until the other has too
+        if table == "reservations" and key == RES_A and getattr(mine, "armed", False):
+            mine.armed = False
+            gate.wait(timeout=10)
+
+    r.after_read = hold_first_read
+    passengers = json.loads(pristine)["passengers"]
+    lost, errors = 0, []
+    for i in range(100):
+        r.hset("reservations", RES_A, pristine)
+        renamed = [{**passengers[0], "first_name": f"Round{i}"}, *passengers[1:]]
+        calls = [("update_reservation_baggages", {"reservation_id": RES_A, "total_baggages": 5,
+                                                  "nonfree_baggages": 0, "payment_id": "credit_card_2140654"}),
+                 ("update_reservation_passengers", {"reservation_id": RES_A, "passengers": renamed})]
+
+        def run(tool, args):
+            mine.armed = True
+            try:
+                out = server.invoke_tool(server.TOOLS[tool], args)
+                if out.startswith("Error"):
+                    errors.append(out)
+            except Exception as e:           # noqa: BLE001 (reported below)
+                errors.append(repr(e))
+
+        threads = [threading.Thread(target=run, args=c) for c in calls]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+        final = json.loads(r.hget("reservations", RES_A))
+        if final["total_baggages"] != 5 or final["passengers"][0]["first_name"] != f"Round{i}":
+            lost += 1
+    r.after_read = None
+    assert errors == []
+    assert lost == 0, f"rounds with a lost write: {lost}/100"

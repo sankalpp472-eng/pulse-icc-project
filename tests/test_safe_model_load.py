@@ -31,6 +31,8 @@ def calls(module: str, name: str, *args: str) -> bytes:
     ("builtins", "exec"), ("builtins", "getattr"), ("builtins", "__import__"), ("pulse.ui.backend", "BatchRun"),
     ("pulse.compat", "load"), ("pulse.predictor.action_model", "Encoder.__init__"), ("numpy", "load"),
     ("numpy", "memmap"), ("numpy.testing", "assert_equal"), ("pulse.pulse_v3.train", "main"),
+    # classes defined elsewhere that an allowed module merely imports
+    ("sklearn.feature_extraction.text", "partial"), ("numpy.ctypeslib._ctypeslib", "_ndptr_base"),
 ])
 def test_hostile_names_are_refused(tmp_path, module, name):
     marker = tmp_path / "pwned"

@@ -101,6 +101,10 @@ class Unpickler(pickle.Unpickler):
         obj = getattr(importlib.import_module(module), name)
         if not isinstance(obj, type):
             raise UnsafeModelFile(f"model file refused: {what} is a function, not a model class")
+        # defined there, not merely imported there (an allowed module re-exports e.g. functools.partial, ctypes types)
+        if not _in(obj.__module__ or "", CLASS_MODULES) or _in(obj.__module__, NOT_MODULES):
+            raise UnsafeModelFile(f"model file refused: {what} is {obj.__module__}.{obj.__qualname__}, "
+                                  f"which a model is not made of")
         if _in(module, ("numpy",)) and not _numpy_ok(obj):
             raise UnsafeModelFile(f"model file refused: it names {what}, which a model is not made of")
         return obj
