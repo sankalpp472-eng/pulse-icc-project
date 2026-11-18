@@ -20,7 +20,11 @@ Settings (environment variables):
   LOOKAHEAD        1 = on a step that is most likely a reply (P(RESPOND) >= LOOKAHEAD_MIN_RESPOND, default 0.5),
                    also prewarm the tool the agent calls after the customer's reply (P >= THETA_NEXT, default 0.4).
                    Only predictors that support it (lightgbm, markov with a lookahead model in action_model.pkl)
-  TTL_S            TTL the controller should give a prewarmed pod  (default 60)
+  TTL_S            TTL the controller should give a prewarmed pod  (default 60; with TTL_MODE=fixed, every tool)
+  TTL_MODE         step (default): TTL by when the call is expected -- TTL_STEP_S (default 20) for a next-step
+                   prediction (the agent's think time), TTL_AHEAD_S (default 75) for a lookahead one (the customer's
+                   reply first) | fixed: TTL_S for all. Only the lease controller (CONTROLLER_MODE=lease) uses it;
+                   the ping controller's TTL is the Knative idle window
   AUDIT_LOG        optional file: one JSON line per prewarm decision (FR-12)
   CRD_MODE         off | dryrun | k8s : write PrewarmRequest objects for the controller (crd_writer.py; default off)
 
@@ -50,6 +54,9 @@ LOOKAHEAD = os.getenv("LOOKAHEAD", "0") == "1"
 THETA_NEXT = float(os.getenv("THETA_NEXT", "0.4"))
 LOOKAHEAD_MIN_RESPOND = float(os.getenv("LOOKAHEAD_MIN_RESPOND", "0.5"))
 TTL_S = int(os.getenv("TTL_S", "60"))
+TTL_MODE = os.getenv("TTL_MODE", "step")                    # step | fixed
+TTL_STEP_S = int(os.getenv("TTL_STEP_S", "20"))
+TTL_AHEAD_S = int(os.getenv("TTL_AHEAD_S", "75"))
 AUDIT_LOG = os.getenv("AUDIT_LOG")
 
 PRED = predictors.load(NAME)
@@ -70,6 +77,7 @@ app.mount("/metrics", make_asgi_app(registry=REGISTRY))
 
 def policy():
     return {"name": PREWARM_POLICY, "theta": THETA, "top_k": TOP_K, "p_min": P_MIN, "ttl_s": TTL_S,
+            "ttl": {"mode": TTL_MODE, "step_s": TTL_STEP_S, "ahead_s": TTL_AHEAD_S},
             "lookahead": {"on": LOOKAHEAD and PRED.supports_lookahead, "theta_next": THETA_NEXT,
                           "min_respond": LOOKAHEAD_MIN_RESPOND}}
 
@@ -106,6 +114,7 @@ def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread p
                  if p >= THETA_NEXT and t not in NO_PREWARM and t not in k}
         k.update({t: 1 for t in ahead})
     pw = [(t, probs[t]) for t in warm] + sorted(ahead.items(), key=lambda kv: -kv[1])
+    ttl = {t: TTL_S if TTL_MODE == "fixed" else (TTL_AHEAD_S if t in ahead else TTL_STEP_S) for t, _ in pw}
     latency = time.perf_counter() - t0
 
     wf = req.workflow_id or req.domain
@@ -118,10 +127,11 @@ def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread p
             for t, p in pw:
                 f.write(json.dumps({"time": time.time(), "predictor": NAME, "tool": t, "probability": round(p, 4),
                                     "action": "prewarm-lookahead" if t in ahead else "prewarm",
-                                    "replicas": k[t], "ttl_s": TTL_S}) + "\n")
+                                    "replicas": k[t], "ttl_s": ttl[t]}) + "\n")
 
     # hand the prewarm list to the controller (background thread, returns at once)
-    WRITER.submit([(t, p, k[t]) for t, p in pw], THETA, TTL_S, episode_id=req.episode_id, workflow_id=wf)
+    WRITER.submit([(t, p, k[t], ttl[t], t in ahead) for t, p in pw], THETA, TTL_S, episode_id=req.episode_id,
+                  workflow_id=wf)
 
     used = [i for i in PRED.inputs if (i == "trajectory") or (i == "signals" and req.signals is not None)
             or (i == "history" and req.history)]
@@ -131,6 +141,6 @@ def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread p
     return PredictionOut(
         workflow_id=wf, episode_id=req.episode_id, model=NAME,
         ranked=[ActionP(tool=t, p=round(p, 6)) for t, p in ranked],
-        prewarm=[ActionP(tool=t, p=round(p, 6), k=k[t]) for t, p in pw],
-        lookahead=[ActionP(tool=t, p=round(p, 6), k=1) for t, p in ahead.items()],
+        prewarm=[ActionP(tool=t, p=round(p, 6), k=k[t], ttl_s=ttl[t]) for t, p in pw],
+        lookahead=[ActionP(tool=t, p=round(p, 6), k=1, ttl_s=ttl[t]) for t, p in ahead.items()],
         theta=THETA, ttl_s=TTL_S, latency_ms=round(latency * 1000, 3), inputs_used=used, note=note)

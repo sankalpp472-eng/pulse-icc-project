@@ -12,6 +12,9 @@
 #           WORKLOAD heldout|taubench|none (heldout; replay only: --tasks 6 20 22 26 30 or all tau-bench runs)
 #           DOMAIN airline|retail (airline): replay or live on the retail tools (Setup -> Deploy the retail tools;
 #           pass --tasks, e.g. the held-out retail tasks); the speculator is airline only
+#           CONTROLLER ping|lease (ping): C3's prewarm controller. ping = Option A, the tools' 60 s Knative window
+#           is the TTL; lease = TTLs, a reserve of free pods (LEASE_RESERVE_PODS, 4) and eviction
+#           (pulse/controller/leases.py), with the tools' window set to 6 s
 #           LABEL (cloud) · PYTHON (for deploy.sh if the tools must be redeployed) · TARGET kind|ecr (auto)
 # Needs cloud_up.sh done. Results: results/cloud_runs/ (EKS) or results/local_runs/ (kind),
 # plus controller.jsonl for C3; the pod's log goes to infra/eks/logs/.
@@ -27,6 +30,10 @@ case "$PREDICTOR" in gbt|lgbm) PREDICTOR=lightgbm ;; ngram_action) PREDICTOR=mar
 WORKLOAD=${WORKLOAD:-heldout}
 LABEL=${LABEL:-cloud}
 DOMAIN=${DOMAIN:-airline}
+CONTROLLER=${CONTROLLER:-ping}
+[ "$CONFIG" = C3 ] || CONTROLLER=ping
+LEASE_RESERVE_PODS=${LEASE_RESERVE_PODS:-4}
+want_window=$([ "$CONTROLLER" = lease ] && echo 6s || echo 60s)
 if [ "$DOMAIN" = retail ]; then
   ROLE=mcp-tool-retail; PREFIX=retail-
   [ "$PREDICTOR" = speculator ] && [ "${CONFIG}" = C3 ] && { echo "The speculator knows the airline tools only"; exit 1; }
@@ -43,23 +50,24 @@ STAMP=$(date +%Y-%m-%d_%H%M%S)
 POD="pulse-run-$(date +%m%d-%H%M%S)"
 RDIR=/home/app/results
 
-# ---- tools: scale-to-zero for C0 / C3, one warm replica for C1 (patched only if needed; the rest of each tool's
-#      settings stays as infra/knative/deploy.sh made it)
+# ---- tools: scale-to-zero for C0 / C3, one warm replica for C1, and the idle window: 60 s, or 6 s for the lease
+#      controller (patched only if needed; the rest of each tool's settings stays as infra/knative/deploy.sh made it)
 want_min=$([ "$CONFIG" = C1 ] && echo 1 || echo 0)
 [ -n "$(kubectl get ksvc -l pulse/role=$ROLE -o name)" ] || \
   { echo "No $DOMAIN tools in this cluster$([ "$DOMAIN" = retail ] && echo ' (Setup -> Deploy the retail tools)')"; exit 1; }
-have=$(kubectl get ksvc -l pulse/role=$ROLE -o jsonpath='{range .items[*]}{.spec.template.metadata.annotations.autoscaling\.knative\.dev/min-scale}{"\n"}{end}' | sort -u)
-if [ "$have" != "$want_min" ]; then
-  echo "Setting the $DOMAIN tools to min-scale $want_min ..."
+have=$(kubectl get ksvc -l pulse/role=$ROLE -o jsonpath='{range .items[*]}{.spec.template.metadata.annotations.autoscaling\.knative\.dev/min-scale}/{.spec.template.metadata.annotations.autoscaling\.knative\.dev/window}{"\n"}{end}' | sort -u)
+if [ "$have" != "$want_min/$want_window" ]; then
+  echo "Setting the $DOMAIN tools to min-scale $want_min, idle window $want_window ..."
   for s in $(kubectl get ksvc -l pulse/role=$ROLE -o name); do
     kubectl patch "$s" --type merge -p \
-      "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"autoscaling.knative.dev/min-scale\":\"$want_min\"}}}}}" >/dev/null
+      "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"autoscaling.knative.dev/min-scale\":\"$want_min\",\"autoscaling.knative.dev/window\":\"$want_window\"}}}}}" >/dev/null
   done
   kubectl wait ksvc -l pulse/role=$ROLE --for=condition=Ready --timeout=600s >/dev/null
 fi
 
 # ---- arguments for the runner
 [ "$CONFIG" = C3 ] && LABEL="$LABEL-$PREDICTOR"     # e.g. ..._cloud-lightgbm
+[ "$CONTROLLER" = lease ] && LABEL="$LABEL-lease"
 ARGS=(--label "$LABEL")
 if [ "$MODE" = replay ]; then
   case "$WORKLOAD" in
@@ -84,12 +92,14 @@ if [ "$CONFIG" = C3 ]; then
   # pulse_v3 loads its model from S3: PULSE_MODEL_URI from here, else the pulse-config ConfigMap (GitOps)
   [ "$PREDICTOR" = pulse_v3 ] && [ -n "${PULSE_MODEL_URI:-}" ] && \
     kubectl set env deploy/pulse-predictor PULSE_MODEL_URI="$PULSE_MODEL_URI" >/dev/null
+  # the controller: ping (Option A) or lease (TTLs, reserve, eviction)
+  kubectl set env deploy/pulse-controller CONTROLLER_MODE="$CONTROLLER" LEASE_RESERVE_PODS="$LEASE_RESERVE_PODS" >/dev/null
   kubectl rollout restart deploy/pulse-controller deploy/pulse-predictor >/dev/null
   kubectl rollout status deploy/pulse-controller --timeout=300s >/dev/null
   kubectl rollout status deploy/pulse-predictor --timeout=300s >/dev/null
 fi
 ARGS+=("$@")
-echo "Run $POD | $MODE $CONFIG$([ "$CONFIG" = C3 ] && echo " ($PREDICTOR)") | $DOMAIN | context $CTX"
+echo "Run $POD | $MODE $CONFIG$([ "$CONFIG" = C3 ] && echo " ($PREDICTOR, $CONTROLLER controller)") | $DOMAIN | context $CTX"
 echo "  args: ${ARGS[*]}"
 
 # ---- the run pod (on the client node if the cluster has one, so it does not compete with the tools)

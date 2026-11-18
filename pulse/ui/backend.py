@@ -34,6 +34,7 @@ PY = sys.executable                             # the agent's Python (agent/.ven
 PREDICTOR_PORT = int(os.getenv("UI_PREDICTOR_PORT", "8000"))
 PREDICTOR_URL = f"http://127.0.0.1:{PREDICTOR_PORT}"
 EKS_PREDICTOR_PORT = int(os.getenv("UI_EKS_PREDICTOR_PORT", "8010"))   # kubectl port-forward to deploy/pulse-predictor
+DEFAULT_WINDOW, LEASE_WINDOW = "60s", "6s"   # the tools' Knative idle window: ping controller / lease controller
 CONTROLLER_LOG = STATE / "controller.jsonl"
 RESULT_DIRS = {"local": paths.RESULTS / "local_runs", "cloud": paths.RESULTS / "cloud_runs",
                "load": paths.RESULTS / "load_runs"}
@@ -111,7 +112,7 @@ class Cluster:
         self.mode = "sim"
         self.domain = "airline"                 # which tau-bench tools experiment runs use (DOMAINS)
         self.context, self.reachable, self.detail = None, False, "not checked"
-        self.tools_found, self.min_scale = 0, None
+        self.tools_found, self.min_scale, self.window = 0, None, None
         self.url_tpl, self.host_tpl = None, None
         self.pods: list[dict] = []
         self.pods_at = 0.0
@@ -142,6 +143,9 @@ class Cluster:
         scales = {(i["spec"]["template"]["metadata"].get("annotations", {}) or {})
                   .get("autoscaling.knative.dev/min-scale", "0") for i in items}
         self.min_scale = int(scales.pop()) if len(scales) == 1 else None
+        windows = {(i["spec"]["template"]["metadata"].get("annotations", {}) or {})
+                   .get("autoscaling.knative.dev/window", "60s") for i in items}
+        self.window = windows.pop() if len(windows) == 1 else None
         self.reachable = self.tools_found > 0
         self.detail = f"{self.tools_found} {self.domain} tools deployed" if self.reachable else \
             "no retail tools deployed (Setup -> Deploy the retail tools)" if self.domain == "retail" else \
@@ -174,11 +178,14 @@ class Cluster:
             env["MCP_HOST_TEMPLATE"] = DOMAINS[domain]["prefix"] + (self.host_tpl or "") if self.host_tpl else ""
         return env
 
-    def set_min_scale(self, n: int, say=print) -> None:
+    def set_min_scale(self, n: int, say=print, window: str | None = None) -> None:
         """C1 = 1 (always warm), C0 / C3 = 0: patch every tool's Knative Service (a new Revision), wait for Ready.
-        The other settings (concurrency, max-scale, window) stay as infra/knative/deploy.sh set them."""
-        patch = json.dumps({"spec": {"template": {"metadata": {"annotations": {
-            "autoscaling.knative.dev/min-scale": str(n)}}}}})
+        window: also set the idle window (60s for C0 / C1 / C3 with the ping controller, 6s for the lease
+        controller, which keeps leased tools warm itself). The other settings stay as infra/knative/deploy.sh set them."""
+        ann = {"autoscaling.knative.dev/min-scale": str(n)}
+        if window:
+            ann["autoscaling.knative.dev/window"] = window
+        patch = json.dumps({"spec": {"template": {"metadata": {"annotations": ann}}}})
         code, out = _run(["kubectl", "get", "ksvc", "-l", self.role, "-o", "name"], 15)
         names = out.split() if code == 0 else []
         if not names:
@@ -187,12 +194,15 @@ class Cluster:
             code, out = _run(["kubectl", "patch", name, "--type", "merge", "-p", patch], 20)
             if code != 0:
                 raise RuntimeError(f"could not patch {name}: {out[:200]}")
-        say(f"  {len(names)} tools patched to min-scale {n}; waiting for the new revisions to be Ready ...")
+        say(f"  {len(names)} tools patched to min-scale {n}{f', window {window}' if window else ''}; "
+            "waiting for the new revisions to be Ready ...")
         code, out = _run(["kubectl", "wait", "--for=condition=Ready", "ksvc", "-l", self.role,
                           "--timeout=600s"], 620)
         if code != 0:
             raise RuntimeError(f"tools not Ready: {out[-300:]}")
         self.min_scale = n
+        if window:
+            self.window = window
         say("  tools Ready")
 
     # -------------------------------------------------------------- live state (knative mode)
@@ -473,16 +483,23 @@ class Services:
             return "the prewarm controller is not running"
         return None
 
-    def start_controller(self) -> dict:
+    def start_controller(self, mode: str = "ping", reserve: int = 4) -> dict:
+        """mode ping = Option A (the Knative window is the TTL); lease = leases with TTLs, a reserve of free pods
+        and eviction (pulse/controller/leases.py; the tools need the short window, build_run sets it)."""
         self.stop("controller")
         if CONTROLLER_LOG.exists():
             CONTROLLER_LOG.unlink()
         self.cluster._log_pos = 0
+        mode = "lease" if mode == "lease" else "ping"
         # PrewarmRequests name the service itself (retail-<tool> for retail): the airline Host template fits both domains
-        env = {**self.cluster.tool_env("airline"), "CONTROLLER_LOG": str(CONTROLLER_LOG), "MAX_REQUEST_AGE_S": "30"}
+        env = {**self.cluster.tool_env("airline"), "CONTROLLER_LOG": str(CONTROLLER_LOG), "MAX_REQUEST_AGE_S": "30",
+               "CONTROLLER_MODE": mode, "LEASE_RESERVE_PODS": str(int(reserve))}
         self.procs["controller"] = Proc("controller", [PY, "-m", "pulse.controller.prewarm_controller"], env,
-                                        {"context": self.cluster.context})
+                                        {"context": self.cluster.context, "mode": mode, "reserve": int(reserve)})
         return self.status()
+
+    def controller_mode(self) -> str | None:
+        return self.procs["controller"].info.get("mode", "ping") if self.controller_running() else None
 
     def start_bgload(self, agents: int, predictor_url: str | None) -> dict:
         """Live demo, 'background load': N more agents replaying recorded episodes (pulse/loadtest/locust_episodes.py)
@@ -992,6 +1009,11 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     """The commands for one batch run, from the form in the Experiments tab."""
     mode, config, where = spec["mode"], spec["config"], spec.get("where", "laptop")
     pred = Services.ALIASES.get(spec.get("predictor") or "lightgbm", spec.get("predictor") or "lightgbm")
+    # the prewarm controller (C3): ping = Option A, the 60 s Knative window is the TTL; lease = TTLs, a reserve of
+    # free pods and eviction (pulse/controller/leases.py), with a 6 s window so a lease's end really frees the pod
+    ctl = "lease" if config == "C3" and spec.get("controller") == "lease" else "ping"
+    reserve = max(0, int(spec.get("reserve") or 4))
+    window = LEASE_WINDOW if ctl == "lease" else DEFAULT_WINDOW
     tasks = [str(int(t)) for t in spec.get("tasks") or []]
     if cluster.domain == "retail":
         if spec.get("predictor") == "speculator" and spec.get("config") == "C3":
@@ -1030,16 +1052,16 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
                              "deploy/pulse-predictor PREWARM_POLICY=topk TOP_K=2 P_MIN=0.1 LOOKAHEAD=0 (then pick θ here)")
         label = spec.get("label") or "ui"
         cenv = {**env, "MODE": mode, "CONFIG": config, "PREDICTOR": pred, "WORKLOAD": "none", "LABEL": label,
-                "PYTHON": PY}
+                "PYTHON": PY, "CONTROLLER": ctl, "LEASE_RESERVE_PODS": str(reserve)}
         steps.append((f"{mode} {config} inside the cluster (run_cloud.sh)",
                       [b, "infra/cloud/run_cloud.sh", *args], cenv))
         return steps
 
     # ---- the runner runs on the laptop
     want = 1 if config == "C1" else 0
-    if cluster.min_scale != want:
-        steps.append((f"set the tools to min-scale {want} ({'always warm' if want else 'scale to zero'})",
-                      lambda say: cluster.set_min_scale(want, say), {}))
+    if cluster.min_scale != want or cluster.window != window:
+        steps.append((f"set the tools to min-scale {want} ({'always warm' if want else 'scale to zero'}), "
+                      f"idle window {window}", lambda say: cluster.set_min_scale(want, say, window=window), {}))
     label = spec.get("label") or "ui"
     if config == "C3":
         policy = norm_policy(spec.get("policy"))
@@ -1049,14 +1071,16 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
                 and abs(cur.info.get("theta", -1) - float(spec.get("theta", 0.3))) < 1e-9
                 and cur.info.get("policy") == policy):
             services.start_predictor(pred, float(spec.get("theta", 0.3)), crd=True, policy=policy)
-        if not services.controller_running():
-            services.start_controller()
+        cur_ctl = services.procs.get("controller")
+        if not (services.controller_running() and services.controller_mode() == ctl
+                and cur_ctl.info.get("reserve", 4) == reserve):
+            services.start_controller(ctl, reserve)
         steps.append(("__predictor__", [], {}))
         args += ["--predictor-url", PREDICTOR_URL]
         if pred in ("speculator", "pulse_v3") and mode == "replay":   # slower answers (an LLM / embeddings)
             args += ["--hint-timeout", "10"]
         tag = ("-top%d" % policy["top_k"] if policy["policy"] == "topk" else "") + ("-look" if policy["lookahead"] else "")
-        label = f"{label}-{pred}{tag}"
+        label = f"{label}-{pred}{tag}" + ("-lease" if ctl == "lease" else "")
     module = "pulse.experiments.replay" if mode == "replay" else "pulse.experiments.live"
     steps.append((f"{mode} {config}{' (' + pred + ')' if config == 'C3' else ''} "
                   "from the laptop",

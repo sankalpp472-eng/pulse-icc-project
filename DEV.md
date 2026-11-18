@@ -116,6 +116,33 @@ times concurrently through the ingress, records `Warming → Ready → Evicted/F
 line per action and serves Prometheus metrics (port 9102). Runs on the laptop (the UI starts it) or as the
 `pulse-controller` Deployment.
 
+Two modes (`CONTROLLER_MODE`):
+
+| | `ping` (default, "Option A") | `lease` |
+|---|---|---|
+| Action per request | k warm-up pings | a lease: keep the tool warm for `spec.ttlSeconds` with k pods |
+| TTL | the tools' Knative idle window (60 s), counted from the last call | per prediction from the predictor (`TTL_MODE=step`: 20 s next step, 75 s lookahead), clamped to 5–120 s; ends early when the episode's next hint stops predicting the tool |
+| How a pod stays warm | it just does until the window passes | keep-alive pings every 2 s while the lease lives; the tools get a 6 s window, so a pod goes soon after its lease ends |
+| k | the predictor's fan-out width | the same, lowered to 1 when the tool nodes are nearly full |
+| When the nodes are full | nothing: new pods sit Pending | a reserve of free pods (`LEASE_RESERVE_PODS`, 4) is never leased, so on-demand calls still find room; a new lease evicts lower-value leases (value = P × cold-start seconds saved per pod, discounted by time to expiry) or is rejected |
+| When there is room | every tool stays warm 60 s after its last call | idle warmth: a lease that ends or is superseded, and a tool a real call just started (a new pod), keep a low-value 60 s lease while free pods exceed the reserve by 8; it is evicted first and shed as soon as room gets tight |
+
+The lease policy is pure logic in `leases.py`, shared by the controller and the simulator. The controller reads free
+pod slots from the tool nodes (`TOOL_NODES`, default `pulse/role=worker`: allocatable pods and CPU minus what runs
+there). The PrewarmRequest's status records each decision (`Rejected`, `Expired`, `Evicted`, `grantedReplicas`,
+`leaseExpiresAt`, `decision`). The Experiments tab picks the mode (Controller: ping / lease, plus the reserve), and
+`run_cloud.sh` takes `CONTROLLER=lease`. Either way the tools' window is set for the run: 60 s, or 6 s for lease.
+
+`pulse/experiments/sim_capacity.py` compares C0, C1, C3 with ping and C3 with leases on the simulated cluster with
+a pod capacity, on a virtual clock (no cluster, Docker or LLM). It reports tool-call latency p50/p95/p99, cold share,
+calls that waited for a slot, and pod-seconds per capacity. First results (lightgbm, θ 0.3, 4 episodes/min, 60
+episodes, `results/sim_runs/*_final-r4`): with no limit leases match the ping controller (p99 2.1 s, cold share 0.15
+vs 0.14, about the same pod-seconds); at 24 pods p99 is 3.0 s vs 3.7 s (C0) and 68 s (ping) at under half the
+pod-seconds; at 16 pods 13.6 s vs 133 s (C0) and 284 s (ping). At 8 episodes/min and 24 pods: 6.0 s vs 42 s and 389 s.
+The simulator models pod slots, cold starts and a 10 s termination grace; not CPU contention or Knative's
+autoscaler dynamics, so these need confirming on EKS. The adaptive part of k (capping it at each tool's
+observed fan-out width) needs to see calls, so only the simulator has it; the real controller lowers k only for room.
+
 ### 3.6 `pulse.experiments`: experiment runners
 
 | Module | Role |
@@ -124,6 +151,7 @@ line per action and serves Prometheus metrics (port 9102). Runs on the laptop (t
 | `live.py` | The live agent with an LLM customer on the real tools |
 | `common.py` | Shared by both: the pod watcher (cold/warm by pod start), the Redis reset, `run_config.json`, the result folder |
 | `metrics.py` | Prometheus metrics of a run (port 9105) |
+| `sim_capacity.py` | Capacity simulation: the same episodes on the simulated cluster with a pod limit, C0 / C1 / C3-ping / C3-lease (§3.5) |
 | `plot_compare.py`, `plot_c0.py` | Comparison plots across runs |
 | `score_hints.py`, `fill_trace_args.py` | Scoring recorded hints; adding arguments to traces |
 

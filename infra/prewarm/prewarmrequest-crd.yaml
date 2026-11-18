@@ -17,6 +17,16 @@
 #   * spec.desiredReplicas = fan-out width k: a tool with fewer than k pods gets k pings at once
 #     (containerConcurrency 1 -> Knative starts k pods).
 #
+# Mechanism = lease (CONTROLLER_MODE=lease, pulse/controller/leases.py), with a short Knative idle window (~6 s):
+#   * Each request asks for a lease: keep the tool warm for spec.ttlSeconds, with k pods. The controller admits it
+#     (status.grantedReplicas, maybe fewer than asked when the tool nodes are nearly full), or evicts lower-value
+#     leases to make room, or rejects it (phase Rejected). A reserve of free pods is never leased, so on-demand
+#     calls still find room.
+#   * While a lease lives the controller pings the tool every few seconds; when it expires (phase Expired) or is
+#     evicted (phase Evicted, by the controller) the pings stop and Knative scales the tool down within the window.
+#   * A newer hint from the same episode that no longer predicts the tool ends its next-step claim early;
+#     spec.lookahead claims (the call after the customer's reply) are kept until their TTL.
+#
 # One object per tool, named after its Knative service (search-direct-flight).
 # A new prediction for the same tool UPDATES the object (new requestedAt -> new ping -> TTL restarts).
 #
@@ -61,16 +71,20 @@ spec:
                 service:         {type: string, description: "Knative service to warm, e.g. search-direct-flight"}
                 probability:     {type: number, minimum: 0, maximum: 1, description: "predicted P(next tool)"}
                 threshold:       {type: number, minimum: 0, maximum: 1, description: "theta used for this decision"}
-                ttlSeconds:      {type: integer, minimum: 1, description: "predictor's intended TTL. Option A: informational only; the real TTL is the Knative idle window (status.effectiveTtlSeconds)"}
+                ttlSeconds:      {type: integer, minimum: 1, description: "predictor's intended TTL. Lease mode: the lease length; Option A: informational only (the real TTL is the Knative idle window, status.effectiveTtlSeconds)"}
                 desiredReplicas: {type: integer, minimum: 0, maximum: 5, description: "fan-out width k from the next-action predictor (pending-ID rule); the controller sends k pings at once to a tool with fewer than k pods"}
                 requestedAt:     {type: string, format: date-time, description: "time of the latest prediction (RFC 3339); a newer value triggers a new warm-up ping"}
                 episodeId:       {type: string}
                 workflowId:      {type: string}
+                lookahead:       {type: boolean, description: "predicted for the step after the customer's reply (kept until its TTL, not superseded)"}
             status:
               type: object
               description: "Owned by the controller."
               properties:
-                phase:               {type: string, enum: [Pending, Warming, Ready, Evicted, Failed], description: "Warming = ping sent; Ready = a pod answered; Evicted = Knative scaled the tool back to zero; Failed = ping failed"}
+                phase:               {type: string, enum: [Pending, Warming, Ready, Evicted, Expired, Rejected, Failed], description: "Warming = ping sent; Ready = a pod answered; Evicted = Option A: Knative scaled the tool back to zero, lease mode: the controller gave up the lease for a higher-value one; Expired = lease mode: TTL passed; Rejected = lease mode: no room; Failed = ping failed"}
+                grantedReplicas:     {type: integer, description: "lease mode: pods granted (fewer than desiredReplicas when the tool nodes are nearly full)"}
+                leaseExpiresAt:      {type: string, format: date-time, description: "lease mode: when the keep-alive pings stop"}
+                decision:            {type: string, description: "lease mode: why it was admitted, reduced, evicted or rejected"}
                 lastRequestedAt:     {type: string, format: date-time, description: "spec.requestedAt of the last request the controller acted on"}
                 lastPingAt:          {type: string, format: date-time, description: "when the warm-up ping was sent"}
                 readyAt:             {type: string, format: date-time, description: "when the ping was answered (the pod is warm)"}

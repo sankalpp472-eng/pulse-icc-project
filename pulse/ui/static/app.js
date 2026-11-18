@@ -615,7 +615,9 @@ function expForm() {
   $("#xLook").disabled = !lookOk;
   if (!lookOk) $("#xLook").checked = false;
   $$(".x-look").forEach((e) => e.classList.toggle("hidden", !c3 || !$("#xLook").checked));
+  $$(".x-lease").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xController").value !== "lease"));
 }
+$("#xController").onchange = () => expForm();
 $("#xPred").addEventListener("change", () => expForm());
 $("#xPolicy").onchange = () => expForm();
 $("#xLook").onchange = () => expForm();
@@ -641,6 +643,7 @@ $("#xStart").onclick = async () => {
     user_delay_median: live ? $("#xUserDelay").value : null,
     policy: { policy: $("#xPolicy").value, top_k: Number($("#xTopK").value), p_min: Number($("#xPMin").value),
               lookahead: $("#xLook").checked, theta_next: Number($("#xThetaNext").value) },
+    controller: $("#xController").value, reserve: Number($("#xReserve").value),
     // load tests (loadtest/)
     target: $("#lTarget").value, engine: $("#lEngine").value, stages: $("#lStages").value.trim(),
     interactive: $("#lWeb").checked, rates: $("#lRates").value, duration: Number($("#lDuration").value),

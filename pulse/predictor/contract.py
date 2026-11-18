@@ -43,6 +43,7 @@ class ActionP(BaseModel):
     tool: str                 # a tool, RESPOND or END
     p: float
     k: Optional[int] = None   # prewarm list only: pods to start (fan-out width = desiredReplicas)
+    ttl_s: Optional[int] = None   # prewarm list only: how long to keep it warm (ttlSeconds; TTL_MODE in service.py)
 
 
 class PredictionOut(BaseModel):
