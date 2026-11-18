@@ -1,5 +1,7 @@
 # Shared airline database for the 14 MCP tools (reservations + users; flights are read-only).
-# In-memory only (no persistence): deploy.sh seeds it, the runners reset it between episodes.
+# deploy.sh seeds it, the runners reset it between episodes. The append-only file on an emptyDir keeps the data
+# across a container restart (crash, OOM kill); a new pod (scale to 0 and back, eviction, node move) starts empty,
+# and the first tool call reseeds it from the data in the tools' image (mcp_server.py, ensure_seeded).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,7 +23,10 @@ spec:
       containers:
         - name: redis
           image: redis:7.4-alpine
-          args: ["--save", "", "--appendonly", "no"]
+          args: ["--save", "", "--appendonly", "yes", "--dir", "/data"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
           ports:
             - containerPort: 6379
           readinessProbe:
@@ -34,6 +39,9 @@ spec:
               memory: 64Mi
             limits:
               memory: 256Mi
+      volumes:
+        - name: data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

@@ -116,6 +116,7 @@ class Session(threading.Thread):
         # end-to-end clock: from the first message of the conversation to the end of the episode (setup excluded)
         self.t_start = self.t_end = None
         self.tool_wait = 0.0                         # time the agent was blocked on tools (a parallel step = its slowest call)
+        self.step_t0 = None                          # when the step now waiting on tools started (None = not waiting)
         self.llm_wait = 0.0                          # live: time the agent's LLM calls waited on the API's rate limits
         self.rng = random.Random(int(cfg.get("seed", 252)))
         self.pod_s0 = sim.live_pod_seconds() if sim else None
@@ -131,7 +132,12 @@ class Session(threading.Thread):
         with self.lock:
             return {"id": self.episode_id, "state": self.state, "cfg": self.cfg, "events": self.events[after:],
                     "n": len(self.events), "t_start": self.t_start, "t_end": self.t_end,
-                    "tool_wait_s": round(self.tool_wait, 3)}
+                    "tool_wait_s": round(self.live_tool_wait(), 3)}
+
+    def live_tool_wait(self) -> float:
+        """Tool wait so far, including the step still waiting on its calls (the counter moves during a slow call)."""
+        t0 = self.step_t0
+        return self.tool_wait + (time.time() - t0 if t0 is not None else 0.0)
 
     def begin(self):
         """Start the end-to-end clock (the conversation starts now)."""
@@ -200,20 +206,24 @@ class Session(threading.Thread):
             r["t_start"] = time.time() - r["latency_s"]
             results[i] = r
 
-        if parallel and len(calls) > 1:
-            ts = [threading.Thread(target=one, args=(i, n, a)) for i, (n, a) in enumerate(calls)]
-            for t in ts:
-                t.start()
-            for t in ts:
-                t.join()
-        else:
-            for i, (n, a) in enumerate(calls):
-                self.check()
-                one(i, n, a)
+        self.step_t0 = time.time()
+        try:
+            if parallel and len(calls) > 1:
+                ts = [threading.Thread(target=one, args=(i, n, a)) for i, (n, a) in enumerate(calls)]
+                for t in ts:
+                    t.start()
+                for t in ts:
+                    t.join()
+            else:
+                for i, (n, a) in enumerate(calls):
+                    self.check()
+                    one(i, n, a)
+        finally:
+            lats = [r["latency_s"] for r in results if r]
+            if lats:                               # the agent waits for the whole step: parallel = slowest, else the sum
+                self.tool_wait += max(lats) if parallel and len(calls) > 1 else sum(lats)
+            self.step_t0 = None                    # after the add, so the live counter never dips
         outs = []
-        lats = [r["latency_s"] for r in results if r]
-        if lats:                                   # the agent waits for the whole step: parallel = slowest, else the sum
-            self.tool_wait += max(lats) if parallel and len(calls) > 1 else sum(lats)
         tags = prewarm_tags([n for n, _ in calls], [r["cold"] for r in results], self.prewarmed.get(step, {}))
         for (name, args), r, tag in zip(calls, results, tags):
             rec = {"step": step, "tool": name, "args": args, "latency_ms": round(r["latency_s"] * 1000, 1),

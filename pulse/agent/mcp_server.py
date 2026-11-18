@@ -24,11 +24,15 @@ State:
                   products) is loaded once per pod at start-up.
   python mcp_server.py --seed   loads the domain's data into Redis (and a pristine copy
                                 under seed:* that resets copy back between episodes)
+  Redis keeps no data across a restart; a tool that finds it empty reseeds it from the data in
+  the image (one pod at a time, under seed:lock). While Redis is down a pod still starts and
+  its calls fail within seconds with "DatabaseUnavailable: ..." instead of crash-looping.
 """
 
 import json
 import os
 import sys
+import time
 from collections.abc import MutableMapping
 from contextlib import AsyncExitStack, asynccontextmanager
 
@@ -102,14 +106,78 @@ class RedisTable(MutableMapping):
             self.r.hset(self.name, mapping=dirty)
 
 
+REDIS_TIMEOUT_S = float(os.getenv("REDIS_TIMEOUT_S", "3"))   # connect / command timeout: fail fast, never hang
+
+
+class DatabaseUnavailable(RuntimeError):
+    """The shared Redis database cannot be reached (or is being reseeded): the tool call fails with this
+    message instead of hanging or crashing the pod."""
+
+
 def _redis():
     import redis
-    return redis.Redis.from_url(REDIS_URL, decode_responses=True)
+    from redis.backoff import ExponentialBackoff
+    from redis.retry import Retry
+    # A Redis restart breaks the pooled connections: retry a command twice on a fresh one before giving up
+    return redis.Redis.from_url(REDIS_URL, decode_responses=True,
+                                socket_connect_timeout=REDIS_TIMEOUT_S, socket_timeout=REDIS_TIMEOUT_S,
+                                retry=Retry(ExponentialBackoff(cap=0.5, base=0.05), 2),
+                                retry_on_error=[redis.exceptions.ConnectionError, redis.exceptions.TimeoutError])
+
+
+def _redis_errors() -> tuple[type[BaseException], ...]:
+    try:
+        from redis.exceptions import RedisError
+        return (RedisError,)
+    except ImportError:
+        return ()
+
+
+def write_seed(r, data: dict) -> None:
+    """Load every table and its pristine seed:<table> copy; one transaction per table, so a reader never sees a
+    half-written table and two pods seeding at once leave the same result."""
+    for t in TABLES:
+        mapping = {k: json.dumps(v) for k, v in data[t].items()}
+        pipe = r.pipeline(transaction=True)
+        for key in (t, f"seed:{t}"):
+            pipe.delete(key)
+            pipe.hset(key, mapping=mapping)
+        pipe.execute()
+
+
+SEED_LOCK = "seed:lock"
+
+
+def ensure_seeded(r, wait_s: float = 20.0) -> bool:
+    """Make sure the domain's data is in Redis. Redis keeps no data across a restart (redis.yaml), so after one
+    the first tool that notices reloads the data baked into this image; the other pods wait for it.
+    Returns True if this call (re)seeded."""
+    keys = [*TABLES, *(f"seed:{t}" for t in TABLES)]
+    if r.exists(*keys) == len(keys):
+        return False
+    if r.set(SEED_LOCK, os.getenv("HOSTNAME", "tool"), nx=True, ex=60):
+        try:
+            if r.exists(*keys) != len(keys):
+                print(f"Redis at {REDIS_URL} has no (or partial) {DOMAIN} data (restarted?): reseeding it",
+                      flush=True)
+                write_seed(r, load_data())
+                return True
+            return False
+        finally:
+            r.delete(SEED_LOCK)
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < wait_s:                # another pod is seeding
+        time.sleep(0.2)
+        if r.exists(*keys) == len(keys):
+            return False
+    raise DatabaseUnavailable(f"the shared database (Redis at {REDIS_URL}) is being reseeded: try again")
 
 
 def reset_redis(r) -> None:
     """Restore the written tables from the pristine seed:* copies (explicit rewrite,
     so it never depends on how a Redis implementation does COPY)."""
+    if ensure_seeded(r):                                 # just reloaded from scratch = already pristine
+        return
     for t in SHARED:
         pristine = r.hgetall(f"seed:{t}")
         pipe = r.pipeline()
@@ -121,20 +189,37 @@ def reset_redis(r) -> None:
 def seed_redis():
     """Load the domain's data into Redis, plus a pristine copy (seed:<table>) used for resets."""
     r, data = _redis(), load_data()
-    for t in TABLES:
-        mapping = {k: json.dumps(v) for k, v in data[t].items()}
-        for key in (t, f"seed:{t}"):
-            r.delete(key)
-            r.hset(key, mapping=mapping)
+    write_seed(r, data)
     print(f"seeded {DOMAIN} data into {REDIS_URL}: " + ", ".join(f"{t}={len(data[t])}" for t in TABLES))
 
 
+_R = None
+
+
+def shared_db():
+    """The Redis client, with the domain's data present and the read-only table loaded in this pod.
+    Raises DatabaseUnavailable (naming the cause) if Redis is down; the next call tries again."""
+    global _R
+    try:
+        if _R is None:
+            _R = _redis()
+        ensure_seeded(_R)
+        if not STATE.get(STATIC):
+            STATE[STATIC] = {k: json.loads(v) for k, v in _R.hgetall(STATIC).items()}
+    except _redis_errors() as e:
+        raise DatabaseUnavailable(f"the shared database (Redis at {REDIS_URL}) is unavailable: "
+                                  f"{type(e).__name__}: {e}") from e
+    return _R
+
+
 if REDIS_URL and "--seed" not in sys.argv:
-    _R = _redis()
-    STATE = {STATIC: {k: json.loads(v) for k, v in _R.hgetall(STATIC).items()}}
-    if not STATE[STATIC]:
-        raise SystemExit(f"Redis at {REDIS_URL} has no {DOMAIN} data: "
-                         f"run `DOMAIN={DOMAIN} python mcp_server.py --seed` first")
+    # Load the read-only table now so a warm pod answers at once. If Redis is down the pod still starts:
+    # its calls fail fast with the cause, and recover by themselves once Redis is back.
+    STATE = {}
+    try:
+        shared_db()
+    except DatabaseUnavailable as e:
+        print(f"WARNING: {e} (tool calls will fail until it is back)", flush=True)
 else:
     STATE = {"data": load_data()}
 
@@ -143,10 +228,15 @@ def invoke_tool(tool, args: dict) -> str:
     """Run a tau-bench tool on the in-memory database, or on the shared Redis one."""
     if not REDIS_URL:
         return tool.invoke(data=STATE["data"], **args)
-    tables = {t: RedisTable(_R, t) for t in SHARED}
-    out = tool.invoke(data={STATIC: STATE[STATIC], **tables}, **args)
-    for t in tables.values():
-        t.flush()
+    r = shared_db()
+    tables = {t: RedisTable(r, t) for t in SHARED}
+    try:
+        out = tool.invoke(data={STATIC: STATE[STATIC], **tables}, **args)
+        for t in tables.values():
+            t.flush()
+    except _redis_errors() as e:
+        raise DatabaseUnavailable(f"the shared database (Redis at {REDIS_URL}) failed during the call: "
+                                  f"{type(e).__name__}: {e}") from e
     return out
 
 
@@ -165,6 +255,8 @@ def build_tool_server(name: str) -> Server:
                 content=[types.TextContent(type="text", text=f"Unknown tool {params.name}")], is_error=True)
         try:
             out, err = invoke_tool(tool, params.arguments or {}), False
+        except DatabaseUnavailable as e:  # Redis down -> say so, fast
+            out, err = f"DatabaseUnavailable: {e}", True
         except Exception as e:  # bad arguments from the LLM -> report, don't crash
             out, err = f"{type(e).__name__}: {e}", True
         return types.CallToolResult(content=[types.TextContent(type="text", text=out)], is_error=err)
@@ -190,7 +282,10 @@ def build_app(names: list[str]) -> Starlette:
 
     async def reset(request):
         if REDIS_URL:
-            reset_redis(_R)
+            try:
+                reset_redis(shared_db())
+            except (DatabaseUnavailable, *_redis_errors()) as e:
+                return PlainTextResponse(f"reset failed: {e}", status_code=503)
         else:
             STATE["data"] = load_data()
         return PlainTextResponse("database reloaded")
