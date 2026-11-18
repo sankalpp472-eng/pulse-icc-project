@@ -123,7 +123,28 @@ class Cluster:
         self.pending: list[dict] = []
         self.last_episode_start = 0.0
         self._plock = threading.Lock()
+        self.lost: str | None = None            # set when the Knative cluster in use disappears (issue #28)
         threading.Thread(target=self._poll, daemon=True).start()
+
+    CONTEXT_CHECK_S = 5.0                       # how often the poll re-reads kubectl's current context
+
+    def check_context(self) -> bool:
+        """Re-read kubectl's current context. `kind delete cluster` (from Setup or a terminal) removes the context,
+        and the UI used to keep showing it. Returns True if the cluster the Knative mode was using is gone (or
+        kubectl now points elsewhere); self.lost then says why, for the server to fall back to the simulator."""
+        code, out = _run(["kubectl", "config", "current-context"], 5)
+        ctx = out.strip() if code == 0 and out.strip() else None
+        if ctx == self.context:
+            return False
+        old, self.context = self.context, ctx
+        self.reachable, self.tools_found = False, 0
+        self.detail = f"kubectl context is now {ctx!r}" if ctx else "no kubectl context"
+        if self.mode == "knative":
+            self.lost = (f"the cluster {old!r} is gone" if old else "the cluster is gone") + \
+                        (f" (kubectl now points at {ctx!r})" if ctx else "") + ": back to the simulated cluster"
+            self.pods = []
+            return True
+        return False
 
     def detect(self) -> dict:
         code, ctx = _run(["kubectl", "config", "current-context"], 5)
@@ -197,7 +218,14 @@ class Cluster:
 
     # -------------------------------------------------------------- live state (knative mode)
     def _poll(self):
+        last_check = 0.0
         while True:
+            if time.time() - last_check >= self.CONTEXT_CHECK_S:
+                last_check = time.time()
+                try:
+                    self.check_context()
+                except Exception:                # kubectl missing or hung: try again next time
+                    pass
             if self.mode == "knative" and self.reachable:
                 code, out = _run(["kubectl", "get", "pods", "-l", self.role, "-o", "json",
                                   "--request-timeout=4s"], 6)
