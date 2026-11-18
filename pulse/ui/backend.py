@@ -133,6 +133,8 @@ class Cluster:
         and the UI used to keep showing it. Returns True if the cluster the Knative mode was using is gone (or
         kubectl now points elsewhere); self.lost then says why, for the server to fall back to the simulator."""
         code, out = _run(["kubectl", "config", "current-context"], 5)
+        if code != 0 and "current-context is not set" not in out:
+            return False                        # kubectl missing, hung or failing: no answer, so change nothing
         ctx = out.strip() if code == 0 and out.strip() else None
         if ctx == self.context:
             return False

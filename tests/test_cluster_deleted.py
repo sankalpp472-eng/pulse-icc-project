@@ -49,6 +49,15 @@ def test_unchanged_context_is_left_alone(cluster, monkeypatch):
     assert cluster.reachable and cluster.lost is None
 
 
+@pytest.mark.parametrize("failure", [(1, "FileNotFoundError"), (1, "TimeoutExpired"),
+                                     (1, "error: open /home/u/.kube/config: permission denied")])
+def test_no_answer_from_kubectl_changes_nothing(cluster, monkeypatch, failure):
+    """kubectl missing (e.g. in CI), hung or failing is not 'the cluster was deleted'."""
+    monkeypatch.setattr(backend, "_run", lambda args, timeout=10: failure)
+    assert cluster.check_context() is False
+    assert cluster.context == "kind-pulse-kn" and cluster.reachable and cluster.lost is None
+
+
 def test_simulated_mode_just_tracks_the_context(cluster, monkeypatch):
     cluster.mode = "sim"
     kubectl_context(monkeypatch, None)
