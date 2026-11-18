@@ -50,6 +50,8 @@ from prometheus_client import Counter, Histogram, start_http_server
 
 GROUP, VERSION, PLURAL = "pulse.iisc.ac.in", "v1alpha1", "prewarmrequests"
 from pulse import paths  # noqa: E402
+
+MAX_REPLICAS = 5     # desiredReplicas upper bound: keep equal to `maximum` in infra/prewarm/prewarmrequest-crd.yaml and K_CAP in predictor/action_model.py
 NS = os.getenv("CRD_NAMESPACE", "default")
 URL_TPL = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 HOST_TPL = os.getenv("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
@@ -142,7 +144,7 @@ class Controller:
             # desiredReplicas = the predictor's fan-out width k. With containerConcurrency 1 every in-flight
             # request needs its own pod, so k pings at once make Knative start k pods. A tool that already
             # has k pods gets one ping, which just restarts its idle window.
-            k = max(1, int(spec.get("desiredReplicas") or 1))
+            k = min(MAX_REPLICAS, max(1, int(spec.get("desiredReplicas") or 1)))   # same cap as the CRD schema (#34)
             n = k if before < k else 1
             ttl = self.window_s(svc)
             sent = now_iso()
