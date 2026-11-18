@@ -1,6 +1,7 @@
-# The cluster and its two managed node groups, as in infra/eks/cluster.yaml:
-#   workers  2 x m7i-flex.large, 50 GB   label pulse/role=worker   (tools, Knative, Pulse services)
-#   client   1 x m7i-flex.large, 30 GB   label + taint pulse/role=client  (run pods, UI, monitoring, training)
+# The cluster and its three managed node groups, as in infra/eks/cluster.yaml:
+#   workers  2 x m7i-flex.large, 50 GB   label pulse/role=worker   (tools, Knative)
+#   system   1 x m7i-flex.large, 30 GB   label + taint pulse/role=system  (predictor, controller, embeddings)
+#   client   1 x m7i-flex.large, 30 GB   label + taint pulse/role=client  (run pods, monitoring, training)
 
 data "aws_iam_policy_document" "eks_assume" {
   statement {
@@ -72,6 +73,27 @@ resource "aws_eks_node_group" "workers" {
     desired_size = var.workers
     min_size     = var.workers
     max_size     = var.workers
+  }
+  depends_on = [aws_iam_role_policy_attachment.node]
+}
+
+resource "aws_eks_node_group" "system" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "system"
+  node_role_arn   = aws_iam_role.node.arn
+  subnet_ids      = aws_subnet.public[*].id
+  instance_types  = [var.instance_type]
+  disk_size       = 30
+  labels          = { "pulse/role" = "system" }
+  taint {
+    key    = "pulse/role"
+    value  = "system"
+    effect = "NO_SCHEDULE"
+  }
+  scaling_config {
+    desired_size = 1
+    min_size     = 1
+    max_size     = 1
   }
   depends_on = [aws_iam_role_policy_attachment.node]
 }

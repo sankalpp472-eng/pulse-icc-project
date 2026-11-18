@@ -30,9 +30,25 @@ managedNodeGroups:
     labels:
       pulse/role: worker
 
+  # System tier: Pulse's own always-on services (pulse-predictor, pulse-controller, pulse-embed in
+  # infra/cloud/pulse-cloud.yaml), so their CPU and pod slots never compete with the tools' cold starts
+  # on the worker nodes. The taint keeps the tools off it; those Deployments tolerate it.
+  - name: system
+    instanceType: m7i-flex.large
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 1
+    volumeSize: 30
+    labels:
+      pulse/role: system
+    taints:
+      - key: pulse/role
+        value: system
+        effect: NoSchedule
+
   # Client tier in the cloud (infra/cloud/run_cloud.sh): the run pods (replay / live agent) go here,
   # so their threads and pod polling never compete with the tools' cold starts on the worker nodes.
-  # The taint keeps the tools, Knative and Pulse's own services off it; run pods tolerate it.
+  # The taint keeps the tools and Knative off it; run pods, monitoring and training tolerate it.
   - name: client
     instanceType: m7i-flex.large
     desiredCapacity: 1

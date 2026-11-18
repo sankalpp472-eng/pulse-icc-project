@@ -201,8 +201,8 @@ The runner image then carries the model, so it also works on EKS without the S3 
 ## 4. Costs and safety
 
 - The simulated cluster and kind are free.
-- An EKS session costs roughly **$1–3 per hour** (control plane ~$0.10/h plus three `m7i-flex.large` nodes and a
-  load balancer). New AWS accounts may need a vCPU quota of at least 6 for these instances.
+- An EKS session costs roughly **$1–3 per hour** (control plane ~$0.10/h plus four `m7i-flex.large` nodes and a
+  load balancer). New AWS accounts may need a vCPU quota of at least 8 for these instances.
 - The tools' load balancer on EKS only accepts your own IP address.
 - `.env` (LLM keys) is gitignored and never leaves this machine except as a Kubernetes Secret in your own cluster.
 

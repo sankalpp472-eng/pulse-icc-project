@@ -7,6 +7,9 @@
 #                     kubectl set env deploy/pulse-predictor PREDICTOR=markov   (run_cloud.sh does this per run)
 #   pulse-embed       llama.cpp server with nomic-embed-text: sentence embeddings for pulse_v3   :8091
 #   pulse-controller  watches PrewarmRequests, pings tools at http://{svc}.default.svc.cluster.local/mcp
+#
+# All three prefer the system node (pulse/role=system, infra/eks/cluster.yaml), away from the worker nodes whose
+# tool cold starts are measured. Preferred, not required: on kind or a cluster without that node they still run.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -58,6 +61,12 @@ spec:
       labels: {app: pulse-predictor, pulse/role: system}
     spec:
       serviceAccountName: pulse
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference: {matchExpressions: [{key: pulse/role, operator: In, values: [system]}]}
+      tolerations: [{key: pulse/role, operator: Equal, value: system, effect: NoSchedule}]
       containers:
         - name: predictor
           image: __IMAGE__
@@ -87,7 +96,8 @@ spec:
 # The embedding server pulse_v3 reads (PULSE_EMBED_BASE): the same llama.cpp server + nomic-embed-text-v1.5 as the
 # training Job's sidecar (infra/training/train-job.yaml), so serving and training embed text the same way.
 # The model (~140 MB GGUF) is downloaded from Hugging Face when the pod starts, into an emptyDir (kept across
-# container restarts). It prefers the client node, away from the tools whose cold starts are measured.
+# container restarts). It prefers the system node (else the client node), away from the tools whose cold starts are
+# measured.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -105,8 +115,12 @@ spec:
         nodeAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
+              preference: {matchExpressions: [{key: pulse/role, operator: In, values: [system]}]}
+            - weight: 50
               preference: {matchExpressions: [{key: pulse/role, operator: In, values: [client]}]}
-      tolerations: [{key: pulse/role, operator: Equal, value: client, effect: NoSchedule}]
+      tolerations:
+        - {key: pulse/role, operator: Equal, value: system, effect: NoSchedule}
+        - {key: pulse/role, operator: Equal, value: client, effect: NoSchedule}
       containers:
         - name: embed
           image: ghcr.io/ggml-org/llama.cpp:server
@@ -142,6 +156,12 @@ spec:
       labels: {app: pulse-controller, pulse/role: system}
     spec:
       serviceAccountName: pulse
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference: {matchExpressions: [{key: pulse/role, operator: In, values: [system]}]}
+      tolerations: [{key: pulse/role, operator: Equal, value: system, effect: NoSchedule}]
       containers:
         - name: controller
           image: __IMAGE__
