@@ -104,18 +104,45 @@ function setupParams(btn) {
            family: $("#sFamily").value, version: $("#sVersion").value.trim(), revision: $("#sRevision").value.trim(),
            latest: $("#sPubLatest").checked };
 }
+// Actions that cost money or delete something are confirmed in the page: the first click arms the button, a second
+// click within CONFIRM_MS runs it. (The browser's confirm() could be suppressed and return false silently, and the
+// click then started nothing and said nothing: issue #28.) Every outcome is written to the Log panel.
+const CONFIRM_MS = 8000;
+const setupLog = (msg) => {
+  const log = $("#sLog");
+  log.textContent = (/^No job yet\.?$/.test(log.textContent) ? "" : log.textContent + "\n") + msg;
+  log.scrollTop = log.scrollHeight;
+};
+function disarm(b) {
+  clearTimeout(b._armed);
+  b._armed = null;
+  b.textContent = b._label;
+  b.classList.remove("danger");
+}
 $("#tab-setup").addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-act]");
   if (!b) return;
   const act = b.dataset.act, info = (SETUP && SETUP.actions[act]) || {};
-  if (info.confirm && !confirm(info.confirm)) return;
+  const title = info.title || act;
+  if (info.confirm && !b._armed) {
+    b._label = b._label || b.textContent;
+    b.textContent = "Click again to confirm";
+    b.classList.add("danger");
+    b._armed = setTimeout(() => { disarm(b); setupLog(`${title}: not confirmed, nothing started.`); }, CONFIRM_MS);
+    setupLog(`${info.confirm} Click "${b._label}" again within ${CONFIRM_MS / 1000} s to go ahead.`);
+    return;
+  }
+  if (b._armed) disarm(b);
   try {
     await api("/api/setup/run", { action: act, params: setupParams(b) });
     runAfter = 0;
     $("#xLog").textContent = "";
     $("#sLog").textContent = "";
-    toast(`${info.title || act}: started (log below)`);
-  } catch (err) { toast(err.message, 8000); }
+    toast(`${title}: started (log below)`);
+  } catch (err) {
+    setupLog(`✗ ${title}: not started: ${err.message}`);
+    toast(err.message, 8000);
+  }
 });
 $("#sRefresh").onclick = loadSetup;
 $("#sStop").onclick = () => api("/api/run/stop", {});
@@ -1064,6 +1091,11 @@ async function poll() {
     state = s;
     const c = s.cluster;
     clusterSeg.set(c.mode);
+    if (s.cluster_lost) toast(s.cluster_lost.charAt(0).toUpperCase() + s.cluster_lost.slice(1), 8000);
+    if (c.context !== poll.ctx) {                          // a cluster created or deleted (here or in a terminal): #28
+      if (poll.ctx !== undefined && $("#tab-setup").classList.contains("on")) loadSetup();
+      poll.ctx = c.context;
+    }
     if (c.domain && c.domain !== shownDomain) { shownDomain = c.domain; domainSeg.set(c.domain); domainForm(c.domain); }
     if (tasksDomain && demoDomain() !== tasksDomain && !busyNow()) loadTasks(demoDomain());
     $("#ctxName").textContent = c.context ? `(${c.context.replace(/^.*@/, "")})` : "";

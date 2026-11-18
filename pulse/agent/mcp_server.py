@@ -31,6 +31,7 @@ State:
 
 import json
 import os
+import random
 import sys
 import time
 from collections.abc import MutableMapping
@@ -64,7 +65,7 @@ class RedisTable(MutableMapping):
     """One database table (e.g. reservations or users) stored as a Redis hash: key -> JSON.
 
     Records are fetched on first access and cached for the duration of ONE tool call;
-    flush() writes back only the records that changed (or were added). Iterating loads the
+    commit() writes back only the records that changed (or were added). Iterating loads the
     whole table in one HGETALL (retail's find_user_id_* scan every user)."""
 
     def __init__(self, r, name: str):
@@ -100,12 +101,44 @@ class RedisTable(MutableMapping):
     def __len__(self):
         return self.r.hlen(self.name)
 
-    def flush(self):
-        dirty = {k: s for k, v in self.cache.items() if (s := json.dumps(v)) != self.orig.get(k)}
-        if dirty:
-            self.r.hset(self.name, mapping=dirty)
+    def dirty(self) -> dict:
+        """The records this call changed or added, as JSON."""
+        return {k: s for k, v in self.cache.items() if (s := json.dumps(v)) != self.orig.get(k)}
 
 
+class WriteConflict(RuntimeError):
+    """Another tool call changed a record this call read, between our read and our write (issue #31)."""
+
+
+def commit(r, tables: list[RedisTable]) -> None:
+    """Write back what one tool call changed, atomically and only if nothing it read changed meanwhile.
+
+    A tool call is a read-modify-write of whole records (e.g. book_reservation reads the user, takes the payment,
+    writes the user back). Two concurrent calls on different pods used to both read the same version and the later
+    HSET silently overwrote the earlier one (a lost update). Now: WATCH the tables, check that every record this call
+    read still has the value it read (a record it created must still be absent), then MULTI/HSET/EXEC. If anything
+    changed, raise WriteConflict and invoke_tool reruns the call on fresh data. Read-only calls write nothing and skip
+    this entirely."""
+    dirty = {t.name: d for t in tables if (d := t.dirty())}
+    if not dirty:
+        return
+    import redis
+    with r.pipeline() as pipe:
+        try:
+            pipe.watch(*(t.name for t in tables))
+            for t in tables:
+                keys = list(t.orig)
+                if keys and pipe.hmget(t.name, keys) != [t.orig[k] for k in keys]:
+                    raise WriteConflict(f"{t.name} changed during the call")
+            pipe.multi()
+            for name, mapping in dirty.items():
+                pipe.hset(name, mapping=mapping)
+            pipe.execute()
+        except redis.exceptions.WatchError as e:
+            raise WriteConflict("a watched table changed before the write") from e
+
+
+WRITE_RETRIES = int(os.getenv("TOOL_WRITE_RETRIES", "8"))   # reruns of a tool call that lost a write race
 REDIS_TIMEOUT_S = float(os.getenv("REDIS_TIMEOUT_S", "3"))   # connect / command timeout: fail fast, never hang
 
 
@@ -229,15 +262,20 @@ def invoke_tool(tool, args: dict) -> str:
     if not REDIS_URL:
         return tool.invoke(data=STATE["data"], **args)
     r = shared_db()
-    tables = {t: RedisTable(r, t) for t in SHARED}
-    try:
-        out = tool.invoke(data={STATIC: STATE[STATIC], **tables}, **args)
-        for t in tables.values():
-            t.flush()
-    except _redis_errors() as e:
-        raise DatabaseUnavailable(f"the shared database (Redis at {REDIS_URL}) failed during the call: "
-                                  f"{type(e).__name__}: {e}") from e
-    return out
+    for attempt in range(WRITE_RETRIES + 1):
+        tables = {t: RedisTable(r, t) for t in SHARED}       # fresh reads on every attempt
+        try:
+            out = tool.invoke(data={STATIC: STATE[STATIC], **tables}, **args)
+            commit(r, list(tables.values()))
+            return out
+        except WriteConflict:
+            if attempt == WRITE_RETRIES:
+                raise WriteConflict(f"gave up after {WRITE_RETRIES + 1} attempts: other calls kept changing the "
+                                    f"same records") from None
+            time.sleep(random.uniform(0, 0.005 * 2 ** attempt))   # back off a little, then rerun on fresh data
+        except _redis_errors() as e:
+            raise DatabaseUnavailable(f"the shared database (Redis at {REDIS_URL}) failed during the call: "
+                                      f"{type(e).__name__}: {e}") from e
 
 
 def build_tool_server(name: str) -> Server:
