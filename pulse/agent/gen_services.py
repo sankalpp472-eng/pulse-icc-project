@@ -75,8 +75,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--domain", choices=sorted(PACKAGES), default="airline")
     ap.add_argument("--image", default=None,
-                    help="default docker.io/sankalps2003/pulse-mcp-tools:0.2 (airline) / :0.3 (retail; "
-                         "0.2 has no retail tools)")
+                    help="default docker.io/sankalps2003/pulse-mcp-tools:0.4 (both domains; reseeds Redis "
+                         "after a restart, issue #25)")
     ap.add_argument("--redis-url", default=None,
                     help="shared database for all tools (default redis://redis.default.svc.cluster.local:6379/0, "
                          "/1 for retail); '' = each pod keeps its own in-memory copy")
@@ -96,7 +96,7 @@ def main():
     retail = a.domain == "retail"
     if a.redis_url is None:
         a.redis_url = f"redis://redis.default.svc.cluster.local:6379/{1 if retail else 0}"
-    a.image = a.image or f"docker.io/sankalps2003/pulse-mcp-tools:{'0.3' if retail else '0.2'}"
+    a.image = a.image or "docker.io/sankalps2003/pulse-mcp-tools:0.4"
     a.out = a.out or str(paths.INFRA / "knative" / ("tools-retail.yaml" if retail else "tools.yaml"))
     prefix, role = ("retail-", "mcp-tool-retail") if retail else ("", "mcp-tool")
     domain_env = ("\n            - name: DOMAIN"
