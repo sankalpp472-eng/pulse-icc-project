@@ -69,6 +69,30 @@ class KnativeTools:
         return {"out": out, "latency_s": lat, "cold": lat > COLD_LATENCY_S, "wait_s": None}
 
 
+# ====================================================================== prewarm tags
+def prewarm_tags(names: list[str], cold: list[bool], asked: dict[str, int]) -> list[dict]:
+    """How prewarming served each call of one step (issue #21). The predictor asked for k pods of a tool; a step
+    may call that tool more often than k (parallel lookups). Per tool, at most k calls are covered by the prewarm:
+      prewarmed     served warm, covered by a prewarmed pod (a hit)   -> Cold + Prewarmed never exceeds Calls
+      prewarm_late  covered, but the pod was not ready in time: the call was cold anyway
+      neither       the tool was not prewarmed, or the call was beyond the k pods asked for
+    Parallel calls are not ordered, so the warm calls take the covered slots first."""
+    out = [{"prewarmed": False, "prewarm_late": False, "prewarm_k": asked.get(n, 0)} for n in names]
+    for tool in set(names):
+        k = asked.get(tool, 0)
+        if not k:
+            continue
+        idx = [i for i, n in enumerate(names) if n == tool]
+        slots = min(k, len(idx))
+        hits = [i for i in idx if not cold[i]][:slots]
+        late = [i for i in idx if cold[i]][:slots - len(hits)]
+        for i in hits:
+            out[i]["prewarmed"] = True
+        for i in late:
+            out[i]["prewarm_late"] = True
+    return out
+
+
 # ====================================================================== the session
 class Session(threading.Thread):
     def __init__(self, cfg: dict, cluster, sim, predictor_url: str | None, record_dir: Path | None = None):
@@ -200,11 +224,11 @@ class Session(threading.Thread):
                 self.tool_wait += max(lats) if parallel and len(calls) > 1 else sum(lats)
             self.step_t0 = None                    # after the add, so the live counter never dips
         outs = []
-        warm = self.prewarmed.get(step, {})
-        for (name, args), r in zip(calls, results):
+        tags = prewarm_tags([n for n, _ in calls], [r["cold"] for r in results], self.prewarmed.get(step, {}))
+        for (name, args), r, tag in zip(calls, results, tags):
             rec = {"step": step, "tool": name, "args": args, "latency_ms": round(r["latency_s"] * 1000, 1),
                    "cold": r["cold"], "wait_ms": None if r["wait_s"] is None else round(r["wait_s"] * 1000),
-                   "prewarmed": name in warm, "parallel": len(calls) if parallel and len(calls) > 1 else 1,
+                   **tag, "parallel": len(calls) if parallel and len(calls) > 1 else 1,
                    "result": r["out"][:300]}
             self.calls.append(rec)
             self.emit("call", **rec)
@@ -271,7 +295,9 @@ class Session(threading.Thread):
         during = round(self.sim.live_pod_seconds() - self.pod_s0, 1) if self.sim else None
         after = round(self.sim.pending_pod_seconds(), 1) if self.sim else None
         return {"calls": n, "cold": len(cold), "cold_share": round(len(cold) / n, 3) if n else None,
-                "prewarmed_hits": sum(c["prewarmed"] for c in self.calls),
+                "prewarmed_hits": sum(c["prewarmed"] for c in self.calls),     # served warm by a prewarm (<= calls - cold)
+                "prewarm_late": sum(c.get("prewarm_late", False) for c in self.calls),
+                "prewarm_requested_calls": sum(c.get("prewarm_k", 0) > 0 for c in self.calls),
                 "cold_wait_s": round(sum(c["latency_ms"] for c in cold) / 1000, 2),
                 "mean_ms": round(sum(lat) / n, 1) if n else None,
                 "p95_ms": lat[min(n - 1, int(0.95 * n))] if n else None,
