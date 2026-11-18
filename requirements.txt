@@ -1,6 +1,7 @@
 # Everything the pulse package needs on a laptop (scripts/setup.sh installs it into .venv).
 # Pinned to one tested, mutually consistent set (#32): a clean install resolves the same versions months later, so the
 # model pickles load and the API contract holds. boto3 and locust stay floors (not model/API dependencies).
+# setuptools is pinned too: the one a new venv ships (65.5.0) has known advisories. scripts/setup.sh upgrades pip itself.
 # The cluster image pins its own versions: infra/cloud/requirements.txt.
 
 # the agent, the simulated customer and the speculator: OpenAI-compatible LLM APIs (Groq, OpenRouter, Ollama)
@@ -32,3 +33,4 @@ six>=1.16                      # pip once picked boto3 0.0.3 + six 1.7.3, whose 
 locust>=2.20
 httpx==0.28.1
 matplotlib==3.11.2
+setuptools==84.2.1
