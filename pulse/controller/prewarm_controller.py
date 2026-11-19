@@ -17,12 +17,12 @@ It never evicts anything: Knative scales the tool back to zero after its idle wi
 (autoscaling.knative.dev/window) without traffic, so that window IS the TTL. A sweeper marks
 objects Evicted once their tool is back at zero pods, for the record (NFR-8 / E7).
 
-CONTROLLER_MODE=lease instead (pulse/controller/leases.py; give the tools a short idle window, ~6 s):
-every request asks for a lease of spec.ttlSeconds with k pods. The controller reads the tool nodes' free pod
-slots (allocatable pods and CPU minus what runs there), admits the lease if it fits next to a reserve of free pods
-kept for on-demand calls, lowers k, evicts lower-value leases, or rejects it (status.phase, status.decision).
-A keep-alive loop pings every leased tool every KEEPALIVE_S; when a lease expires, is superseded by the episode's
-next hint, or is evicted, the pings stop and Knative scales the tool down within its short window.
+CONTROLLER_MODE=lease instead (pulse/controller/leases.py): admission control for prewarms, with the same 60 s
+window. The controller reads the tool nodes' free pod slots (allocatable pods, and CPU in tool pods of TOOL_CPU_M,
+minus what runs there and the tool pods waiting for a slot) and lets a prediction start only the NEW pods that fit
+next to a reserve kept for on-demand calls: all of them, fewer (k lowered), or none (a cold tool is rejected; a
+warm one just gets its window refreshed). status.phase / grantedReplicas / decision record it. A lease lasts
+spec.ttlSeconds; one that outlives the window gets one extending ping before the window runs out.
 
 Run from the project root, with the agent's Python (needs `kubernetes`), next to the predictor:
 
@@ -40,14 +40,35 @@ Settings (environment):
   CONTROLLER_LOG     one JSON line per action (default results/controller.jsonl)
   CONTROLLER_METRICS_PORT  Prometheus /metrics on this port (default 9102; 0 = off), see infra/monitoring/
   CONTROLLER_MODE    ping (default, Option A) | lease
+  both modes, how many pods a prediction of k parallel calls gets (leases.rule_k):
+  K_RULE             1 (default): min(k, ceil(k * the tool's warm call time / K_BUDGET_S)); 0 = k as predicted
+  K_BUDGET_S         queueing one pod may add before another pod is worth it (default 0.3)
+  TOOL_WARM_S        a warm call's time in seconds, every tool (default 0.05: the tau-bench tools take ~45 ms)
+  TOOL_WARM_S_JSON   per-tool times overriding it, e.g. {"search_onestop_flight": 0.4}
+  K_ADAPT            1: learn both at runtime (pulse/controller/adaptive.py): warm times from Prometheus (PROM_URL,
+                     every WARM_POLL_S 60; the settings above until a tool has WARM_MIN_CALLS 5 warm calls), the
+                     budget scaled by the tool's cold start (from this controller's pings to tools at zero pods,
+                     vs REF_COLD_S 1.5) and by how full the tool nodes are (K_FREE_HIGH 6 free slots = not full)
+  adaptive top-k (both modes; the predictor's PREWARM_POLICY=adaptive, its candidates carry spec.hitRate):
+  TOPK_PRICE_S       a pod slot's price with room, in seconds of cold start (default 0.075: a 1.5 s tool from a 5 %
+                     chance); a candidate is warmed only if hitRate x the tool's cold start reaches (1 - hitRate) x
+                     the price (only a wrong prewarm wastes a slot)
+  TOPK_FULL_X        the price's multiple when the tool nodes are full or pods wait for a slot (default 10)
+  ping mode, how long prewarmed pods live (pulse/controller/refresh.py; every one off by default):
+  REFRESH_POLICY     always (default: every prediction pings) | never (a warm tool is not pinged: only real calls
+                     extend its pods) | value (pinged only if p >= a threshold rising from 0 at REFRESH_FREE_HIGH
+                     free slots to REFRESH_P_MAX at none; defaults 6, 0.8)
+  SHED_P             while tool pods wait for a slot, predictions below this neither start nor refresh pods (0 = off)
+  per-tool idle windows: set on the Knative services (TOOL_WINDOWS=per-tool in run_cloud.sh / the UI), not here
   lease mode:
-  KEEPALIVE_S        seconds between keep-alive pings to a leased tool (default 2; keep it under the idle window)
-  LEASE_RESERVE_PODS free pods prewarms never take (default 4)
-  LEASE_K_MAX        most pods one lease holds (default 5)
+  LEASE_RESERVE_PODS free pod slots prewarms never take (default 4)
+  LEASE_K_MAX        most pods one prediction may ask for (default 5)
   LEASE_TTL_MIN_S, LEASE_TTL_MAX_S   clamp for spec.ttlSeconds (default 5, 120)
+  TOOL_WINDOW_S      the tools' Knative idle window (default 60)
   TOOL_NODES         label selector of the nodes the tools run on (default pulse/role=worker; none found = every
-                     node without a taint, e.g. kind)
-  TOOL_CPU_M         a tool pod's CPU request in millicores, to turn free CPU into pod slots (default 50)
+                     node without a taint, e.g. kind); cordoned nodes count as full
+  TOOL_CPU_M         CPU a tool pod requests in millicores, Knative's queue-proxy sidecar included, to turn free CPU
+                     into pod slots (default 75 = the tool's 50 + queue-proxy's 25)
 """
 
 import json
@@ -66,7 +87,9 @@ from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 GROUP, VERSION, PLURAL = "pulse.iisc.ac.in", "v1alpha1", "prewarmrequests"
 from pulse import paths  # noqa: E402
-from pulse.controller.leases import LeaseBook, LeaseConfig, measured_cold_s  # noqa: E402
+from pulse.controller.leases import LeaseBook, LeaseConfig, rule_k  # noqa: E402
+from pulse.controller.refresh import RefreshConfig, decide  # noqa: E402
+from pulse.controller.adaptive import K_FREE_HIGH, Estimates, budget, query_warm, worth_warming  # noqa: E402
 NS = os.getenv("CRD_NAMESPACE", "default")
 URL_TPL = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 HOST_TPL = os.getenv("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
@@ -75,13 +98,37 @@ LOG = Path(os.getenv("CONTROLLER_LOG") or paths.RESULTS / "controller.jsonl")
 PING = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}).encode()
 METRICS_PORT = int(os.getenv("CONTROLLER_METRICS_PORT", "9102"))
 MODE = os.getenv("CONTROLLER_MODE", "ping")             # ping | lease
-KEEPALIVE_S = float(os.getenv("KEEPALIVE_S", "2"))
+LEASE_TICK_S = 2.0                                       # how often the lease clock runs
+K_RULE = os.getenv("K_RULE", "1") != "0"
+K_BUDGET_S = float(os.getenv("K_BUDGET_S", "0.3"))
+TOOL_WARM_S = float(os.getenv("TOOL_WARM_S", "0.05"))
+TOOL_WARM = json.loads(os.getenv("TOOL_WARM_S_JSON") or "{}")
+REFRESH = RefreshConfig.from_env()                       # ping mode: refresh / skip / shed (refresh.py)
+K_ADAPT = os.getenv("K_ADAPT", "0") == "1"               # learn the k rule's warm time and budget (adaptive.py)
+PROM_URL = os.getenv("PROM_URL", "")
+WARM_POLL_S = float(os.getenv("WARM_POLL_S", "60"))
+ESTIMATES = Estimates(TOOL_WARM_S, TOOL_WARM)
+
+
+def k_inputs(tool: str, free: int | None = None) -> tuple[float, float]:
+    """(warm call time, queueing budget) for the k rule: the settings, or with K_ADAPT=1 what was learned at
+    runtime (adaptive.py: warm medians from Prometheus, the tool's measured cold start, how full the nodes are)."""
+    if not K_ADAPT:
+        return float(TOOL_WARM.get(tool, TOOL_WARM_S)), K_BUDGET_S
+    return ESTIMATES.warm(tool), budget(K_BUDGET_S, ESTIMATES.cold(tool), K_FREE_HIGH if free is None else free)
+
+
+def pods_for(tool: str, k_predicted, free: int | None = None) -> int:
+    """The pods a prediction gets: the predictor's fan-out k, cut by the k rule (fast tools: 1)."""
+    k = max(1, int(k_predicted or 1))
+    return rule_k(k, *k_inputs(tool, free)) if K_RULE else k
 TOOL_NODES = os.getenv("TOOL_NODES", "pulse/role=worker")
-TOOL_CPU_M = int(os.getenv("TOOL_CPU_M", "50"))
+TOOL_CPU_M = int(os.getenv("TOOL_CPU_M", "75"))         # 50m tool + 25m Knative queue-proxy (measured on EKS)
 LEASE_CFG = LeaseConfig(reserve_pods=int(os.getenv("LEASE_RESERVE_PODS", "4")),
                         k_max=int(os.getenv("LEASE_K_MAX", "5")),
                         ttl_min_s=float(os.getenv("LEASE_TTL_MIN_S", "5")),
                         ttl_max_s=float(os.getenv("LEASE_TTL_MAX_S", "120")),
+                        window_s=float(os.getenv("TOOL_WINDOW_S", "60")),
                         adapt_k=False)      # the controller cannot see calls, only pods: k varies with room instead
 
 # ---- Prometheus metrics (FR-11): what the controller did, as counters the dashboards can rate()
@@ -94,9 +141,14 @@ EVICTIONS = Counter("pulse_controller_evictions_total", "Tools seen back at zero
 WARM_SECONDS = Histogram("pulse_controller_warm_seconds", "Time from a warm-up's readyAt to the tool's scale-down",
                          buckets=(30, 60, 75, 90, 120, 180, 300, 600))
 LEASES = Counter("pulse_controller_lease_decisions_total", "Lease mode: what happened to a lease",
-                 ["decision"])     # admit | reduced | reject | evicted | expired | superseded
+                 ["decision"])     # admit | reduced | reject | extended | expired
 FREE_PODS = Gauge("pulse_controller_free_pods", "Lease mode: free pod slots on the tool nodes")
-HELD_PODS = Gauge("pulse_controller_leased_pods", "Lease mode: pods the live leases hold")
+LEASED = Gauge("pulse_controller_leases", "Lease mode: live leases")
+NEW_PODS = Counter("pulse_controller_lease_pods_total", "Lease mode: new pods asked for and started by prewarms",
+                   ["kind"])       # asked | started
+SKIPS = Counter("pulse_controller_skips_total", "Predictions not acted on (refresh.py, adaptive.py)",
+                ["why"])           # refresh (a warm tool not worth refreshing) | pressure (shed while pods wait) |
+                                   # topk (an adaptive top-k candidate not worth a slot now)
 
 
 def parse_cpu_m(q: str) -> int:
@@ -132,9 +184,10 @@ class Controller:
         self.lock = threading.Lock()
         LOG.parent.mkdir(parents=True, exist_ok=True)
         # lease mode
-        self.book = LeaseBook(LEASE_CFG, cold_s=measured_cold_s())   # a lease's value is weighed by cold starts
+        self.book = LeaseBook(LEASE_CFG)
         self.objects: dict[str, tuple[str, str]] = {}         # tool -> (PrewarmRequest name, Knative service)
         self._free: tuple[float, int] = (0.0, 0)              # (when read, free pod slots), cached for 2 s
+        self._pending = 0                                     # tool pods waiting for a slot, read with _free
 
     # ------------------------------------------------------------------ helpers
     def log(self, **rec):
@@ -177,6 +230,14 @@ class Controller:
             code = e.code              # any answer FROM THE POD (even 4xx) proves it is up ...
         return code, int((time.perf_counter() - t0) * 1000)
 
+    def skip(self, name: str, spec: dict, requested: str, why: str, kind: str, **extra):
+        """A prediction not acted on: status Skipped, one log line, the skips metric."""
+        SKIPS.labels(kind).inc()
+        self.set_status(name, phase="Skipped", lastRequestedAt=requested, message=why[:300])
+        self.log(event="skipped", why=kind, tool=spec["tool"], service=spec["service"],
+                 probability=spec.get("probability"), rank=spec.get("rank"), hit_rate=spec.get("hitRate"),
+                 episode=spec.get("episodeId"), reason=why, **extra)
+
     def warm(self, obj: dict, k: int | None = None):
         name, spec = obj["metadata"]["name"], obj["spec"]
         svc, requested = spec["service"], spec["requestedAt"]
@@ -186,7 +247,21 @@ class Controller:
             # desiredReplicas = the predictor's fan-out width k. With containerConcurrency 1 every in-flight
             # request needs its own pod, so k pings at once make Knative start k pods. A tool that already
             # has k pods gets one ping, which just restarts its idle window. Lease mode passes the granted k.
-            k = max(1, int(k or spec.get("desiredReplicas") or 1))
+            topk = spec.get("hitRate") is not None    # an adaptive top-k candidate (pulse/predictor/policy.py)
+            room = self.capacity() if (REFRESH.needs_capacity() or K_ADAPT or topk) and MODE == "ping" else None
+            k = max(1, int(k)) if k else pods_for(spec["tool"], spec.get("desiredReplicas"), room and room[0])
+            if MODE == "ping":
+                if topk:                              # adaptive.py: worth a pod slot now?
+                    ok, why = worth_warming(spec["hitRate"], ESTIMATES.cold(spec["tool"]), *room)
+                    if not ok:
+                        return self.skip(name, spec, requested, why, "topk", pods_before=before, free_pods=room[0],
+                                         pending_pods=room[1])
+                free, pending = room if REFRESH.needs_capacity() else (0, 0)
+                action, why = decide(spec.get("probability") or 0.0, before, k, REFRESH, free, pending)
+                if action == "skip":                  # refresh.py: not worth refreshing, or shed under pressure
+                    return self.skip(name, spec, requested, why, "pressure" if why.startswith("pressure") else
+                                     "refresh", pods_before=before, desired_replicas=k, free_pods=free,
+                                     pending_pods=pending, refresh_policy=REFRESH.policy)
             n = k if before < k else 1
             ttl = self.window_s(svc)
             sent = now_iso()
@@ -196,6 +271,8 @@ class Controller:
                 results = list(pool.map(lambda _: self.ping(svc, spec["tool"]), range(n)))
             codes = [c for c, _ in results]
             ms = max(m for _, m in results)
+            if cold:                                  # a ping to a tool at zero pods: its cold start (adaptive.py)
+                ESTIMATES.observe_cold(spec["tool"], ms / 1000)
             bad = [c for c in codes if c in (404, 502, 503, 504)]   # ... but these come from the ingress/activator
             if bad:
                 raise RuntimeError(f"ingress answered HTTP {bad[0]} to {len(bad)} of {n} pings")
@@ -211,9 +288,12 @@ class Controller:
             PINGS.labels(spec["tool"]).inc(n)
             PING_SECONDS.labels(str(cold).lower()).observe(ms / 1000)
             self.log(event="warmed", tool=spec["tool"], service=svc, was_cold=cold, ping_ms=ms, http=codes[0],
-                     desired_replicas=k, pings=n, pods_before=before, pods_after=self.pods(svc),
+                     desired_replicas=k, predicted_k=spec.get("desiredReplicas"), pings=n, pods_before=before,
+                     pods_after=self.pods(svc),
                      probability=spec.get("probability"), episode=spec.get("episodeId"), requested_at=requested,
-                     effective_ttl_s=ttl)
+                     effective_ttl_s=ttl, **dict(zip(("k_warm_s", "k_budget_s"),
+                                                     (round(x, 4) for x in k_inputs(spec["tool"],
+                                                                                   room and room[0])))))
         except Exception as e:
             FAILURES.labels(spec.get("tool", "")).inc()
             self.set_status(name, phase="Failed", message=f"{type(e).__name__}: {e}"[:300])
@@ -241,8 +321,9 @@ class Controller:
 
     # ------------------------------------------------------------------ lease mode
     def free_pods(self) -> int:
-        """Free pod slots on the tool nodes: allocatable pods and CPU (in tool-pod requests) minus what runs there,
-        counting unscheduled tool pods too (they are about to take room). Cached for 2 s."""
+        """Free pod slots on the tool nodes: allocatable pods and CPU (in tool pods of TOOL_CPU_M, queue-proxy
+        included) minus what runs there, and minus the tool pods waiting for a slot (they get the next free one).
+        Cached for 2 s."""
         when, val = self._free
         if time.time() - when < 2:
             return val
@@ -253,108 +334,103 @@ class Controller:
         names = {n.metadata.name for n in nodes}
         pods_alloc = sum(int(n.status.allocatable.get("pods", "110")) for n in nodes)
         cpu_alloc = sum(parse_cpu_m(n.status.allocatable.get("cpu", "0")) for n in nodes)
-        used_pods = used_cpu = 0
+        used_pods = used_cpu = pending = 0
         for p in self.core.list_pod_for_all_namespaces(field_selector="status.phase!=Succeeded,status.phase!=Failed").items:
             pending_tool = not p.spec.node_name and "serving.knative.dev/service" in (p.metadata.labels or {})
+            pending += pending_tool
             if p.spec.node_name in names or pending_tool:
                 used_pods += 1
                 used_cpu += sum(parse_cpu_m(((c.resources and c.resources.requests) or {}).get("cpu", "0"))
                                 for c in p.spec.containers)
         free = max(0, min(pods_alloc - used_pods, (cpu_alloc - used_cpu) // max(1, TOOL_CPU_M)))
         self._free = (time.time(), free)
+        self._pending = pending
         FREE_PODS.set(free)
         return free
 
+    def capacity(self) -> tuple[int, int]:
+        """(free pod slots, tool pods waiting for a slot), from the same 2 s cache."""
+        free = self.free_pods()
+        return free, self._pending
+
     def lease(self, obj: dict):
-        """One request in lease mode: ask the lease book, record the decision, warm the tool if it needs pods."""
+        """One request in lease mode: ask the lease book how many new pods may start, record it, warm the tool."""
         name, spec = obj["metadata"]["name"], obj["spec"]
         tool, svc, requested = spec["tool"], spec["service"], spec["requestedAt"]
         self.objects[tool] = (name, svc)
-        free = self.free_pods()
-        cold = self.pods(svc) == 0
+        free, have = self.free_pods(), self.pods(svc)
+        if spec.get("hitRate") is not None:         # adaptive top-k: is this candidate worth a slot now?
+            ok, why = worth_warming(spec["hitRate"], ESTIMATES.cold(tool), free, self._pending)
+            if not ok:
+                return self.skip(name, spec, requested, why, "topk", had=have, free_pods=free,
+                                 pending_pods=self._pending)
+        want = pods_for(tool, spec.get("desiredReplicas"), free)
         with self.lock:
-            d = self.book.request(tool, spec.get("episodeId") or name, float(spec.get("probability") or 0),
-                                  int(spec.get("desiredReplicas") or 1), float(spec.get("ttlSeconds") or 0),
-                                  time.time(), free, lookahead=bool(spec.get("lookahead")))
+            d = self.book.request(tool, spec.get("episodeId") or name, want,
+                                  float(spec.get("ttlSeconds") or 0), time.time(), free, have)
             lease = self.book.leases.get(tool)
-            held = self.book.held_pods()
-            start = d.action != "reject" and (d.extra > 0 or cold) and svc not in self.in_flight
+            start = d.action != "reject" and svc not in self.in_flight
             if start:
                 self.in_flight.add(svc)
-        HELD_PODS.set(held)
+            LEASED.set(len(self.book.leases))
         LEASES.labels(d.action).inc()
-        for t in d.evict:
-            self.end_lease(t, "Evicted", f"evicted to make room for {tool}: lower value", "evicted")
-        for t in d.ended:
-            self.end_lease(t, "Expired", "superseded: the episode's next hint no longer predicts it", "superseded")
+        NEW_PODS.labels("asked").inc(max(0, min(want, LEASE_CFG.k_max) - have))
+        NEW_PODS.labels("started").inc(d.new)
+        if d.new:                                   # pods are about to start: the cached free count is stale
+            self._free = (0.0, 0)
+        self.log(event="leased" if d.action != "reject" else "rejected", tool=tool, service=svc, action=d.action,
+                 granted=d.k, new_pods=d.new, had=have, asked=spec.get("desiredReplicas"), ttl_s=spec.get("ttlSeconds"),
+                 free_pods=free, reason=d.reason, probability=spec.get("probability"), episode=spec.get("episodeId"))
         if d.action == "reject":
             self.set_status(name, phase="Rejected", lastRequestedAt=requested, grantedReplicas=0, decision=d.reason,
-                            message="no room for this prewarm")
-            self.log(event="rejected", tool=tool, service=svc, probability=spec.get("probability"),
-                     free_pods=free, reason=d.reason, episode=spec.get("episodeId"))
+                            message="no room for this prewarm: the first real call starts the tool")
             return
         self.set_status(name, grantedReplicas=d.k, leaseExpiresAt=iso(lease.expires), decision=f"{d.action}: {d.reason}")
-        self.log(event="leased", tool=tool, service=svc, action=d.action, granted=d.k, extra=d.extra,
-                 asked=spec.get("desiredReplicas"), ttl_s=spec.get("ttlSeconds"), free_pods=free, held_pods=held,
-                 evicted=d.evict, superseded=d.ended, probability=spec.get("probability"), episode=spec.get("episodeId"))
-        if start:
-            self.pool.submit(self.warm, obj, d.k)
-        else:                                       # warm already, or being warmed: note that this one was seen
+        if start:                                   # k pings if the tool has fewer than k pods, else one (refresh)
+            self.pool.submit(self.warm, obj, max(1, d.k))
+        else:                                       # being warmed right now: note that this one was seen
             self.set_status(name, lastRequestedAt=requested)
 
-    def end_lease(self, tool: str, phase: str, why: str, kind: str):
-        name, svc = self.objects.get(tool, (None, None))
-        LEASES.labels(kind).inc()
-        if name:
-            self.set_status(name, phase=phase, evictedAt=now_iso(), decision=why)
-        self.log(event=kind, tool=tool, service=svc, reason=why)
-
-    def keepalive(self):
-        """Lease mode: end expired leases, ping every live one so Knative's short window never runs out on it."""
+    def lease_clock(self):
+        """Lease mode: end expired leases; send the one extending ping a lease needs when it outlives the window."""
         while True:
-            time.sleep(KEEPALIVE_S)
+            time.sleep(LEASE_TICK_S)
             try:
-                free = self.free_pods()
-                self.adopt_new_pods(free)
+                now = time.time()
                 with self.lock:
-                    ended = self.book.expire(time.time(), free)    # idle warmth while there is room, shed when not
-                    live = [(t, self.objects.get(t, (None, None))[1]) for t in self.book.active()]
-                    live = [(t, s) for t, s in live if s and s not in self.in_flight]
-                    HELD_PODS.set(self.book.held_pods())
+                    ended = self.book.expire(now)
+                    due = [(t, self.objects.get(t, (None, None))) for t in self.book.due_pings(now)]
+                    for t, _ in due:
+                        self.book.pinged(t, now)
+                    LEASED.set(len(self.book.leases))
                 for t in ended:
-                    self.end_lease(t, "Expired", "TTL passed", "expired")
-                for t, svc in live:
-                    self.pool.submit(self._keep, svc, t)
-            except Exception as e:      # keep the leases alive even if one round fails
-                print(f"keepalive error: {type(e).__name__}: {e}")
+                    name = self.objects.get(t, (None, None))[0]
+                    LEASES.labels("expired").inc()
+                    if name:
+                        self.set_status(name, phase="Expired", decision="TTL passed: Knative's window takes over")
+                for t, (name, svc) in due:
+                    LEASES.labels("extended").inc()
+                    self.pool.submit(self._extend, svc, t)
+            except Exception as e:      # keep the clock running even if one round fails
+                print(f"lease clock error: {type(e).__name__}: {e}")
 
-    def adopt_new_pods(self, free: int):
-        """A tool pod no lease asked for appeared: a real call made Knative start it. Give the tool idle warmth if
-        there is room (what the 60 s window did), so the next episode's call finds it warm."""
-        items = self.core.list_namespaced_pod(NS, label_selector="serving.knative.dev/service").items
-        seen = self.__dict__.setdefault("_seen_pods", set())
-        for p in items:
-            name, svc = p.metadata.name, p.metadata.labels.get("serving.knative.dev/service", "")
-            if name in seen or p.metadata.deletion_timestamp is not None:
-                continue
-            seen.add(name)
-            tool = svc.removeprefix("retail-").replace("-", "_")
-            with self.lock:
-                if tool in self.book.leases or not self.book.adopt(tool, time.time(), free):
-                    continue
-                self.objects.setdefault(tool, (None, svc))      # no PrewarmRequest of its own to update
-            LEASES.labels("adopted").inc()
-            self.log(event="adopted", tool=tool, service=svc, pod=name, free_pods=free)
-        live = {p.metadata.name for p in items}
-        seen &= live                                    # forget pods that are gone
-
-    def _keep(self, svc: str, tool: str):
+    def _extend(self, svc: str, tool: str):
         try:
-            self.ping(svc, tool)
+            code, ms = self.ping(svc, tool)
+            self.log(event="extended", tool=tool, service=svc, http=code, ping_ms=ms)
         except Exception as e:
-            self.log(event="keepalive_failed", tool=tool, service=svc, error=f"{type(e).__name__}: {e}")
+            self.log(event="extend_failed", tool=tool, service=svc, error=f"{type(e).__name__}: {e}")
 
     # ------------------------------------------------------------------ loops
+    def warm_poll(self):
+        """K_ADAPT with PROM_URL: refresh the tools' warm call times from Prometheus every WARM_POLL_S."""
+        while True:
+            got = query_warm(PROM_URL)
+            if got:
+                ESTIMATES.set_warm(got)
+                self.log(event="k_inputs", source="prometheus", **ESTIMATES.snapshot())
+            time.sleep(WARM_POLL_S)
+
     def sweep(self):
         """Mark Ready objects Evicted once Knative has scaled their tool back to zero."""
         while True:
@@ -383,16 +459,23 @@ class Controller:
         print(f"prewarm controller ({mode}) | context {ctx} | namespace {NS} | ingress {URL_TPL} | log {LOG}")
         if MODE == "lease":
             print(f"leases: reserve {LEASE_CFG.reserve_pods} pods, k max {LEASE_CFG.k_max}, "
-                  f"TTL {LEASE_CFG.ttl_min_s:g}-{LEASE_CFG.ttl_max_s:g} s, keep-alive every {KEEPALIVE_S:g} s, "
-                  f"tool nodes {TOOL_NODES}")
+                  f"TTL {LEASE_CFG.ttl_min_s:g}-{LEASE_CFG.ttl_max_s:g} s over a {LEASE_CFG.window_s:g} s window, "
+                  f"tool nodes {TOOL_NODES}, {TOOL_CPU_M}m per tool pod")
         if METRICS_PORT:
             try:
                 start_http_server(METRICS_PORT, addr=bind_host())     # this machine only on a laptop (pulse/net.py)
                 print(f"metrics: http://{bind_host()}:{METRICS_PORT}/metrics")
             except OSError as e:     # e.g. a second controller on the same laptop: run without metrics
                 print(f"metrics port {METRICS_PORT} not available ({e}); no /metrics")
-        # lease mode ends leases itself; Option A only records when Knative scaled a tool back to zero
-        threading.Thread(target=self.keepalive if MODE == "lease" else self.sweep, daemon=True).start()
+        # both modes record when Knative scaled a tool back to zero; lease mode also runs the lease clock
+        threading.Thread(target=self.sweep, daemon=True).start()
+        if K_ADAPT:
+            print(f"k rule: adaptive (cold starts from the pings; warm times "
+                  f"{'from ' + PROM_URL if PROM_URL else 'as configured: no PROM_URL'})")
+            if PROM_URL:
+                threading.Thread(target=self.warm_poll, daemon=True).start()
+        if MODE == "lease":
+            threading.Thread(target=self.lease_clock, daemon=True).start()
         while True:      # the watch times out every few minutes; just start it again
             try:
                 for ev in watch.Watch().stream(self.crd.list_namespaced_custom_object, GROUP, VERSION, NS,

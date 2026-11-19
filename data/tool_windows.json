@@ -1,0 +1,82 @@
+{
+ "airline": {
+  "windows": {
+   "book_reservation": 20,
+   "calculate": 20,
+   "cancel_reservation": 30,
+   "get_reservation_details": 20,
+   "get_user_details": 20,
+   "list_all_airports": 20,
+   "search_direct_flight": 20,
+   "search_onestop_flight": 35,
+   "send_certificate": 20,
+   "think": 44,
+   "transfer_to_human_agents": 54,
+   "update_reservation_baggages": 55,
+   "update_reservation_flights": 20,
+   "update_reservation_passengers": 20
+  },
+  "rule": "q0.8 of re-use gaps, clamped to [20, 60] s (over 60 s -> 20)",
+  "runs": [
+   "2026-11-19_1402_C0_W1-replay_taubench-60ep-fanout_e4-airline-room-c0"
+  ],
+  "reuses": {
+   "book_reservation": 5,
+   "calculate": 8,
+   "cancel_reservation": 27,
+   "get_reservation_details": 61,
+   "get_user_details": 49,
+   "list_all_airports": 2,
+   "search_direct_flight": 36,
+   "search_onestop_flight": 19,
+   "send_certificate": 0,
+   "think": 15,
+   "transfer_to_human_agents": 10,
+   "update_reservation_baggages": 12,
+   "update_reservation_flights": 48,
+   "update_reservation_passengers": 3
+  }
+ },
+ "retail": {
+  "windows": {
+   "calculate": 20,
+   "cancel_pending_order": 20,
+   "exchange_delivered_order_items": 41,
+   "find_user_id_by_email": 35,
+   "find_user_id_by_name_zip": 20,
+   "get_order_details": 20,
+   "get_product_details": 23,
+   "get_user_details": 20,
+   "list_all_product_types": 57,
+   "modify_pending_order_address": 20,
+   "modify_pending_order_items": 40,
+   "modify_pending_order_payment": 20,
+   "modify_user_address": 20,
+   "return_delivered_order_items": 52,
+   "think": 33,
+   "transfer_to_human_agents": 20
+  },
+  "rule": "q0.8 of re-use gaps, clamped to [20, 60] s (over 60 s -> 20)",
+  "runs": [
+   "2026-11-19_1512_C0_W3-replay_taubench-60ep-fanout_e4-retail-room-c0"
+  ],
+  "reuses": {
+   "calculate": 2,
+   "cancel_pending_order": 4,
+   "exchange_delivered_order_items": 16,
+   "find_user_id_by_email": 20,
+   "find_user_id_by_name_zip": 48,
+   "get_order_details": 59,
+   "get_product_details": 43,
+   "get_user_details": 46,
+   "list_all_product_types": 10,
+   "modify_pending_order_address": 12,
+   "modify_pending_order_items": 24,
+   "modify_pending_order_payment": 1,
+   "modify_user_address": 3,
+   "return_delivered_order_items": 14,
+   "think": 9,
+   "transfer_to_human_agents": 2
+  }
+ }
+}

@@ -36,8 +36,13 @@ def service_name(tool: str) -> str:
 
 
 def make_object(tool, probability, threshold, ttl_s, episode_id="", workflow_id="",
-                desired_replicas=1, namespace="default", lookahead=False):
+                desired_replicas=1, namespace="default", lookahead=False, rank=None, hit_rate=None):
+    """threshold = the policy's probability floor (P_MIN). rank / hit_rate (adaptive policy): the candidate's place in
+    this step's top-k and how often a candidate of its probability was really next -- the controller warms it only
+    if that is worth a pod slot now (pulse/controller/adaptive.py)."""
     now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    extra = {k: v for k, v in (("rank", None if rank is None else int(rank)),
+                               ("hitRate", None if hit_rate is None else round(float(hit_rate), 4))) if v is not None}
     return {
         "apiVersion": f"{GROUP}/{VERSION}",
         "kind": KIND,
@@ -47,7 +52,7 @@ def make_object(tool, probability, threshold, ttl_s, episode_id="", workflow_id=
                  "probability": round(float(probability), 4), "threshold": float(threshold),
                  "ttlSeconds": int(ttl_s), "desiredReplicas": int(desired_replicas),
                  "requestedAt": now, "episodeId": episode_id or "", "workflowId": workflow_id or "",
-                 "lookahead": bool(lookahead)},
+                 "lookahead": bool(lookahead), **extra},
     }
 
 
@@ -79,9 +84,9 @@ class CRDWriter:
         return client.CustomObjectsApi()
 
     # ---- called by service.py: returns immediately
-    def submit(self, prewarm, theta, ttl_s, episode_id="", workflow_id=""):
-        """prewarm = [(tool, probability[, k[, ttl_s[, lookahead]]]), ...] -- the tools the policy picked;
-        k -> desiredReplicas, a per-tool ttl_s overrides the call's ttl_s (TTL_MODE=step in service.py)."""
+    def submit(self, prewarm, threshold, ttl_s, episode_id="", workflow_id=""):
+        """prewarm = [(tool, probability[, k[, ttl_s[, lookahead[, rank[, hit_rate]]]]]), ...] -- the tools the policy
+        picked; k -> desiredReplicas, a per-tool ttl_s overrides the call's ttl_s (TTL_MODE=step in service.py)."""
         if self.mode == "off":
             return
         for item in prewarm:
@@ -89,8 +94,10 @@ class CRDWriter:
             k = item[2] if len(item) > 2 else 1
             ttl = item[3] if len(item) > 3 and item[3] else ttl_s
             ahead = bool(item[4]) if len(item) > 4 else False
-            self._q.put(make_object(tool, p, theta, ttl, episode_id, workflow_id, desired_replicas=k,
-                                    namespace=self.namespace, lookahead=ahead))
+            rank = item[5] if len(item) > 5 else None
+            hit = item[6] if len(item) > 6 else None
+            self._q.put(make_object(tool, p, threshold, ttl, episode_id, workflow_id, desired_replicas=k,
+                                    namespace=self.namespace, lookahead=ahead, rank=rank, hit_rate=hit))
 
     def flush(self, timeout=5.0):
         """Wait until everything submitted so far is written (used by tests)."""

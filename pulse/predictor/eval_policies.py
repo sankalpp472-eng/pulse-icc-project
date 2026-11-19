@@ -7,7 +7,9 @@ a reply-step hint since the previous tool call did (prewarmed during the custome
 
     python -m pulse.predictor.eval_policies        # from the repo root
 
-Same settings as service.py: theta / topk (TOP_K, P_MIN), LOOKAHEAD (THETA_NEXT, LOOKAHEAD_MIN_RESPOND).
+Same settings as service.py: topk (TOP_K, P_MIN), LOOKAHEAD (THETA_NEXT, LOOKAHEAD_MIN_RESPOND). The adaptive
+policy's candidates are top 3 with p >= 0.05; how many of them get warmed depends on the cluster at run time
+(pulse/controller/adaptive.py), so offline it is shown as its two ends: all three (room) and the first (full).
 """
 import pandas as pd
 
@@ -25,11 +27,9 @@ N = predict_rows(look, "gbt", test) if look is not None else None
 if look is None:
     print("(this action_model.pkl has no lookahead model: retrain with train_action.py)")
 
-POLICIES = [("theta 0.3 (current)", dict(policy="theta", theta=0.3), None),
+POLICIES = [("adaptive, room (top 3, p >= 0.05)", dict(policy="adaptive", p_min=0.05, top_k_max=3), None),
+            ("adaptive, full (top 1, p >= 0.05)", dict(policy="topk", top_k=1, p_min=0.05), None),
             ("topk 2, p_min 0.1", dict(policy="topk", top_k=2, p_min=0.1), None),
-            ("topk 3, p_min 0.05", dict(policy="topk", top_k=3, p_min=0.05), None),
-            ("theta 0.3 + lookahead 0.4", dict(policy="theta", theta=0.3), 0.4),
-            ("theta 0.3 + lookahead 0.3", dict(policy="theta", theta=0.3), 0.3),
             ("topk 2, p_min 0.1 + lookahead 0.4", dict(policy="topk", top_k=2, p_min=0.1), 0.4),
             ("topk 2, p_min 0.1 + lookahead 0.3", dict(policy="topk", top_k=2, p_min=0.1), 0.3)]
 print(f"{len(test)} held-out LLM steps, {int((test.target != RESPOND).sum())} tool steps\n")

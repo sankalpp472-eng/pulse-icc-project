@@ -34,7 +34,7 @@ PY = sys.executable                             # the agent's Python (agent/.ven
 PREDICTOR_PORT = int(os.getenv("UI_PREDICTOR_PORT", "8000"))
 PREDICTOR_URL = f"http://127.0.0.1:{PREDICTOR_PORT}"
 EKS_PREDICTOR_PORT = int(os.getenv("UI_EKS_PREDICTOR_PORT", "8010"))   # kubectl port-forward to deploy/pulse-predictor
-DEFAULT_WINDOW, LEASE_WINDOW = "60s", "6s"   # the tools' Knative idle window: ping controller / lease controller
+DEFAULT_WINDOW = "60s"   # the tools' Knative idle window, for every configuration (each run makes sure of it)
 CONTROLLER_LOG = STATE / "controller.jsonl"
 RESULT_DIRS = {"local": paths.RESULTS / "local_runs", "cloud": paths.RESULTS / "cloud_runs",
                "load": paths.RESULTS / "load_runs"}
@@ -180,17 +180,28 @@ class Cluster:
 
     def set_min_scale(self, n: int, say=print, window: str | None = None) -> None:
         """C1 = 1 (always warm), C0 / C3 = 0: patch every tool's Knative Service (a new Revision), wait for Ready.
-        window: also set the idle window (60s for C0 / C1 / C3 with the ping controller, 6s for the lease
-        controller, which keeps leased tools warm itself). The other settings stay as infra/knative/deploy.sh set them."""
-        ann = {"autoscaling.knative.dev/min-scale": str(n)}
-        if window:
-            ann["autoscaling.knative.dev/window"] = window
-        patch = json.dumps({"spec": {"template": {"metadata": {"annotations": ann}}}})
+        window: also set the idle window: "60s" (every tool, so runs compare like with like even if the tools were
+        deployed with another one) or "per-tool" (each tool's own, data/tool_windows.json; refresh.py lever 3).
+        The other settings stay as infra/knative/deploy.sh set them."""
+        per_tool = {}
+        if window == "per-tool":
+            from pulse.experiments import tool_windows
+            per_tool = tool_windows.load(self.domain)
+            if not per_tool:
+                raise RuntimeError(f"no per-tool windows for {self.domain} in {tool_windows.OUT}: python -m "
+                                   f"pulse.experiments.tool_windows <C0 runs> --domain {self.domain}")
         code, out = _run(["kubectl", "get", "ksvc", "-l", self.role, "-o", "name"], 15)
         names = out.split() if code == 0 else []
         if not names:
             raise RuntimeError(f"no tools found ({out[:200]})")
         for name in names:
+            ann = {"autoscaling.knative.dev/min-scale": str(n)}
+            if per_tool:      # service/retail-get-user-details -> get_user_details
+                tool = name.split("/")[-1].removeprefix("retail-").replace("-", "_")
+                ann["autoscaling.knative.dev/window"] = f"{per_tool.get(tool, 60)}s"
+            elif window:
+                ann["autoscaling.knative.dev/window"] = window
+            patch = json.dumps({"spec": {"template": {"metadata": {"annotations": ann}}}})
             code, out = _run(["kubectl", "patch", name, "--type", "merge", "-p", patch], 20)
             if code != 0:
                 raise RuntimeError(f"could not patch {name}: {out[:200]}")
@@ -296,12 +307,13 @@ class Cluster:
 
 # ====================================================================== services
 def norm_policy(p: dict | None) -> dict:
-    """The prewarm policy as the predictor reads it (pulse/predictor/service.py):
-    theta = every tool with P >= theta (the original); topk = the top_k most likely tools, each with P >= p_min;
-    lookahead = on a likely reply step, also prewarm the tool the agent calls after the customer answers."""
+    """The prewarm policy as the predictor reads it (pulse/predictor/policy.py): adaptive = the top 3 candidates, the
+    controller warms those worth a pod slot now (pulse/controller/adaptive.py); topk = exactly the top_k most likely
+    tools; every one with P >= p_min. lookahead = on a likely reply step, also prewarm the tool the agent calls
+    after the customer answers."""
     p = p or {}
-    return {"policy": "topk" if p.get("policy") == "topk" else "theta",
-            "top_k": max(1, min(5, int(p.get("top_k") or 2))), "p_min": float(p.get("p_min", 0.1)),
+    return {"policy": "topk" if p.get("policy") == "topk" else "adaptive",
+            "top_k": max(1, min(5, int(p.get("top_k") or 2))), "p_min": float(p.get("p_min", 0.05)),
             "lookahead": bool(p.get("lookahead")), "theta_next": float(p.get("theta_next", 0.3))}
 
 
@@ -311,9 +323,9 @@ def policy_env(p: dict) -> dict:
             "LOOKAHEAD": "1" if p["lookahead"] else "0", "THETA_NEXT": str(p["theta_next"])}
 
 
-def policy_label(p: dict | None, theta: float | None = None) -> str:
+def policy_label(p: dict | None) -> str:
     p = norm_policy(p)
-    s = f"top-{p['top_k']} (P ≥ {p['p_min']:g})" if p["policy"] == "topk" else f"θ {theta if theta is not None else ''}".strip()
+    s = f"top-{p['top_k']} (P ≥ {p['p_min']:g})" if p["policy"] == "topk" else f"adaptive top-k (P ≥ {p['p_min']:g})"
     return s + (f" + lookahead {p['theta_next']:g}" if p["lookahead"] else "")
 
 
@@ -404,7 +416,7 @@ class Services:
         self.health: dict | None = None
         threading.Thread(target=self._health_loop, daemon=True).start()
 
-    def start_predictor(self, model: str, theta: float, crd: bool, policy: dict | None = None,
+    def start_predictor(self, model: str, crd: bool, policy: dict | None = None,
                         model_version: str | None = None) -> dict:
         """model_version (pulse_v3 only): serve that registry version instead of the latest (Models tab)."""
         model = self.ALIASES.get(model, model)
@@ -420,7 +432,7 @@ class Services:
         self.stop("predictor")
         policy = norm_policy(policy)
         # DOMAIN: the retail action model, and PrewarmRequests for the retail-<tool> services
-        env = {"THETA": str(theta), "TTL_S": "60", "CRD_MODE": "k8s" if crd else "off",
+        env = {"TTL_S": "60", "CRD_MODE": "k8s" if crd else "off",
                "CRD_DRYRUN_FILE": str(STATE / "prewarm_requests.jsonl"), "DOMAIN": domain,
                **policy_env(policy)}
         if crd:
@@ -437,7 +449,7 @@ class Services:
         # this machine only (127.0.0.1) on a laptop, the pod's IP in the cluster: pulse/net.py (PULSE_BIND)
         cmd = [PY, "-m", "uvicorn", "pulse.predictor.service:app", "--host", bind_host(),
                "--port", str(PREDICTOR_PORT), "--log-level", "warning"]
-        self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "theta": theta, "policy": policy,
+        self.procs["predictor"] = Proc("predictor", cmd, env, {"model": model, "policy": policy,
                                                                 "crd": "k8s" if crd else "off", "domain": domain,
                                                                 "model_version": model_version})
         from pulse.predictor import client
@@ -451,7 +463,7 @@ class Services:
     def match_cluster(self) -> bool:
         """Make the running predictor fit where the tools run now (issue #19). It writes PrewarmRequests only when
         it was started for Knative (CRD_MODE=k8s), and serves one domain: after a switch between the simulated
-        cluster and Knative it is restarted with the same model / theta / policy / version, and on Knative the
+        cluster and Knative it is restarted with the same model / policy / version, and on Knative the
         controller that turns those requests into warm pods is started. True if the predictor was restarted."""
         cur = self.procs.get("predictor")
         if not (cur and cur.alive()):
@@ -462,7 +474,7 @@ class Services:
         restart = info.get("crd") != ("k8s" if knative else "off") or info.get("domain") != domain
         if restart:
             try:
-                self.start_predictor(info["model"], float(info["theta"]), knative, info.get("policy"),
+                self.start_predictor(info["model"], knative, info.get("policy"),
                                      model_version=info.get("model_version"))
             except ValueError:              # this predictor can't serve here (e.g. the speculator with retail)
                 self.stop("predictor")
@@ -484,9 +496,13 @@ class Services:
             return "the prewarm controller is not running"
         return None
 
-    def start_controller(self, mode: str = "ping", reserve: int = 4) -> dict:
-        """mode ping = Option A (the Knative window is the TTL); lease = leases with TTLs, a reserve of free pods
-        and eviction (pulse/controller/leases.py; the tools need the short window, build_run sets it)."""
+    def start_controller(self, mode: str = "ping", reserve: int = 4, refresh: str = "always",
+                         shed_p: float = 0.0, k_adapt: bool = False) -> dict:
+        """mode ping = Option A (the Knative window is the TTL); lease = admission control: a prediction starts only
+        the new pods that fit next to `reserve` free pods (pulse/controller/leases.py). Ping mode: refresh
+        (always | never | value) and shed_p decide how long prewarmed pods live (pulse/controller/refresh.py)."""
+        refresh = refresh if refresh in ("always", "never", "value") else "always"
+        shed_p = max(0.0, float(shed_p or 0))
         self.stop("controller")
         if CONTROLLER_LOG.exists():
             CONTROLLER_LOG.unlink()
@@ -494,9 +510,15 @@ class Services:
         mode = "lease" if mode == "lease" else "ping"
         # PrewarmRequests name the service itself (retail-<tool> for retail): the airline Host template fits both domains
         env = {**self.cluster.tool_env("airline"), "CONTROLLER_LOG": str(CONTROLLER_LOG), "MAX_REQUEST_AGE_S": "30",
-               "CONTROLLER_MODE": mode, "LEASE_RESERVE_PODS": str(int(reserve))}
+               "CONTROLLER_MODE": mode, "LEASE_RESERVE_PODS": str(int(reserve)),
+               "REFRESH_POLICY": refresh, "SHED_P": str(shed_p), "K_ADAPT": "1" if k_adapt else "0"}
+        # k_adapt's warm times come from Prometheus only if PROM_URL is set for the UI (e.g. a port-forward to the
+        # kind cluster's Prometheus); otherwise the controller learns the cold starts and fullness only
+        if k_adapt and os.getenv("PROM_URL"):
+            env["PROM_URL"] = os.environ["PROM_URL"]
         self.procs["controller"] = Proc("controller", [PY, "-m", "pulse.controller.prewarm_controller"], env,
-                                        {"context": self.cluster.context, "mode": mode, "reserve": int(reserve)})
+                                        {"context": self.cluster.context, "mode": mode, "reserve": int(reserve),
+                                         "refresh": refresh, "shed_p": shed_p, "k_adapt": bool(k_adapt)})
         return self.status()
 
     def controller_mode(self) -> str | None:
@@ -529,16 +551,15 @@ class Services:
         d = json.loads(out)
         c = d["spec"]["template"]["spec"]["containers"][0]
         env = {e["name"]: e.get("value") for e in c.get("env", []) if "value" in e}
-        theta = float(env.get("THETA", "0.3"))
-        policy = norm_policy({"policy": env.get("PREWARM_POLICY", "theta"), "top_k": env.get("TOP_K", "2"),
-                              "p_min": env.get("P_MIN", "0.1"), "lookahead": env.get("LOOKAHEAD", "0") == "1",
+        policy = norm_policy({"policy": env.get("PREWARM_POLICY", "adaptive"), "top_k": env.get("TOP_K", "2"),
+                              "p_min": env.get("P_MIN", "0.05"), "lookahead": env.get("LOOKAHEAD", "0") == "1",
                               "theta_next": env.get("THETA_NEXT", "0.4")})
         st, want = d.get("status", {}), d["spec"].get("replicas", 1)
         ready, updated = st.get("readyReplicas", 0), st.get("updatedReplicas", 0)
         rolling = updated < want or st.get("replicas", 0) > want      # a switch (kubectl set env) still rolling out
         name = env.get("PREDICTOR") or "lightgbm"
-        return {"deployed": True, "predictor": name, "label": self.MODELS.get(name, name), "theta": theta,
-                "policy_label": policy_label(policy, theta), "ready": ready >= 1 and not rolling,
+        return {"deployed": True, "predictor": name, "label": self.MODELS.get(name, name), "policy": policy,
+                "policy_label": policy_label(policy), "ready": ready >= 1 and not rolling,
                 "pods": f"{ready}/{want}", "rolling": rolling, "image": c.get("image", "").rsplit(":", 1)[-1],
                 "model_version": env.get("PULSE_MODEL_VERSION") or env.get("ACTION_MODEL_VERSION") or None}
 
@@ -546,7 +567,7 @@ class Services:
         """Live demo with the predictor DEPLOYED in the cluster (deploy/pulse-predictor, infra/cloud/pulse-cloud.yaml)
         instead of one started here: a kubectl port-forward to it, kept up like the other processes. Its PrewarmRequests
         are handled by the in-cluster pulse-controller, so the laptop's controller is stopped (two controllers would
-        both warm every request). Returns {url, name, theta, policy} from its /healthz."""
+        both warm every request). Returns {url, name, policy} from its /healthz."""
         if self.cluster.mode != "knative" or not self.cluster.context:
             raise ValueError("the EKS predictor needs the real cluster: switch to Knative (top bar) first")
         for dep in ("pulse-predictor", "pulse-controller"):
@@ -582,13 +603,12 @@ class Services:
         from pulse.predictor import client
         client.forget(url)
         pol = health.get("policy") or {}
-        theta = float(pol.get("theta", 0.3))
         look = pol.get("lookahead") or {}
         policy = norm_policy({k: v for k, v in {"policy": pol.get("name"), "top_k": pol.get("top_k"),
                                                 "p_min": pol.get("p_min"), "lookahead": look.get("on"),
                                                 "theta_next": look.get("theta_next")}.items() if v is not None})
-        self.procs["eks_predictor"].info.update(model=health.get("predictor"), theta=theta)
-        return {"url": url, "name": health.get("predictor"), "theta": theta, "policy": policy}
+        self.procs["eks_predictor"].info.update(model=health.get("predictor"), policy=policy)
+        return {"url": url, "name": health.get("predictor"), "policy": policy}
 
     def stop(self, name: str | None = None) -> dict:
         for n in ([name] if name else list(self.procs)):
@@ -638,7 +658,7 @@ class Services:
             out["predictor"]["ready"] = self.predictor_ready()
             out["predictor"]["health"] = self.health
             out["predictor"]["serving_version"] = served_version(self.health)
-            out["predictor"]["policy_label"] = policy_label(out["predictor"].get("policy"), out["predictor"].get("theta"))
+            out["predictor"]["policy_label"] = policy_label(out["predictor"].get("policy"))
             # every predictor runs the policy; lookahead only where /info says it is supported
             sup = out["predictor"].get("supports")
             out["predictor"]["policy_supported"] = True
@@ -1010,11 +1030,17 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     """The commands for one batch run, from the form in the Experiments tab."""
     mode, config, where = spec["mode"], spec["config"], spec.get("where", "laptop")
     pred = Services.ALIASES.get(spec.get("predictor") or "lightgbm", spec.get("predictor") or "lightgbm")
-    # the prewarm controller (C3): ping = Option A, the 60 s Knative window is the TTL; lease = TTLs, a reserve of
-    # free pods and eviction (pulse/controller/leases.py), with a 6 s window so a lease's end really frees the pod
+    # the prewarm controller (C3): ping = Option A, every prediction starts its k pods; lease = admission control,
+    # a prediction starts only the new pods that fit next to a reserve of free pods (pulse/controller/leases.py).
+    # Both run over the same 60 s Knative window.
     ctl = "lease" if config == "C3" and spec.get("controller") == "lease" else "ping"
     reserve = max(0, int(spec.get("reserve") or 4))
-    window = LEASE_WINDOW if ctl == "lease" else DEFAULT_WINDOW
+    # how long prewarmed pods live (pulse/controller/refresh.py): the ping controller's refresh policy and pressure
+    # shedding, and the tools' idle windows (60 s, or each tool's own) for every configuration
+    refresh = spec.get("refresh") if spec.get("refresh") in ("always", "never", "value") else "always"
+    shed_p = max(0.0, float(spec.get("shed_p") or 0))
+    k_adapt = bool(spec.get("k_adapt"))     # the k rule's warm time and budget learned at runtime (adaptive.py)
+    window = "per-tool" if spec.get("windows") == "per-tool" else DEFAULT_WINDOW
     tasks = [str(int(t)) for t in spec.get("tasks") or []]
     if cluster.domain == "retail":
         if spec.get("predictor") == "speculator" and spec.get("config") == "C3":
@@ -1048,12 +1074,15 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
         if not b:
             raise ValueError("Git Bash not found (needed for run_cloud.sh)")
         pol = norm_policy(spec.get("policy"))   # run_cloud.sh switches the pulse-predictor Deployment to `pred`
-        if config == "C3" and (pol["policy"] != "theta" or pol["lookahead"]):
-            raise ValueError("run_cloud.sh uses the cluster's pulse-predictor, so set its policy there: kubectl set env "
-                             "deploy/pulse-predictor PREWARM_POLICY=topk TOP_K=2 P_MIN=0.1 LOOKAHEAD=0 (then pick θ here)")
+        if config == "C3" and pol["lookahead"]:
+            raise ValueError("run_cloud.sh sets the cluster's pulse-predictor policy without lookahead: turn it on there "
+                             "(kubectl set env deploy/pulse-predictor LOOKAHEAD=1) or untick it here")
         label = spec.get("label") or "ui"
         cenv = {**env, "MODE": mode, "CONFIG": config, "PREDICTOR": pred, "WORKLOAD": "none", "LABEL": label,
-                "PYTHON": PY, "CONTROLLER": ctl, "LEASE_RESERVE_PODS": str(reserve)}
+                "PYTHON": PY, "CONTROLLER": ctl, "LEASE_RESERVE_PODS": str(reserve), "REFRESH_POLICY": refresh,
+                "SHED_P": f"{shed_p:g}", "TOOL_WINDOWS": "per-tool" if window == "per-tool" else "60",
+                "K_ADAPT": "1" if k_adapt else "0", "PREWARM_POLICY": pol["policy"], "TOP_K": str(pol["top_k"]),
+                "P_MIN": f"{pol['p_min']:g}"}
         steps.append((f"{mode} {config} inside the cluster (run_cloud.sh)",
                       [b, "infra/cloud/run_cloud.sh", *args], cenv))
         return steps
@@ -1068,20 +1097,23 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
         policy = norm_policy(spec.get("policy"))
         cur = services.procs.get("predictor")
         if not (cur and cur.alive() and cur.info.get("model") == pred and cur.info.get("crd") == "k8s"
-                and cur.info.get("domain") == cluster.domain
-                and abs(cur.info.get("theta", -1) - float(spec.get("theta", 0.3))) < 1e-9
-                and cur.info.get("policy") == policy):
-            services.start_predictor(pred, float(spec.get("theta", 0.3)), crd=True, policy=policy)
+                and cur.info.get("domain") == cluster.domain and cur.info.get("policy") == policy):
+            services.start_predictor(pred, crd=True, policy=policy)
         cur_ctl = services.procs.get("controller")
         if not (services.controller_running() and services.controller_mode() == ctl
-                and cur_ctl.info.get("reserve", 4) == reserve):
-            services.start_controller(ctl, reserve)
+                and cur_ctl.info.get("reserve", 4) == reserve and cur_ctl.info.get("refresh", "always") == refresh
+                and cur_ctl.info.get("shed_p", 0.0) == shed_p and cur_ctl.info.get("k_adapt", False) == k_adapt):
+            services.start_controller(ctl, reserve, refresh, shed_p, k_adapt)
         steps.append(("__predictor__", [], {}))
         args += ["--predictor-url", PREDICTOR_URL]
         if pred in ("speculator", "pulse_v3") and mode == "replay":   # slower answers (an LLM / embeddings)
             args += ["--hint-timeout", "10"]
         tag = ("-top%d" % policy["top_k"] if policy["policy"] == "topk" else "") + ("-look" if policy["lookahead"] else "")
-        label = f"{label}-{pred}{tag}" + ("-lease" if ctl == "lease" else "")
+        label = f"{label}-{pred}{tag}" + ("-lease" if ctl == "lease" else "") + \
+            (f"-refresh_{refresh}" if ctl == "ping" and refresh != "always" else "") + \
+            (f"-shed{shed_p:g}" if ctl == "ping" and shed_p else "") + ("-kadapt" if k_adapt else "")
+    if window == "per-tool":
+        label += "-tw"
     module = "pulse.experiments.replay" if mode == "replay" else "pulse.experiments.live"
     steps.append((f"{mode} {config}{' (' + pred + ')' if config == 'C3' else ''} "
                   "from the laptop",
@@ -1092,13 +1124,12 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
 def ensure_predictor(spec: dict, services: Services, crd: bool) -> str:
     """Start the predictor the spec asks for, unless exactly that one already runs; returns its model name."""
     pred = Services.ALIASES.get(spec.get("predictor") or "lightgbm", spec.get("predictor") or "lightgbm")
-    theta, policy = float(spec.get("theta", 0.3)), norm_policy(spec.get("policy"))
+    policy = norm_policy(spec.get("policy"))
     cur = services.procs.get("predictor")
     domain = services.cluster.domain if services.cluster.mode == "knative" else "airline"
     if not (cur and cur.alive() and cur.info.get("model") == pred and cur.info.get("crd") == ("k8s" if crd else "off")
-            and cur.info.get("domain") == domain
-            and abs(cur.info.get("theta", -1) - theta) < 1e-9 and cur.info.get("policy") == policy):
-        services.start_predictor(pred, theta, crd=crd, policy=policy)
+            and cur.info.get("domain") == domain and cur.info.get("policy") == policy):
+        services.start_predictor(pred, crd=crd, policy=policy)
     if crd and not services.controller_running():
         services.start_controller()
     return pred

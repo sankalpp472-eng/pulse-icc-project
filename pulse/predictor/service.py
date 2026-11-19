@@ -14,9 +14,11 @@ The prediction API: one service, any of the four predictors (predictor/predictor
 Settings (environment variables):
   PREDICTOR        lightgbm (default) | lightgbm_adapt | markov | speculator | pulse_v3   (old names gbt, ngram_action also work;
                    PREDICTOR_MODEL is read if PREDICTOR is unset). Each predictor's own settings are in its file.
-  THETA            confidence threshold for prewarming             (default 0.3)
-  PREWARM_POLICY   theta (every tool with P >= THETA) | topk (the TOP_K most likely tools, each with P >= P_MIN)
-  TOP_K, P_MIN     for topk                                         (default 2, 0.1)
+  PREWARM_POLICY   adaptive (default: the TOP_K_MAX most likely tools as candidates, each with its rank and its hit
+                   rate learned online (calibration.py); the controller warms those worth a pod slot now, so how many
+                   follows the predictor's confidence and the cluster) | topk (exactly the TOP_K most likely tools)
+                   (policy.py). Every candidate needs P >= P_MIN
+  TOP_K, TOP_K_MAX, P_MIN   (default 2, 3, 0.05)
   LOOKAHEAD        1 = on a step that is most likely a reply (P(RESPOND) >= LOOKAHEAD_MIN_RESPOND, default 0.5),
                    also prewarm the tool the agent calls after the customer's reply (P >= THETA_NEXT, default 0.4).
                    Only predictors that support it (lightgbm, markov with a lookahead model in action_model.pkl)
@@ -43,13 +45,14 @@ from prometheus_client import CollectorRegistry, Counter, Histogram, make_asgi_a
 import pulse.predictor.predictors as predictors
 from pulse.predictor.contract import NO_PREWARM, RESPOND, ActionP, PredictionOut, PredictRequest
 from pulse.predictor.crd_writer import CRDWriter
+from pulse.predictor.calibration import Calibrator
 from pulse.predictor.policy import prewarm_select
 
 NAME = predictors.canonical(os.getenv("PREDICTOR") or os.getenv("PREDICTOR_MODEL") or predictors.DEFAULT)
-THETA = float(os.getenv("THETA", "0.3"))
-PREWARM_POLICY = os.getenv("PREWARM_POLICY", "theta")       # theta | topk
+PREWARM_POLICY = os.getenv("PREWARM_POLICY", "adaptive")    # adaptive | topk (policy.py)
 TOP_K = int(os.getenv("TOP_K", "2"))
-P_MIN = float(os.getenv("P_MIN", "0.1"))
+TOP_K_MAX = int(os.getenv("TOP_K_MAX", "3"))
+P_MIN = float(os.getenv("P_MIN", "0.05"))
 LOOKAHEAD = os.getenv("LOOKAHEAD", "0") == "1"
 THETA_NEXT = float(os.getenv("THETA_NEXT", "0.4"))
 LOOKAHEAD_MIN_RESPOND = float(os.getenv("LOOKAHEAD_MIN_RESPOND", "0.5"))
@@ -60,6 +63,7 @@ TTL_AHEAD_S = int(os.getenv("TTL_AHEAD_S", "75"))
 AUDIT_LOG = os.getenv("AUDIT_LOG")
 
 PRED = predictors.load(NAME)
+CALIB = Calibrator()          # adaptive: how often a candidate of probability p is really the next call
 WRITER = CRDWriter()   # CRD_MODE=off|dryrun|k8s
 
 # ---- Prometheus metrics (the same names for every predictor: infra/monitoring dashboards)
@@ -76,7 +80,7 @@ app.mount("/metrics", make_asgi_app(registry=REGISTRY))
 
 
 def policy():
-    return {"name": PREWARM_POLICY, "theta": THETA, "top_k": TOP_K, "p_min": P_MIN, "ttl_s": TTL_S,
+    return {"name": PREWARM_POLICY, "top_k": TOP_K, "top_k_max": TOP_K_MAX, "p_min": P_MIN, "ttl_s": TTL_S,
             "ttl": {"mode": TTL_MODE, "step_s": TTL_STEP_S, "ahead_s": TTL_AHEAD_S},
             "lookahead": {"on": LOOKAHEAD and PRED.supports_lookahead, "theta_next": THETA_NEXT,
                           "min_respond": LOOKAHEAD_MIN_RESPOND}}
@@ -95,7 +99,8 @@ async def info():
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok", **PRED.health(), "predictor": NAME, "policy": policy(),    # the name wins over health()
-            "crd": {"mode": WRITER.mode, **WRITER.stats, "last_error": WRITER.last_error}}
+            "crd": {"mode": WRITER.mode, **WRITER.stats, "last_error": WRITER.last_error},
+            "calibration": CALIB.stats()}
 
 
 @app.post("/predict", response_model=PredictionOut)
@@ -103,8 +108,14 @@ def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread p
     t0 = time.perf_counter()
     probs = PRED.predict(req)
     ranked = sorted(probs.items(), key=lambda kv: -kv[1])
-    warm = prewarm_select(ranked, PREWARM_POLICY, THETA, TOP_K, P_MIN)
+    warm = prewarm_select(ranked, PREWARM_POLICY, TOP_K, P_MIN, TOP_K_MAX)
     k = {t: PRED.fanout(t, req) if PRED.supports_fanout else 1 for t in warm}
+    # adaptive: what the previous step really did scores its candidates; each new candidate carries its rank and
+    # its calibrated hit rate, and the controller decides which are worth a pod slot (pulse/controller/adaptive.py)
+    CALIB.observe(req.episode_id, req.tools(), [(t, probs[t]) for t in warm])
+    adaptive = PREWARM_POLICY == "adaptive"
+    rank = {t: i + 1 for i, t in enumerate(warm)}
+    hit = {t: round(CALIB.rate(probs[t]), 4) for t in warm} if adaptive else {}
 
     # Lookahead: this step is most likely a reply to the customer, so also prewarm the tool the agent will call
     # AFTER the customer answers (customer reply + think time = seconds of lead, enough for a whole cold start)
@@ -130,8 +141,8 @@ def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread p
                                     "replicas": k[t], "ttl_s": ttl[t]}) + "\n")
 
     # hand the prewarm list to the controller (background thread, returns at once)
-    WRITER.submit([(t, p, k[t], ttl[t], t in ahead) for t, p in pw], THETA, TTL_S, episode_id=req.episode_id,
-                  workflow_id=wf)
+    WRITER.submit([(t, p, k[t], ttl[t], t in ahead, rank.get(t), hit.get(t)) for t, p in pw], P_MIN, TTL_S,
+                  episode_id=req.episode_id, workflow_id=wf)
 
     used = [i for i in PRED.inputs if (i == "trajectory") or (i == "signals" and req.signals is not None)
             or (i == "history" and req.history)]
@@ -141,6 +152,7 @@ def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread p
     return PredictionOut(
         workflow_id=wf, episode_id=req.episode_id, model=NAME,
         ranked=[ActionP(tool=t, p=round(p, 6)) for t, p in ranked],
-        prewarm=[ActionP(tool=t, p=round(p, 6), k=k[t], ttl_s=ttl[t]) for t, p in pw],
+        prewarm=[ActionP(tool=t, p=round(p, 6), k=k[t], ttl_s=ttl[t], rank=rank.get(t), hit=hit.get(t))
+                 for t, p in pw],
         lookahead=[ActionP(tool=t, p=round(p, 6), k=1, ttl_s=ttl[t]) for t, p in ahead.items()],
-        theta=THETA, ttl_s=TTL_S, latency_ms=round(latency * 1000, 3), inputs_used=used, note=note)
+        policy=PREWARM_POLICY, ttl_s=TTL_S, latency_ms=round(latency * 1000, 3), inputs_used=used, note=note)

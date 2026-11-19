@@ -14,8 +14,9 @@ What each part of the code does and how the parts fit together. For installing a
    that predictor reads (numeric signals, or the recent messages). Sent on a background thread; the agent never
    waits for it.
 2. **Prediction.** The predictor ranks the next actions (each tool, `RESPOND` = answer the customer, `END`). The
-   prewarm policy picks tools (P ≥ θ, or the top k) and a fan-out width k per tool (the number of parallel calls
-   expected), and writes one `PrewarmRequest` object per tool.
+   prewarm policy picks tools (adaptive top-k: up to 3 candidates, each warmed only if worth a pod slot now; or a
+   fixed top k) and a fan-out width k per tool (the number of parallel calls expected), and writes one
+   `PrewarmRequest` object per tool.
 3. **Prewarm.** The controller watches `PrewarmRequest`s and sends the tool k concurrent MCP `ping`s through the
    ingress. With one request per pod (containerConcurrency 1), Knative starts k pods.
 4. **Call.** The agent's real call finds a warm pod, or one that is already starting.
@@ -70,14 +71,15 @@ What each part of the code does and how the parts fit together. For installing a
 | `contract.py` | The one contract: `PredictRequest` (trajectory; optional `signals`, `history`, `domain`, `workflow_id`) → `PredictionOut` (`ranked` actions with probabilities, `prewarm` tools with k, `lookahead`, latency, inputs used) |
 | `service.py` | FastAPI app: `POST /predict`, `GET /info` (the predictor's inputs and capabilities), `/healthz`, `/metrics`. Loads the predictor named by `PREDICTOR` and applies the shared policy, audit log and PrewarmRequest writer |
 | `predictors/` | One file per predictor behind `base.Predictor` (`inputs`, `predict()`, `fanout()`, `lookahead()`, `health()`); `action.py` loads the pickle lightgbm and markov share (local file or the registry); `__init__.py` is the registry (`PREDICTOR=lightgbm|lightgbm_adapt|markov|speculator|pulse_v3`) |
-| `policy.py` | Which ranked actions become prewarms: θ threshold or top-k with a floor; never `RESPOND`/`END` |
+| `policy.py` | Which ranked actions become prewarms: `adaptive` (default: the top 3 as candidates with their rank and hit rate; the controller warms those worth a slot, `pulse/controller/adaptive.py`) or a fixed `topk`; a floor `P_MIN` (0.05); never `RESPOND`/`END` |
+| `calibration.py` | Adaptive top-k: how often a candidate of probability p really was the next call, learned online from each episode's next hint (per p bin, starting from p itself); `/healthz` shows it |
 | `crd_writer.py` | Writes `PrewarmRequest` objects (`CRD_MODE=k8s`), or to a file (`dryrun`), on a background thread |
 | `client.py` | What hint senders share: `inputs(url)` from `/info`, `make_hint()`, `compact()` messages |
 | `signals.py` | Numeric conversation signals (step, pending IDs, last error, customer keywords, …): no raw text leaves the agent for lightgbm |
 | `action_model.py` | The lightgbm (`GBTModel`) and markov (`NGramModel`) models, the pending-ID fan-out rule and the lookahead model, in one `ActionPredictor` (pickled as `models/action_model.pkl`) |
 | `build_action_data.py` | Training rows from the tau-bench conversations (one row per LLM step) → `data/predictor/action_rows.csv` |
 | `train_action.py` | Trains lightgbm + markov (+ lookahead), scores them on 10 held-out tasks; with `--uri` the MLOps path (§5) |
-| `eval_policies.py` | Offline comparison of prewarm policies (θ / top-k / lookahead) on the held-out steps |
+| `eval_policies.py` | Offline comparison of prewarm policies (adaptive at its two ends / top-k / lookahead) on the held-out steps |
 
 **The five predictors**
 
@@ -123,30 +125,107 @@ line per action and serves Prometheus metrics (port 9102). Runs on the laptop (t
 
 Two modes (`CONTROLLER_MODE`):
 
-| | `ping` (default, "Option A") | `lease` |
+| | `ping` (default, "Option A") | `lease` (admission control) |
 |---|---|---|
-| Action per request | k warm-up pings | a lease: keep the tool warm for `spec.ttlSeconds` with k pods |
-| TTL | the tools' Knative idle window (60 s), counted from the last call | per prediction from the predictor (`TTL_MODE=step`: 20 s next step, 75 s lookahead), clamped to 5–120 s; ends early when the episode's next hint stops predicting the tool |
-| How a pod stays warm | it just does until the window passes | keep-alive pings every 2 s while the lease lives; the tools get a 6 s window, so a pod goes soon after its lease ends |
-| k | the predictor's fan-out width | the same, lowered to 1 when the tool nodes are nearly full |
-| When the nodes are full | nothing: new pods sit Pending | a reserve of free pods (`LEASE_RESERVE_PODS`, 4) is never leased, so on-demand calls still find room; a new lease evicts lower-value leases (value = P × cold-start seconds saved per pod, discounted by time to expiry) or is rejected |
-| When there is room | every tool stays warm 60 s after its last call | idle warmth: a lease that ends or is superseded, and a tool a real call just started (a new pod), keep a low-value 60 s lease while free pods exceed the reserve by 8; it is evicted first and shed as soon as room gets tight |
+| Per request | k warm-up pings: the tool gets k pods | only the NEW pods (k minus the tool's pods) that fit in the tool nodes' free pod slots next to a reserve (`LEASE_RESERVE_PODS`, 4): all, fewer, or none |
+| Nodes full | prewarm pods take the slots real calls then wait for | a warm tool just gets its window refreshed; a cold one is `Rejected` and its first real call starts it |
+| TTL | the tools' 60 s Knative window, from the last call or ping | the same window; the lease (`spec.ttlSeconds`, from the predictor: 20 s next step, 75 s lookahead, clamped 5–120 s) adds one extending ping when it outlives the window |
 
-The lease policy is pure logic in `leases.py`, shared by the controller and the simulator. The controller reads free
-pod slots from the tool nodes (`TOOL_NODES`, default `pulse/role=worker`: allocatable pods and CPU minus what runs
-there). The PrewarmRequest's status records each decision (`Rejected`, `Expired`, `Evicted`, `grantedReplicas`,
-`leaseExpiresAt`, `decision`). The Experiments tab picks the mode (Controller: ping / lease, plus the reserve), and
-`run_cloud.sh` takes `CONTROLLER=lease`. Either way the tools' window is set for the run: 60 s, or 6 s for lease.
+**How many pods (k), both modes** (`leases.rule_k`): the predictor's fan-out k (lightgbm's pending-ID rule) is cut to
+the smallest number of pods whose queueing fits a budget, `min(k, ceil(k × warm call time / K_BUDGET_S))`. A tool pod
+serves one call at a time and Knative's activator queues the rest on the first pod to free, so for the ~45 ms tau-bench
+tools one pod serves a burst of up to 6 calls within 0.3 s: k = 1. Slow tools (`TOOL_WARM_S_JSON`, e.g. 0.5 s) keep k.
+In the calibrated simulator (`results/sim_runs/*_ksweep-*`) this matched the best fixed policy both ways: with fast
+calls 1 pod had the same latency as the predicted or even the true fan-out with room and ~20 % fewer pod-seconds, and
+removed the ping controller's tail at 15 pods (p99 72 s → 0.50 s); with 0.5 s calls k > 1 lowered p95 (1.87 → 1.61 s)
+and the true fan-out did best (1.42 s). `K_RULE=0` turns it off. With k = 1 the lease controller's reserve of 4 turned
+away prewarms that would have fit at 15 pods (p99 1.68 s vs the ping controller's 0.50 s): a smaller reserve may suit.
 
-`pulse/experiments/sim_capacity.py` compares C0, C1, C3 with ping and C3 with leases on the simulated cluster with
-a pod capacity, on a virtual clock (no cluster, Docker or LLM). It reports tool-call latency p50/p95/p99, cold share,
-calls that waited for a slot, and pod-seconds per capacity. First results (lightgbm, θ 0.3, 4 episodes/min, 60
-episodes, `results/sim_runs/*_final-r4`): with no limit leases match the ping controller (p99 2.1 s, cold share 0.15
-vs 0.14, about the same pod-seconds); at 24 pods p99 is 3.0 s vs 3.7 s (C0) and 68 s (ping) at under half the
-pod-seconds; at 16 pods 13.6 s vs 133 s (C0) and 284 s (ping). At 8 episodes/min and 24 pods: 6.0 s vs 42 s and 389 s.
-The simulator models pod slots, cold starts and a 10 s termination grace; not CPU contention or Knative's
-autoscaler dynamics, so these need confirming on EKS. The adaptive part of k (capping it at each tool's
-observed fan-out width) needs to see calls, so only the simulator has it; the real controller lowers k only for room.
+**How many tools a step warms: adaptive top-k** (replaces the θ = 0.3 threshold; `PREWARM_POLICY=adaptive`, the
+default; `topk` = a fixed `TOP_K` for comparisons). The predictor offers its top 3 tools with p ≥ 0.05 as candidates,
+each with its rank and a hit rate: how often a candidate of that probability really was the next call, learned online
+from each episode's next hint (`pulse/predictor/calibration.py`; it starts at p and corrects an over- or
+under-confident predictor). The controller warms a candidate only if `hit rate × the tool's cold start ≥ (1 − hit
+rate) × the price of a pod slot` (only a wrong prewarm wastes a slot; a right one starts the pod the call would have
+started anyway): 0.075 s with room (a 1.5 s tool from a 5 % chance) up to 10× that, 33 %, when the nodes are full or pods wait
+(`TOPK_PRICE_S`, `TOPK_FULL_X`; the cold start is learned from the controller's pings). So a step warms up to 3 tools
+with room and 1 or none when full; refused ones get `Skipped` and a `skipped` log line (`why: topk`). Sim:
+`--prewarm-policy adaptive|topk`. Not yet compared with θ in the simulator or on EKS: with room it warms more tools
+than θ did (more pod-seconds).
+
+**The k rule's numbers at runtime** (`K_ADAPT=1`, `adaptive.py`; off = the fixed 0.05 s and 0.3 s). The warm call
+time per tool becomes the median of its warm calls in Prometheus (`pulse_tool_call_seconds{temperature="warm"}`,
+which the runners export; `PROM_URL`, polled every 60 s; the settings until a tool has 5 warm calls, and throughout
+without monitoring). The budget becomes `K_BUDGET_S × cold factor × (1 + fullness)`: the cold factor is the tool's
+cold start, learned from the controller's own pings to tools at zero pods, over 1.5 s (clamped 0.5–3), and fullness is
+1 − free slots / 6 (0 with room). So with room and normal cold starts nothing changes; a full node or a slow-starting
+tool raises the budget and gets fewer pods. For today's ~45 ms tools k stays 1; it matters for slow tools. Sim:
+`--k-policy adaptive`. The `warmed` log line records the `k_warm_s` and `k_budget_s` it used.
+
+**How long prewarmed pods live, ping mode** (`refresh.py`; every lever off by default = the behaviour above). A pod
+lives until its tool's Knative window passes with no request, and any request restarts it, a prewarm ping included: a
+wrong prediction for a warm tool keeps an unused pod alive another window, holding a slot real calls may then wait for.
+
+| Lever | Setting | What it does |
+|---|---|---|
+| refresh policy | `REFRESH_POLICY` always \| never \| value | always: every prediction pings. never: a tool with its k pods is not pinged, only real calls extend them. value: pinged only if p ≥ a threshold, 0 with `REFRESH_FREE_HIGH` (6) or more free slots, rising to `REFRESH_P_MAX` (0.8) with none |
+| pressure shedding | `SHED_P` (0 = off) | while tool pods wait for a slot, predictions below it neither start nor refresh pods, so low-value pods age out |
+| per-tool windows | `TOOL_WINDOWS=per-tool` (run_cloud.sh; UI: Idle window) | each tool's window = the 80th percentile of its re-use gaps in C0 runs, clamped to 20–60 s (over 60 s → 20 s: keeping it rarely pays). `python -m pulse.experiments.tool_windows <runs> --domain …` writes `data/tool_windows.json`; the shipped one is from the 19 Nov EKS C0 runs at 8 episodes/min (tools with under 5 re-uses are rough) |
+
+Skipped predictions get `status.phase: Skipped` and a `skipped` log line. There is no real eviction: Knative's
+autoscaler sets a tool's pod count from the traffic in its window, so a deleted idle pod is recreated at once; a pod
+is freed only by sending it no traffic, which is what shedding and shorter windows do. The simulator models all three
+(`sim_capacity --refresh always never value --shed-p 0 0.6 --windows 60 per-tool`). Not measured on EKS yet; the
+in-cluster controller needs a rebuilt image for them.
+
+EKS with the k rule (19 Nov 2026, third cluster, same runs; `*_eks3-*`, `*_eks3p-*`): predictions of 2–5 pods all
+became 1. With room: ping p99 1.51 s, cold 2.4 %; lease 1.47 s, 3.2 %. Under pressure (one worker, 16/min) C0 / ping /
+lease: p99 2.15 / **0.58** / 1.86 s, max 85 / **5.9** / 87 s, cold 5.0 / **1.8** / 3.4 %, peak Pending 3 / 1 / 3. The
+ping controller's p99 under pressure went from 24–46 s (first two clusters, predicted k) to 0.58 s: the extra fan-out
+pods were its whole problem. The lease controller saw 0 free slots most of the run (13 tool pods filled the worker),
+so its reserve of 4 left it refreshing warm tools only and rejecting 9 cold ones: about C0's behavior. With the k rule
+the ping controller is the better default; the lease controller needs a smaller reserve to add anything here.
+
+Both run over the same 60 s window, and neither ever removes a warm pod: on EKS a warm pod that already exists was
+the cheapest one to use, and shortening the window to make leases evictable (the first lease design: 6 s window,
+keep-alive pings, value-based eviction) made the nodes restart pods all the time. The controller counts free pod
+slots on the schedulable tool nodes (`TOOL_NODES`, default `pulse/role=worker`; cordoned nodes count as full):
+allocatable pods and CPU minus what runs there and minus the tool pods waiting for a slot, converting CPU at
+`TOOL_CPU_M` (75m: the tool's 50m plus Knative's 25m queue-proxy sidecar). The PrewarmRequest's status records each
+decision (`grantedReplicas`, `leaseExpiresAt`, `decision`, phase `Rejected` / `Expired`). The policy is pure logic in
+`leases.py`, shared by the controller and the simulator. The Experiments tab picks the controller (ping / lease,
+plus the reserve); `run_cloud.sh` takes `CONTROLLER=lease`. Every run sets the tools' window to 60 s.
+
+EKS (18 Nov 2026, 60 tau-bench episodes replayed in the cluster, lightgbm θ 0.3; `results/cloud_runs/*_eks-*`,
+`*_eksp-*`): with room (both workers, 8 episodes/min) C0 / ping / the first lease design had p99 1.74 / 1.46 / 1.43 s
+and cold share 7.5 / 3.0 / 3.2 %. Under pressure (one worker cordoned, ~15 tool pods of room, 16 episodes/min):
+p99 1.85 / 24 / 156 s, cold share 4.6 / 3.4 / 47 %, tool pods started 21 / 27 / 214. Prewarm pods crowding out real
+calls is what hurt the ping controller; constant pod restarts under the 6 s window what hurt the first lease design.
+The admission-control design on EKS (19 Nov 2026, a new cluster, same runs; `*_eks2-*`, `*_eks2p-*`): with room
+(8 episodes/min) p99 1.52 s, cold share 4.2 %, every lease admitted. Under pressure (one worker, 16 episodes/min)
+C0 / ping / lease: p99 33.8 / 45.9 / **2.09 s**, max 87 / 123 / 60 s, cold share 5.2 / 3.8 / 3.2 %, tool pods started
+26 / 30 / 23, pod-seconds 4,726 / 5,015 / 4,166, peak Pending pods 4 / 9 / 2. The controller saw 0–1 free slots
+most of the run, lowered k for 130 predictions, rejected 9 and started only 21 new pods. C0 varied between the two
+clusters (p99 1.85 s on 18 Nov, 33.8 s here): one run per configuration, so the gaps are indicative, not tight.
+
+`pulse/experiments/sim_capacity.py` compares C0, C1, C3-ping and C3-lease on the simulated cluster with a capacity
+of tool pod slots, on a virtual clock (no cluster, Docker or LLM): tool-call latency p50/p95/p99, cold share (calls
+over 1 s, the runners' rule), calls that waited for a slot, pod-seconds. The simulator (`autoscaler="kpa"`) models
+Knative's KPA: tools sized every 2 s by average concurrency over 60 s at 0.7 per pod, panic mode for 6 s bursts,
+scale-down at most halving, a call queued on the first pod to free (the activator), a scaled-down pod holding its
+slot for the 30 s grace, cold starts scaled to the in-cluster median (1.56 s; `data/coldstart/` measures from the
+laptop). Against the six EKS runs it matches C0 (room: p99 1.80 vs 1.74 s, cold 7.7 vs 7.5 %; 15 pods: 1.75 vs 1.85 s,
+4.6 vs 4.6 %) and the ping controller with room (1.59 vs 1.46 s); it overstates the ping controller's tail under
+pressure about 3x (p99 72 vs 24 s) but gets its direction. C1's always-warm pods ignore the capacity (a shortcut).
+
+Admission-control lease controller, simulated (`results/sim_runs/*_v2-*`, lightgbm θ 0.3, reserve 4): with room it
+matches ping (16/min: p99 1.08 vs 1.01 s, cold 1.6 vs 1.2 %, 6 % fewer pod-seconds); at 15 pods p99 1.69 s vs 72 s
+(ping) and 1.75 s (C0), cold 3.2 % (lowest), 24 % fewer pod-seconds than ping; at 24 episodes/min and 15 pods
+1.82 vs 59.6 s (ping). At 10 pods, less room than the traffic needs, every configuration queues for minutes (lease
+241 s, C0 274 s, ping 273 s). Reserve 2 lowers cold share (2.6 %) but lets a few calls wait (max 75 s); 8 removes the
+waits at 3.6 % cold. EKS (above) agreed on the ranking under pressure: lease far below ping and C0. The adaptive
+part of k (capping it at each tool's observed fan-out width)
+needs to see calls, so only the simulator has it; the real controller lowers k only for room.
 
 ### 3.6 `pulse.experiments`: experiment runners
 
@@ -296,7 +375,7 @@ Argo CD does not manage the tools (experiments switch their min-scale at runtime
 | Setting | Used by |
 |---|---|
 | `.env`: `LLM_BACKEND`, `GROQ_API_KEY[_N]`, `GROQ_MODEL`, `OPEN_ROUTER_API_KEY`, `OLLAMA_*`, `USER_MODEL`, `SPEC_*` | the agent, the customer, the speculator |
-| `PREDICTOR`, `THETA`, `PREWARM_POLICY`, `TOP_K`, `P_MIN`, `LOOKAHEAD`, `THETA_NEXT`, `TTL_S`, `CRD_MODE`, `AUDIT_LOG` | the prediction service |
+| `PREDICTOR`, `PREWARM_POLICY`, `TOP_K`, `TOP_K_MAX`, `P_MIN`, `LOOKAHEAD`, `THETA_NEXT`, `TTL_S`, `CRD_MODE`, `AUDIT_LOG` | the prediction service |
 | `PULSE_MODEL_URI` / `PULSE_MODEL_VERSION` / `PULSE_MODEL`, `PULSE_EMBED_BASE` | pulse_v3 |
 | `ACTION_MODEL_URI` / `ACTION_MODEL_VERSION` / `ACTION_MODEL_PATH` | lightgbm, markov |
 | `PREDICTOR_URL`, `TOOL_BACKEND`, `MCP_URL_TEMPLATE`, `MCP_HOST_TEMPLATE`, `KUBE_CONTEXT` | the agent and the runners |

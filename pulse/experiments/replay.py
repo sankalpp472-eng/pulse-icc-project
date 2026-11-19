@@ -385,7 +385,7 @@ class Replay:
                                              headers={"Content-Type": "application/json"}, method="POST")
                 with urllib.request.urlopen(req, timeout=self.hint_timeout) as r:
                     ans = json.loads(r.read())
-                rec.update(ok=True, prewarm=ans["prewarm"], top3=ans["ranked"][:3], theta=ans["theta"],
+                rec.update(ok=True, prewarm=ans["prewarm"], top3=ans["ranked"][:3], policy=ans.get("policy"),
                            model=ans.get("model"))
             except Exception as e:
                 rec.update(ok=False, error=f"{type(e).__name__}: {e}")

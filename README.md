@@ -138,7 +138,8 @@ One job runs at a time.
 
 ### Predictor card (right side)
 
-Pick the predictor, the prewarm policy (θ threshold or top-k, optional lookahead) and θ. The card shows which
+Pick the predictor and the prewarm policy: adaptive top-k (up to 3 tools a step, as many as are worth a pod slot
+now) or a fixed top-k, the probability floor, and optional lookahead. The card shows which
 inputs the running predictor reads (trajectory / signals / history) and its answer latency.
 
 | Predictor | Reads | What it is |

@@ -57,7 +57,7 @@ def _post(hint: dict) -> None:
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
             ans = json.loads(r.read())
             record.update(ok=True, prewarm=ans["prewarm"], top3=ans["ranked"][:3],
-            theta=ans["theta"], ttl_s=ans["ttl_s"])
+            policy=ans.get("policy"), ttl_s=ans["ttl_s"])
     except Exception as e:  # predictor down / slow -> ignore, the agent carries on
         record.update(ok=False, error=f"{type(e).__name__}: {e}")
     record["rtt_ms"] = round((time.perf_counter() - t0) * 1000, 2)

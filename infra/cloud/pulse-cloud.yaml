@@ -1,5 +1,5 @@
 # Pulse's own components in the cluster, next to the Knative tools (applied by cloud_up.sh, which fills
-# in __IMAGE__ and __THETA__). The Groq keys come from the Secret pulse-llm-keys (cloud_up.sh makes it
+# in __IMAGE__ and __PREWARM_POLICY__). The Groq keys come from the Secret pulse-llm-keys (cloud_up.sh makes it
 # from .env). Runs are separate pods started by run_cloud.sh with the same image and account.
 #
 #   pulse-predictor   pulse/predictor/service.py: hints in, PrewarmRequests out                  :8000
@@ -75,7 +75,7 @@ spec:
           env:
             - {name: PREDICTOR, value: lightgbm}
             - {name: CRD_MODE, value: k8s}
-            - {name: THETA, value: "__THETA__"}
+            - {name: PREWARM_POLICY, value: "__PREWARM_POLICY__"}   # adaptive | topk (pulse/predictor/policy.py)
             - {name: PULSE_EMBED_BASE, value: "http://pulse-embed:8091/v1"}   # pulse_v3's embeddings (pulse-embed below)
             - {name: PULSE_DATA_DIR, value: /tmp/pulse-data}           # pulse_v3's embedding cache, and models
             - {name: PULSE_REGISTRY_CACHE, value: /tmp/registry}       # from S3: writable (the image is read-only)

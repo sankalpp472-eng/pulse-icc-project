@@ -44,6 +44,8 @@ class ActionP(BaseModel):
     p: float
     k: Optional[int] = None   # prewarm list only: pods to start (fan-out width = desiredReplicas)
     ttl_s: Optional[int] = None   # prewarm list only: how long to keep it warm (ttlSeconds; TTL_MODE in service.py)
+    rank: Optional[int] = None    # prewarm list, adaptive policy: the candidate's place among this step's candidates
+    hit: Optional[float] = None   # prewarm list, adaptive policy: how often a candidate of this p was really next
 
 
 class PredictionOut(BaseModel):
@@ -53,7 +55,7 @@ class PredictionOut(BaseModel):
     ranked: list[ActionP]
     prewarm: list[ActionP]    # never END or RESPOND
     lookahead: list[ActionP] = []    # the part of `prewarm` the lookahead chose (predictors that support it)
-    theta: float
+    policy: str                      # adaptive | topk (policy.py)
     ttl_s: int
     latency_ms: float
     inputs_used: list[str] = []      # what this answer was computed from

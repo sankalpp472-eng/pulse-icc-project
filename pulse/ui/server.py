@@ -137,16 +137,15 @@ def sim_min_scale(body: dict):
 
 # ---------------------------------------------------------------- services
 class PredictorIn(BaseModel):
-    model: str = "lightgbm"         # lightgbm | markov | speculator | pulse_v3
-    theta: float = 0.3
-    policy: dict | None = None      # {"policy": "theta"|"topk", "top_k", "p_min", "lookahead", "theta_next"}
+    model: str = "lightgbm"         # lightgbm | lightgbm_adapt | markov | speculator | pulse_v3
+    policy: dict | None = None      # {"policy": "adaptive"|"topk", "top_k", "p_min", "lookahead", "theta_next"}
 
 
 @app.post("/api/predictor/start")
 def predictor_start(p: PredictorIn):
     crd = cluster.mode == "knative"
     try:
-        st = services.start_predictor(p.model, p.theta, crd, p.policy)
+        st = services.start_predictor(p.model, crd, p.policy)
     except ValueError as e:                 # e.g. the speculator with the retail domain
         raise HTTPException(400, str(e))
     if crd and not services.controller_running():
@@ -185,8 +184,8 @@ def session_start(cfg: dict):
         except ValueError as e:
             raise HTTPException(400, str(e))
         pred = eks["url"]
-        cfg["predictor"], cfg["theta"] = f"{eks['name']} (EKS)", eks["theta"]
-        cfg["policy_label"] = backend.policy_label(eks["policy"], eks["theta"])
+        cfg["predictor"] = f"{eks['name']} (EKS)"
+        cfg["policy_label"] = backend.policy_label(eks["policy"])
     elif cfg.get("predictor"):
         services.match_cluster()            # e.g. started on the simulated cluster, then switched to Knative (#19)
         if not services.wait_predictor(timeout=1 if services.predictor_ready() else 90):
@@ -197,8 +196,8 @@ def session_start(cfg: dict):
                                      "or choose 'none (C0)'")
         pred = backend.PREDICTOR_URL
         info = services.procs["predictor"].info
-        cfg["predictor"], cfg["theta"] = info["model"], info["theta"]
-        cfg["policy_label"] = backend.policy_label(info.get("policy"), info["theta"])
+        cfg["predictor"] = info["model"]
+        cfg["policy_label"] = backend.policy_label(info.get("policy"))
     if cluster.mode == "sim" and cfg.get("fresh", True):
         sim.set_min_scale(sim.min_scale)
     agents = int(cfg.get("bg_agents") or 0)
@@ -364,8 +363,7 @@ def models_use(body: dict):
     info = cur.info if cur else {}
     model = info.get("model") if info.get("model") in preds else preds[0]
     try:
-        return services.start_predictor(model, float(info.get("theta", 0.3)), cluster.mode == "knative",
-                                        info.get("policy"), model_version=v)
+        return services.start_predictor(model, cluster.mode == "knative", info.get("policy"), model_version=v)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -541,7 +539,7 @@ app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 def _startup():
     # load the main predictor right away: importing LightGBM + the models takes up to a minute on a laptop
     if os.getenv("UI_AUTOSTART_PREDICTOR", "1") != "0":
-        services.start_predictor(os.getenv("UI_PREDICTOR", "lightgbm"), 0.3, crd=cluster.mode == "knative")
+        services.start_predictor(os.getenv("UI_PREDICTOR", "lightgbm"), crd=cluster.mode == "knative")
 
 
 @app.on_event("shutdown")

@@ -180,7 +180,7 @@ class Session(threading.Thread):
             warm = {p["tool"]: int(p.get("k") or 1) for p in ans.get("prewarm", [])}
             self.prewarmed.setdefault(step, {}).update(warm)
             self.emit("prediction", step=step, kind=kind, rtt_ms=rtt, model=ans.get("model"),
-                      theta=ans.get("theta"), top=[{"tool": x["tool"], "p": round(x["p"], 3)} for x in ans["ranked"][:4]],
+                      policy=ans.get("policy"), top=[{"tool": x["tool"], "p": round(x["p"], 3)} for x in ans["ranked"][:4]],
                       prewarm=[{"tool": t, "k": k} for t, k in warm.items()],
                       signals={k: v for k, v in (signals or {}).items() if v} if signals else None)
             if self.sim:                       # the simulated controller: start the pods right away

@@ -190,24 +190,36 @@
           <label class="c3-only">Predictor
             <select id="xPred"></select>
           </label>
-          <label class="c3-only">Prewarm policy
+          <label class="c3-only" title="adaptive: the predictor offers its top 3 tools and the controller warms each one whose learned hit rate × cold start is worth a pod slot now, so a step warms up to 3 tools with room and fewer when the nodes fill (pulse/predictor/policy.py, pulse/controller/adaptive.py). top-k: exactly k tools per step">Prewarm policy
             <select id="xPolicy">
-              <option value="theta">θ threshold</option>
-              <option value="topk">Top-k (k tools per step, each P ≥ floor)</option>
+              <option value="adaptive">adaptive top-k</option>
+              <option value="topk">fixed top-k</option>
             </select>
           </label>
-          <label class="c3-only x-theta">θ <span class="muted" id="xThetaVal">0.30</span>
-            <input type="range" id="xTheta" min="0.05" max="0.9" step="0.05" value="0.3">
-          </label>
           <label class="c3-only x-topk hidden">k <input type="number" id="xTopK" min="1" max="5" value="2"></label>
-          <label class="c3-only x-topk hidden">floor (P ≥) <input type="number" id="xPMin" min="0" max="0.9" step="0.05" value="0.1"></label>
-          <label class="c3-only" title="ping: one warm-up per prediction, the 60 s Knative window is the TTL. lease: per-prediction TTL, fewer pods when the tool nodes are nearly full, a reserve of free pods for on-demand calls, lowest-value leases evicted; the tools get a 6 s window">Controller
+          <label class="c3-only" title="no tool below this probability is prewarmed">floor (P ≥) <input type="number" id="xPMin" min="0" max="0.9" step="0.05" value="0.05"></label>
+          <label class="c3-only" title="ping: every prediction starts its k pods. lease: a prediction starts only the new pods that fit next to a reserve of free pods (fewer, or none for a cold tool, when the tool nodes are nearly full), so prewarms never take the room real calls need. Both keep the 60 s Knative window">Controller
             <select id="xController">
-              <option value="ping">ping (window = TTL)</option>
-              <option value="lease">lease (TTL + eviction)</option>
+              <option value="ping">ping (start k pods)</option>
+              <option value="lease">lease (admission control)</option>
             </select>
           </label>
           <label class="c3-only x-lease hidden" title="free pod slots prewarms never take, so on-demand calls still find room">reserve pods <input type="number" id="xReserve" min="0" max="50" value="4"></label>
+          <label class="c3-only x-ping" title="Does a prediction ping a tool that already has its pods? Every ping restarts the tool's idle window, so a wrong prediction keeps an unused pod alive. always: yes (as before). if worth the slot: only if p is above a threshold that is 0 with 6+ free pod slots and 0.8 with none. never: only real calls keep a pod alive (pulse/controller/refresh.py)">refresh warm tools
+            <select id="xRefresh">
+              <option value="always">always</option>
+              <option value="value">if worth the slot</option>
+              <option value="never">never</option>
+            </select>
+          </label>
+          <label class="c3-only x-ping" title="While tool pods wait for a free slot (Pending), predictions below this neither start nor refresh pods, so low-value pods age out and free their slots. 0 = off">shed p &lt; <input type="number" id="xShed" min="0" max="0.9" step="0.05" value="0"></label>
+          <label class="c3-only check" title="The k rule min(k, ceil(k × warm call time / budget)) with both numbers learned while it runs: each tool's warm call time from Prometheus (when monitoring is installed), and the 0.3 s budget scaled by the tool's measured cold start and by how full the tool nodes are (pulse/controller/adaptive.py). Off: the fixed 0.05 s and 0.3 s"><input type="checkbox" id="xKAdapt"> adaptive k</label>
+          <label title="The tools' Knative idle window, for every configuration: 60 s for all, or each tool's own from how soon it is really called again (data/tool_windows.json, python -m pulse.experiments.tool_windows), 20-60 s">Idle window
+            <select id="xWindows">
+              <option value="60">60 s (all tools)</option>
+              <option value="per-tool">per tool (measured)</option>
+            </select>
+          </label>
           <label class="c3-only check"><input type="checkbox" id="xLook"> Lookahead</label>
           <label class="c3-only x-look hidden">θ_next <input type="number" id="xThetaNext" min="0.05" max="0.9" step="0.05" value="0.3"></label>
           <label class="load-x hidden">Load test target
@@ -431,7 +443,7 @@
         <div class="card-head"><h3>Pulse in the current cluster</h3><span class="pill" id="sClusterPred">…</span></div>
         <div class="form-grid">
           <label>Predictor <select id="sPredictor"></select></label>
-          <label>θ <input type="number" id="sTheta" min="0.05" max="0.9" step="0.05" value="0.3"></label>
+          <label>Prewarm policy <select id="sPolicy"><option value="adaptive">adaptive top-k</option><option value="topk">fixed top-k</option></select></label>
         </div>
         <div class="actions">
           <button data-act="cloud_up">Deploy Pulse's services</button>
@@ -523,14 +535,11 @@
       <label>Model <select id="predModel"></select></label>
       <div class="small muted">Reads from each hint: <span id="predInputs"></span></div>
       <label>Prewarm policy
-        <div class="seg small" id="policySeg"><button data-v="theta" class="on">θ threshold</button><button data-v="topk">Top-k</button></div>
+        <div class="seg small" id="policySeg"><button data-v="adaptive" class="on" title="the top 3 tools as candidates; the controller warms those worth a pod slot now (learned hit rate × cold start vs the slot's price)">Adaptive top-k</button><button data-v="topk">Fixed top-k</button></div>
       </label>
-      <label class="pol-theta">θ (prewarm if P ≥ θ) <span class="muted" id="thetaVal">0.30</span>
-        <input type="range" id="theta" min="0.05" max="0.9" step="0.05" value="0.3">
-      </label>
-      <div class="pol-topk hidden two">
-        <label>k (tools per step) <input type="number" id="topK" min="1" max="5" value="2"></label>
-        <label>floor (P ≥) <input type="number" id="pMin" min="0" max="0.9" step="0.05" value="0.1"></label>
+      <div class="two">
+        <label class="pol-topk hidden">k (tools per step) <input type="number" id="topK" min="1" max="5" value="2"></label>
+        <label>floor (P ≥) <input type="number" id="pMin" min="0" max="0.9" step="0.05" value="0.05"></label>
       </div>
       <label class="check"><input type="checkbox" id="lookChk"> Lookahead (prewarm during the customer's turn)</label>
       <label class="pol-look hidden">lookahead θ_next <input type="number" id="thetaNext" min="0.05" max="0.9" step="0.05" value="0.3"></label>

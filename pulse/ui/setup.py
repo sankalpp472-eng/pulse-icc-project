@@ -303,7 +303,8 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
         pred = p.get("predictor") if p.get("predictor") in PREDICTORS else "lightgbm"
         target = "kind" if (cluster.context or "").startswith("kind-") else "ecr"
         return [(f"{title}: predictor {pred} (infra/cloud/cloud_up.sh)", [_need_bash(), "infra/cloud/cloud_up.sh"],
-                 {**env, "TARGET": target, "PREDICTOR": pred, "THETA": str(float(p.get("theta") or 0.3))})]
+                 {**env, "TARGET": target, "PREDICTOR": pred,
+                  "PREWARM_POLICY": "topk" if p.get("prewarm_policy") == "topk" else "adaptive"})]
     if name == "set_predictor":
         pred = p.get("predictor")
         if pred not in PREDICTORS:

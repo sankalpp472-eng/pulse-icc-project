@@ -51,14 +51,15 @@ def ui(monkeypatch):
 
 def test_switch_to_knative_turns_prewarming_on(ui):
     svc = ui.services
-    svc.start_predictor("lightgbm", 0.3, crd=False)              # how the UI starts it on the simulated cluster
+    svc.start_predictor("lightgbm", crd=False, policy={"policy": "topk", "top_k": 3})   # how the UI starts it (sim)
     assert svc.procs["predictor"].info["crd"] == "off"
 
     ui.set_cluster({"mode": "knative"})                           # the issue's step 3: no click on Start
 
     pred = svc.procs["predictor"]
     assert pred.alive() and pred.info["crd"] == "k8s" and pred.env["CRD_MODE"] == "k8s"
-    assert (pred.info["model"], pred.info["theta"]) == ("lightgbm", 0.3)      # same predictor, same settings
+    assert (pred.info["model"], pred.info["policy"]["policy"], pred.info["policy"]["top_k"]) == \
+        ("lightgbm", "topk", 3)                                   # same predictor, same settings
     assert svc.controller_running()
     assert svc.prewarm_problem() is None
 
@@ -66,7 +67,7 @@ def test_switch_to_knative_turns_prewarming_on(ui):
 def test_switch_back_to_sim_turns_cluster_writes_off(ui):
     svc = ui.services
     ui.set_cluster({"mode": "knative"})
-    svc.start_predictor("markov", 0.5, crd=True)
+    svc.start_predictor("markov", crd=True)
     ui.set_cluster({"mode": "sim"})
     assert svc.procs["predictor"].info["crd"] == "off"
     assert svc.procs["predictor"].info["model"] == "markov"
@@ -75,7 +76,7 @@ def test_switch_back_to_sim_turns_cluster_writes_off(ui):
 def test_c3_episode_refused_when_prewarming_is_inactive(ui, monkeypatch):
     svc = ui.services
     ui.cluster.mode = "knative"                                   # e.g. a predictor that can't follow the switch
-    svc.start_predictor("lightgbm", 0.3, crd=False)
+    svc.start_predictor("lightgbm", crd=False)
     monkeypatch.setattr(backend.Services, "match_cluster", lambda self: False)
     with pytest.raises(HTTPException) as e:
         ui.session_start({"kind": "replay", "predictor": "lightgbm", "task_id": "30"})
@@ -85,7 +86,7 @@ def test_c3_episode_refused_when_prewarming_is_inactive(ui, monkeypatch):
 
 def test_c3_episode_after_switch_starts_with_prewarming(ui, monkeypatch):
     svc = ui.services
-    svc.start_predictor("lightgbm", 0.3, crd=False)
+    svc.start_predictor("lightgbm", crd=False)
     ui.set_cluster({"mode": "knative"})
     started = {}
     monkeypatch.setattr(ui, "Session", lambda cfg, *a, **k: started.setdefault("s", type(

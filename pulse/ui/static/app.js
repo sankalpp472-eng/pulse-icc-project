@@ -101,7 +101,7 @@ async function loadSetup() {
 }
 function setupParams(btn) {
   return { region: $("#sRegion").value.trim(), terraform: $("#sTerraform").checked, target: btn.dataset.target,
-           predictor: $("#sPredictor").value, theta: Number($("#sTheta").value), github_repo: $("#sRepo").value.trim(),
+           predictor: $("#sPredictor").value, prewarm_policy: $("#sPolicy").value, github_repo: $("#sRepo").value.trim(),
            family: $("#sFamily").value, version: $("#sVersion").value.trim(), revision: $("#sRevision").value.trim(),
            latest: $("#sPubLatest").checked };
 }
@@ -195,7 +195,6 @@ $("#detectBtn").onclick = async () => {
 // ------------------------------------------------------------------ predictor card
 const predModel = $("#predModel");
 predModel.innerHTML = Object.entries(PREDICTORS).map(([k, v]) => `<option value="${k}">${v} · reads ${PRED_INPUTS[k].join(" + ")}</option>`).join("");
-$("#theta").oninput = () => ($("#thetaVal").textContent = Number($("#theta").value).toFixed(2));
 const policySeg = seg("policySeg", () => policyForm());
 $("#lookChk").onchange = () => policyForm();
 predModel.onchange = () => policyForm();
@@ -205,13 +204,12 @@ function policyForm() {
   $("#lookChk").disabled = !look;
   if (!look) $("#lookChk").checked = false;
   $("#predInputs").innerHTML = inputBadges(PRED_INPUTS[predModel.value]);
-  $$(".pol-theta").forEach((e) => e.classList.toggle("hidden", policySeg.get() !== "theta"));
   $$(".pol-topk").forEach((e) => e.classList.toggle("hidden", policySeg.get() !== "topk"));
   $$(".pol-look").forEach((e) => e.classList.toggle("hidden", !$("#lookChk").checked));
 }
 // what the Predictor card asks for (pulse/predictor/service.py: PREWARM_POLICY, TOP_K, P_MIN, LOOKAHEAD, THETA_NEXT)
 const cardPredictor = () => ({
-  model: predModel.value, theta: Number($("#theta").value),
+  model: predModel.value,
   policy: { policy: policySeg.get(), top_k: Number($("#topK").value), p_min: Number($("#pMin").value),
             lookahead: $("#lookChk").checked, theta_next: Number($("#thetaNext").value) },
 });
@@ -226,9 +224,8 @@ function predictorMatchesCard() {
   const p = state.services?.predictor, c = cardPredictor();
   if (!p || !p.running) return false;
   const a = p.policy || {}, b = c.policy;
-  if (p.model !== c.model || (a.policy || "theta") !== b.policy || !!a.lookahead !== b.lookahead) return false;
-  if (b.policy === "topk" && (a.top_k !== b.top_k || Math.abs(a.p_min - b.p_min) > 1e-9)) return false;
-  if (b.policy === "theta" && Math.abs(p.theta - c.theta) > 1e-9) return false;
+  if (p.model !== c.model || (a.policy || "adaptive") !== b.policy || !!a.lookahead !== b.lookahead) return false;
+  if (Math.abs(a.p_min - b.p_min) > 1e-9 || (b.policy === "topk" && a.top_k !== b.top_k)) return false;
   if (b.lookahead && Math.abs(a.theta_next - b.theta_next) > 1e-9) return false;
   return true;
 }
@@ -245,7 +242,6 @@ async function applyCard() {
 }
 function scheduleApply() { clearTimeout(applyTimer); applyTimer = setTimeout(applyCard, 900); }
 predModel.addEventListener("change", scheduleApply);
-$("#theta").addEventListener("change", scheduleApply);
 ["#topK", "#pMin", "#thetaNext"].forEach((id) => $(id).addEventListener("change", scheduleApply));
 $("#lookChk").addEventListener("change", scheduleApply);
 $("#policySeg").addEventListener("click", (e) => { if (e.target.closest("button")) scheduleApply(); });
@@ -588,7 +584,6 @@ const xMode = seg("xMode", () => expForm());
 const xConfig = seg("xConfig", () => expForm());
 const xWhere = seg("xWhere");
 $("#xPred").innerHTML = Object.entries(PREDICTORS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
-$("#xTheta").oninput = () => ($("#xThetaVal").textContent = Number($("#xTheta").value).toFixed(2));
 $("#xTasksPreset").onchange = () => {
   const v = $("#xTasksPreset").value;
   $("#xTasksCustomWrap").classList.toggle("hidden", v !== "custom");
@@ -610,13 +605,13 @@ function expForm() {
   // the predictor test always runs a predictor (C0/C1 then only label the cluster state)
   const c3 = xConfig.get() === "C3" || (load && target === "predictor");
   $$(".c3-only").forEach((e) => e.classList.toggle("hidden", !c3));
-  $$(".x-theta").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xPolicy").value !== "theta"));
   $$(".x-topk").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xPolicy").value !== "topk"));
   const lookOk = LOOKAHEAD_OK.has($("#xPred").value);
   $("#xLook").disabled = !lookOk;
   if (!lookOk) $("#xLook").checked = false;
   $$(".x-look").forEach((e) => e.classList.toggle("hidden", !c3 || !$("#xLook").checked));
   $$(".x-lease").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xController").value !== "lease"));
+  $$(".x-ping").forEach((e) => e.classList.toggle("hidden", !c3 || $("#xController").value !== "ping"));
 }
 $("#xController").onchange = () => expForm();
 $("#xPred").addEventListener("change", () => expForm());
@@ -636,7 +631,7 @@ let runAfter = 0;
 $("#xStart").onclick = async () => {
   const live = xMode.get() === "live";
   const spec = {
-    mode: xMode.get(), config: xConfig.get(), predictor: $("#xPred").value, theta: Number($("#xTheta").value),
+    mode: xMode.get(), config: xConfig.get(), predictor: $("#xPred").value,
     where: xWhere.get(), tasks: expTasks(), label: $("#xLabel").value.trim() || "ui",
     episodes: live ? null : ($("#xEpisodes").value || null), seed: live ? null : $("#xSeed").value,
     user_turn_median: live ? null : $("#xUserTurn").value, fanout: $("#xFanout").checked,
@@ -645,6 +640,8 @@ $("#xStart").onclick = async () => {
     policy: { policy: $("#xPolicy").value, top_k: Number($("#xTopK").value), p_min: Number($("#xPMin").value),
               lookahead: $("#xLook").checked, theta_next: Number($("#xThetaNext").value) },
     controller: $("#xController").value, reserve: Number($("#xReserve").value),
+    refresh: $("#xRefresh").value, shed_p: Number($("#xShed").value), windows: $("#xWindows").value,
+    k_adapt: $("#xKAdapt").checked,
     // load tests (loadtest/)
     target: $("#lTarget").value, engine: $("#lEngine").value, stages: $("#lStages").value.trim(),
     interactive: $("#lWeb").checked, rates: $("#lRates").value, duration: Number($("#lDuration").value),

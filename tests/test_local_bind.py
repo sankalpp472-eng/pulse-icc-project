@@ -40,7 +40,7 @@ def test_ui_starts_the_predictor_on_localhost(laptop, monkeypatch):
     monkeypatch.setattr(backend.Services, "_health_loop", lambda self: None)
     monkeypatch.setattr(backend.Services, "status", lambda self: {})
     svc = backend.Services(SimpleNamespace(mode="sim", domain="airline", context=None))
-    svc.start_predictor("markov", theta=0.3, crd=False)
+    svc.start_predictor("markov", crd=False)
     cmd = started["predictor"]
     assert cmd[cmd.index("--host") + 1] == "127.0.0.1"
 
