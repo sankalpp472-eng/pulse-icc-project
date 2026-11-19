@@ -15,6 +15,8 @@ import json
 import time
 import urllib.request
 
+from pulse.predictor.contract import domain_tools
+
 HISTORY_N = 10
 DEFAULT_INPUTS = ("trajectory", "signals")
 INFO_TTL_S = 10          # a different predictor can be started at the same URL (the UI's Model switch)
@@ -71,7 +73,9 @@ def compact(messages: list, n: int = HISTORY_N) -> list[dict]:
 def make_hint(wanted: set, episode_id: str, trajectory: list, workflow_id: str | None = None,
               domain: str = "airline", signals: dict | None = None, history: list | None = None) -> dict:
     """A PredictRequest dict with the inputs in `wanted` that are available."""
-    traj = list(trajectory)[-8:]                     # the recent trajectory is enough
+    # Only the domain's tools: a name the LLM made up never ran, and the predictor rejects it (issue #24)
+    known = domain_tools(domain)
+    traj = [t for t in trajectory if known is None or t in known][-8:]     # the recent trajectory is enough
     hint = {"workflow_id": workflow_id, "episode_id": episode_id, "domain": domain, "trajectory": traj,
             "current_tool": traj[-1] if traj else "START", "ts": time.time()}
     if "signals" in wanted and signals is not None:
