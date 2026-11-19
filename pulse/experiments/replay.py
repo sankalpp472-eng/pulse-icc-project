@@ -525,7 +525,7 @@ def main():
                           "predictor": predictor_info(health),
                           "crd_mode": health.get("crd", {}).get("mode"),
                           "mechanism": "Option A: controller sends k = desiredReplicas MCP pings per PrewarmRequest "
-                                       "(one if the tool already has k pods); TTL = Knative idle window",
+                                       "(one if the tool already has k pods); kept warm for max(TTL, Knative idle window) (keep-alive pings)",
                           "hints": "sent at the recorded start of every LLM step of the trace",
                           "hint_signals": a.signals_matched, "hint_context": a.hint_context,
                           "hint_timing": a.hint_timing,
