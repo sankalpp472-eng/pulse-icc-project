@@ -15,7 +15,7 @@ RESPOND = the agent answers the customer, END = the session ends); prewarm = the
 """
 
 from functools import cache
-from typing import Annotated, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -23,12 +23,7 @@ INPUTS = ("trajectory", "signals", "history")
 RESPOND, END = "RESPOND", "END"
 NO_PREWARM = {RESPOND, END}            # not functions: never prewarmed
 START = "START"                        # current_tool before the first call
-
-# Request size limits (issue #24): a tool name is a short identifier, and senders keep only the last 8 calls
-MAX_NAME = 64
-MAX_TRAJECTORY = 64
-MAX_HISTORY = 100
-Name = Annotated[str, Field(max_length=MAX_NAME)]
+SHOW_NAME = 64                         # an unknown name is echoed back cut to this many characters
 
 
 @cache
@@ -49,18 +44,23 @@ def unknown_tools(domain: str, names: list[str]) -> list[str]:
     return list(dict.fromkeys(n for n in names if n not in known))
 
 
+def short(name: str) -> str:
+    """A name as echoed back in a response: a 100,000-character name is not sent back whole."""
+    return name if len(name) <= SHOW_NAME else name[:SHOW_NAME] + f"... ({len(name)} characters)"
+
+
 class PredictRequest(BaseModel):
-    workflow_id: Optional[Name] = Field(None, description="W1, W2 ... (unknown / missing -> the domain's pooled model)")
-    episode_id: str = Field("", max_length=256)
-    domain: Name = Field("airline", description="must be one of the predictor's domains (GET /info), else 422")
-    trajectory: list[Name] = Field(default_factory=list, max_length=MAX_TRAJECTORY,
-                                   description="tools called so far, in order: tools of the domain only "
-                                               "(not RESPOND / END), else 422")
-    current_tool: Optional[Name] = Field(None, description="optional; used if trajectory is empty")
+    # No size limits: pulse_v3 reads the conversation (history), customer messages included
+    workflow_id: Optional[str] = Field(None, description="W1, W2 ... (unknown / missing -> the domain's pooled model)")
+    episode_id: str = ""
+    domain: str = Field("airline", description="must be one of the predictor's domains (GET /info), else 422")
+    trajectory: list[str] = Field(default_factory=list,
+                                  description="tools called so far, in order. A name that is not one of the domain's "
+                                              "tools (RESPOND / END included) -> every probability 0, see unknown_tools")
+    current_tool: Optional[str] = Field(None, description="optional; used if trajectory is empty")
     ts: Optional[float] = None
     signals: Optional[dict[str, float]] = Field(None, description="predictor/signals.py (inputs: signals)")
-    history: list[dict] = Field(default_factory=list, max_length=MAX_HISTORY,
-                                description="compact messages (inputs: history)")
+    history: list[dict] = Field(default_factory=list, description="compact messages (inputs: history)")
 
     def tools(self) -> list[str]:
         if self.trajectory:
@@ -86,3 +86,4 @@ class PredictionOut(BaseModel):
     latency_ms: float
     inputs_used: list[str] = []      # what this answer was computed from
     note: str = ""
+    unknown_tools: list[str] = []    # trajectory names that are not the domain's tools: then every p is 0 (#24)

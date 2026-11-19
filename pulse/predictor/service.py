@@ -4,8 +4,9 @@ The prediction API: one service, any of the four predictors (predictor/predictor
     PREDICTOR=lightgbm uvicorn service:app --app-dir predictor --port 8000          # run from the repo root
 
   POST /predict   a PredictRequest (contract.py) -> ranked next actions + the tools to prewarm, each with k pods.
-                  422 if the domain is not one of /info's domains, a trajectory name is not one of that domain's
-                  tools (RESPOND / END included), or a field is over its size limit (contract.py)
+                  422 if the domain is not one of /info's domains. A trajectory name that is not one of that
+                  domain's tools (RESPOND / END included) -> 200 with every probability 0, nothing prewarmed, and
+                  the names in unknown_tools
   GET  /info      the predictor's name, the inputs it reads (trajectory / signals / history), what it supports
                   (fan-out, lookahead), its domains, and the prewarm policy. Hint senders read it to send exactly
                   those inputs (pulse/agent/hints.py, pulse/ui/session.py, pulse/experiments/replay.py).
@@ -40,7 +41,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_client import CollectorRegistry, Counter, Histogram, make_asgi_app
 
 import pulse.predictor.predictors as predictors
-from pulse.predictor.contract import END, NO_PREWARM, RESPOND, ActionP, PredictionOut, PredictRequest, unknown_tools
+from pulse.predictor.contract import (END, NO_PREWARM, RESPOND, ActionP, PredictionOut, PredictRequest, domain_tools,
+                                     short, unknown_tools)
 from pulse.predictor.crd_writer import CRDWriter
 from pulse.predictor.policy import prewarm_select
 
@@ -102,22 +104,34 @@ async def healthz():
 
 
 def validate(req: PredictRequest) -> None:
-    """422 for a hint the model cannot answer for (issues #23, #24): a domain this predictor does not serve, or a
-    trajectory with names that are not that domain's tools (RESPOND / END are actions, never in a trajectory).
-    Answering anyway would rank another domain's tools, or score input the model never saw, with no warning."""
+    """422 for a domain this predictor does not serve (issue #23): answering would rank another domain's tools."""
     if req.domain not in PRED.domains:
-        raise HTTPException(422, f"domain {req.domain!r} is not served by this predictor ({NAME}: "
+        raise HTTPException(422, f"domain {short(req.domain)!r} is not served by this predictor ({NAME}: "
                                  f"{', '.join(PRED.domains)}); start a predictor for that domain")
-    bad = unknown_tools(req.domain, req.tools())
-    if bad:
-        shown = ", ".join(repr(n) for n in bad[:5]) + (f" and {len(bad) - 5} more" if len(bad) > 5 else "")
-        raise HTTPException(422, f"not {req.domain} tools: {shown}. A trajectory lists the tools called so far; "
-                                 f"{RESPOND} and {END} are not tools")
+
+
+def no_such_tool(req: PredictRequest, bad: list[str]) -> PredictionOut:
+    """Issue #24: the trajectory has names that are not the domain's tools (RESPOND / END included). The model never
+    saw such a step, so the predictor says so: every action gets probability 0, nothing is prewarmed, and
+    unknown_tools names them (cut to 64 characters)."""
+    wf = req.workflow_id or req.domain
+    HINTS.labels(wf).inc()
+    names = [short(n) for n in bad[:5]]
+    actions = sorted(domain_tools(req.domain)) + [RESPOND, END]
+    return PredictionOut(
+        workflow_id=wf, episode_id=req.episode_id, model=NAME,
+        ranked=[ActionP(tool=t, p=0.0) for t in actions], prewarm=[], theta=THETA, ttl_s=TTL_S, latency_ms=0.0,
+        unknown_tools=names + ([f"... and {len(bad) - 5} more"] if len(bad) > 5 else []),
+        note=f"not {req.domain} tools: {', '.join(repr(n) for n in names)} ({RESPOND} and {END} are not tools): "
+             f"every probability is 0, nothing prewarmed")
 
 
 @app.post("/predict", response_model=PredictionOut)
 def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread pool (the speculator waits on an LLM)
     validate(req)
+    bad = unknown_tools(req.domain, req.tools())
+    if bad:
+        return no_such_tool(req, bad)
     t0 = time.perf_counter()
     probs = PRED.predict(req)
     ranked = sorted(probs.items(), key=lambda kv: -kv[1])
