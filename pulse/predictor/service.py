@@ -23,6 +23,8 @@ Settings (environment variables):
   TTL_S            TTL the controller should give a prewarmed pod  (default 60)
   AUDIT_LOG        optional file: one JSON line per prewarm decision (FR-12)
   CRD_MODE         off | dryrun | k8s : write PrewarmRequest objects for the controller (crd_writer.py; default off)
+  METRIC_WORKFLOWS workflow ids counted under their own name in predictor_hints_total; any other request value
+                   counts as "other", so callers cannot add series        (default "W1 W2 W3 airline retail")
 
 Example request:
   {"workflow_id": "W1", "episode_id": "task1-123", "trajectory": ["get_user_details"], "signals": {...}}
@@ -62,6 +64,13 @@ LATENCY = Histogram("predictor_request_seconds", "Time to answer one /predict ca
                     buckets=(0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5),
                     registry=REGISTRY)
 HINTS = Counter("predictor_hints_total", "Hints received", ["workflow_id"], registry=REGISTRY)
+# The workflow_id label comes from the request body, so it is bounded to a fixed set (issue #36): every other value
+# is counted as "other". Otherwise each new id would add a time series that lives as long as the process.
+METRIC_WORKFLOWS = frozenset(os.getenv("METRIC_WORKFLOWS", "W1 W2 W3 airline retail").split())
+
+
+def metric_workflow(wf: str | None) -> str:
+    return wf if wf in METRIC_WORKFLOWS else "other"
 PREWARMS = Counter("predictor_prewarm_candidates_total", "Tools chosen for prewarming", ["tool"], registry=REGISTRY)
 
 app = FastAPI(title=f"Pulse next-tool predictor ({NAME})")
@@ -110,7 +119,7 @@ def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread p
 
     wf = req.workflow_id or req.domain
     LATENCY.observe(latency)
-    HINTS.labels(wf).inc()
+    HINTS.labels(metric_workflow(wf)).inc()
     for t, _ in pw:
         PREWARMS.labels(t).inc()
     if AUDIT_LOG and pw:

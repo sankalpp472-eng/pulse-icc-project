@@ -24,9 +24,11 @@ NO_PREWARM = {RESPOND, END}            # not functions: never prewarmed
 
 
 class PredictRequest(BaseModel):
-    workflow_id: Optional[str] = Field(None, description="W1, W2 ... (unknown / missing -> the domain's pooled model)")
-    episode_id: str = ""
-    domain: str = "airline"
+    # length limits: these strings go into PrewarmRequest objects, the audit log and the response (issue #36)
+    workflow_id: Optional[str] = Field(None, max_length=64,
+                                       description="W1, W2 ... (unknown / missing -> the domain's pooled model)")
+    episode_id: str = Field("", max_length=128)
+    domain: str = Field("airline", max_length=32)
     trajectory: list[str] = Field(default_factory=list, description="tools called so far, in order")
     current_tool: Optional[str] = Field(None, description="optional; used if trajectory is empty")
     ts: Optional[float] = None
