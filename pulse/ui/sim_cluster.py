@@ -61,6 +61,7 @@ class SimCluster:
         self.pod_seconds = 0.0
         self.terminating: list[float] = []    # when the slots of scaled-down pods free (capacity only)
         self.pending_starts = 0               # pods that had to wait for a slot (capacity only)
+        self.slot_waits: list[float] = []     # how long each of them waited (the learned top-k slot price reads it)
         self.set_min_scale(min_scale)
 
     # ------------------------------------------------------------------ state
@@ -109,6 +110,7 @@ class SimCluster:
             if room <= 0:
                 break
             start = max(p["queued"], freed.pop(0) if freed else p["queued"])
+            self.slot_waits.append(start - p["queued"])
             p.update(pending=False, created=start,
                      ready_at=start + self.cold.get(p["tool"], DEFAULT_COLD_S) * self.rng.uniform(0.9, 1.15))
             p["last_used"] = p["ready_at"]

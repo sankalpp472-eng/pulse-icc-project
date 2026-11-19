@@ -20,6 +20,7 @@
 #           how long prewarmed pods live (pulse/controller/refresh.py; ping controller): REFRESH_POLICY
 #           always|never|value (always) · SHED_P (0 = off) · TOOL_WINDOWS 60|per-tool (60, every configuration)
 #           K_ADAPT 0|1 (0): learn the k rule's warm time (PROM_URL) and budget at runtime (pulse/controller/adaptive.py)
+#           TOPK_PRICE fixed|learned (fixed): adaptive top-k's slot price when full, learned from tool pods' slot waits
 #           LABEL (cloud) · PYTHON (for deploy.sh if the tools must be redeployed) · TARGET kind|ecr (auto)
 # Needs cloud_up.sh done. Results: results/cloud_runs/ (EKS) or results/local_runs/ (kind),
 # plus controller.jsonl for C3; the pod's log goes to infra/eks/logs/.
@@ -43,6 +44,7 @@ TOP_K=${TOP_K:-2}
 P_MIN=${P_MIN:-0.05}
 REFRESH_POLICY=${REFRESH_POLICY:-always}
 K_ADAPT=${K_ADAPT:-0}
+TOPK_PRICE=${TOPK_PRICE:-fixed}
 PROM_URL=${PROM_URL:-http://prometheus-operated.monitoring.svc:9090}   # the in-cluster Prometheus (infra/monitoring)
 SHED_P=${SHED_P:-0}
 TOOL_WINDOWS=${TOOL_WINDOWS:-60}
@@ -97,6 +99,7 @@ done < <(kubectl get ksvc -l pulse/role=$ROLE -o jsonpath='{range .items[*]}{.me
 [ "$CONFIG" = C3 ] && [ "$SHED_P" != 0 ] && LABEL="$LABEL-shed$SHED_P"
 [ "$TOOL_WINDOWS" = per-tool ] && LABEL="$LABEL-tw"
 [ "$CONFIG" = C3 ] && [ "$K_ADAPT" = 1 ] && LABEL="$LABEL-kadapt"
+[ "$CONFIG" = C3 ] && [ "$PREWARM_POLICY" = adaptive ] && [ "$TOPK_PRICE" = learned ] && LABEL="$LABEL-learnedprice"
 ARGS=(--label "$LABEL")
 if [ "$MODE" = replay ]; then
   case "$WORKLOAD" in
@@ -124,7 +127,8 @@ if [ "$CONFIG" = C3 ]; then
     kubectl set env deploy/pulse-predictor PULSE_MODEL_URI="$PULSE_MODEL_URI" >/dev/null
   # the controller: ping (Option A) or lease (TTLs, reserve, eviction)
   kubectl set env deploy/pulse-controller CONTROLLER_MODE="$CONTROLLER" LEASE_RESERVE_PODS="$LEASE_RESERVE_PODS" \
-    REFRESH_POLICY="$REFRESH_POLICY" SHED_P="$SHED_P" K_ADAPT="$K_ADAPT" PROM_URL="$PROM_URL" >/dev/null
+    REFRESH_POLICY="$REFRESH_POLICY" SHED_P="$SHED_P" K_ADAPT="$K_ADAPT" TOPK_PRICE="$TOPK_PRICE" \
+    PROM_URL="$PROM_URL" >/dev/null
   kubectl rollout restart deploy/pulse-controller deploy/pulse-predictor >/dev/null
   kubectl rollout status deploy/pulse-controller --timeout=300s >/dev/null
   kubectl rollout status deploy/pulse-predictor --timeout=300s >/dev/null

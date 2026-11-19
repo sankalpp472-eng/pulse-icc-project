@@ -214,6 +214,7 @@
           </label>
           <label class="c3-only x-ping" title="While tool pods wait for a free slot (Pending), predictions below this neither start nor refresh pods, so low-value pods age out and free their slots. 0 = off">shed p &lt; <input type="number" id="xShed" min="0" max="0.9" step="0.05" value="0"></label>
           <label class="c3-only check" title="The k rule min(k, ceil(k × warm call time / budget)) with both numbers learned while it runs: each tool's warm call time from Prometheus (when monitoring is installed), and the 0.3 s budget scaled by the tool's measured cold start and by how full the tool nodes are (pulse/controller/adaptive.py). Off: the fixed 0.05 s and 0.3 s"><input type="checkbox" id="xKAdapt"> adaptive k</label>
+          <label class="c3-only check" title="Adaptive top-k: a candidate is warmed only if hit rate × cold start ≥ (1 − hit rate) × a pod slot's price. Ticked: the price when the tool nodes are full is learned from how long tool pods are waiting for a slot (0.075 s + fullness × that wait), so long queues raise the bar. Unticked: the fixed 0.075 s × 10 when full (pulse/controller/adaptive.py)"><input type="checkbox" id="xLearnedPrice"> learned slot price</label>
           <label title="The tools' Knative idle window, for every configuration: 60 s for all, or each tool's own from how soon it is really called again (data/tool_windows.json, python -m pulse.experiments.tool_windows), 20-60 s">Idle window
             <select id="xWindows">
               <option value="60">60 s (all tools)</option>

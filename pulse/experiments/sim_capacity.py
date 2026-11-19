@@ -21,6 +21,7 @@ queue-proxy). A scaled-down pod keeps its slot for --grace seconds (Knative's sc
   python -m pulse.experiments.sim_capacity                          # capacities 0 (no limit), 24, 15 pods
   python -m pulse.experiments.sim_capacity --capacity 15 --rate 16 --episodes 60   # the EKS pressure run
   ... --configs C0 C3-ping --refresh always never value --shed-p 0 0.6 --windows 60 per-tool   # pod lifetime levers
+  ... --configs C3-ping --topk-price learned                        # adaptive top-k, slot price from slot waits
 
 Output: results/sim_runs/<date>_<time>_capacity[_label]/  summary.csv, summary.json, calls.csv
 """
@@ -48,6 +49,9 @@ def parse_args():
     ap.add_argument("--prewarm-policy", choices=["adaptive", "topk"], default="adaptive",
                     help="adaptive: top 3 candidates, each warmed only if its learned hit rate x cold start is worth "
                          "a slot now (pulse/controller/adaptive.py); topk: exactly --top-k tools")
+    ap.add_argument("--topk-price", choices=["fixed", "learned"], default="fixed",
+                    help="adaptive: the slot price when full: fixed (x TOPK_FULL_X) or learned from how long pods "
+                         "wait for a slot (the controller's TOPK_PRICE=learned)")
     ap.add_argument("--top-k", type=int, default=2, help="topk: tools per step")
     ap.add_argument("--p-min", type=float, default=0.05, help="every candidate needs p >= this")
     ap.add_argument("--episodes", type=int, default=60)
@@ -106,7 +110,7 @@ from pulse import paths  # noqa: E402
 import pulse.ui.sim_cluster as sim_cluster  # noqa: E402
 from pulse.controller.leases import LeaseBook, LeaseConfig, rule_k  # noqa: E402
 from pulse.controller.refresh import RefreshConfig, decide  # noqa: E402
-from pulse.controller.adaptive import REF_COLD_S, budget, worth_warming  # noqa: E402
+from pulse.controller.adaptive import REF_COLD_S, Estimates, budget, worth_warming  # noqa: E402
 from pulse.experiments import tool_windows  # noqa: E402
 from pulse.experiments import replay  # noqa: E402
 from pulse.predictor import client  # noqa: E402
@@ -154,6 +158,7 @@ class Run:
         self.k_policy = k_policy
         self.refresh, self.windows = refresh or RefreshConfig(), windows
         self.skips = {"refresh": 0, "pressure": 0, "topk": 0}
+        self.est, self.waits_read = Estimates(A.warm_s), 0    # --topk-price learned: the slot wait
         lease = config == "C3-lease"
         CLOCK.t = 0.0                    # before the simulator exists: C1's always-warm pods are ready at t = 0
         per_tool = tool_windows.load(replay.DOMAIN) if windows == "per-tool" else {}
@@ -188,7 +193,8 @@ class Run:
                 continue
             if hit is not None:                          # adaptive top-k: worth a slot now? (adaptive.py)
                 free = self.sim.free_pods() if self.capacity else 10 ** 6
-                if not worth_warming(hit, self.sim.cold.get(tool, REF_COLD_S), free, self.sim.pending_pods())[0]:
+                if not worth_warming(hit, self.sim.cold.get(tool, REF_COLD_S), free, self.sim.pending_pods(),
+                                     **self.price_kw())[0]:
                     self.skips["topk"] += 1
                     continue
             k = self.choose_k(tool, k, ep, group)
@@ -204,6 +210,17 @@ class Run:
             d = self.book.request(tool, ep["episode"], k, ttl, CLOCK.t, self.sim.free_pods(), have)
             if d.action != "reject":                 # the controller's pings: start the new pods, refresh the window
                 self.sim.prewarm(tool, max(1, d.k), p)
+
+    def price_kw(self) -> dict:
+        """--topk-price learned: feed the pods' new slot waits to the estimate, as the controller does from the
+        pods' created -> scheduled times; fixed: nothing (the fixed price)."""
+        if A.topk_price != "learned":
+            return {}
+        new = self.sim.slot_waits[self.waits_read:]
+        for i, w in enumerate(new, self.waits_read):
+            self.est.observe_wait(str(i), w)
+        self.waits_read += len(new)
+        return {"wait_s": self.est.wait()}
 
     def choose_k(self, tool: str, k_pred: int, ep: dict, group: list[int]) -> int:
         k_pred = max(1, int(k_pred or 1))
@@ -307,6 +324,9 @@ class Run:
                "skipped_refresh": self.skips["refresh"] if ping else "-",
                "skipped_pressure": self.skips["pressure"] if ping else "-",
                "skipped_topk": self.skips["topk"] if self.config.startswith("C3") else "-",
+               "topk_price": A.topk_price if self.config.startswith("C3") else "-",
+               "slot_wait_s": round(self.est.wait(), 2) if A.topk_price == "learned" and
+               self.config.startswith("C3") else "-",
                "capacity": self.capacity or "none", "calls": n,
                # the runners' rule (experiments/common.py COLD_LATENCY_S): a call slower than 1 s was cold
                "cold_share": round(sum(r["latency_s"] > 1.0 for r in self.rows) / n, 3) if n else None,
@@ -341,7 +361,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     print(f"{len(plan)} episodes ({sum(len(e['trace']['calls']) for e in plan)} calls), rate {A.rate}/min, "
           f"predictor {A.predictor} {A.prewarm_policy}"
-          f"{f' top-{A.top_k}' if A.prewarm_policy == 'topk' else ''} | {len(tools)} tools | -> {out}")
+          f"{f' top-{A.top_k}' if A.prewarm_policy == 'topk' else f' (slot price {A.topk_price})'}"
+          f" | {len(tools)} tools | -> {out}")
     summaries, rows = [], []
     for cap, win, cfg in itertools.product(A.capacity, A.windows, A.configs):
         ping = cfg == "C3-ping"

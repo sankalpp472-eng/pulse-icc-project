@@ -641,7 +641,7 @@ $("#xStart").onclick = async () => {
               lookahead: $("#xLook").checked, theta_next: Number($("#xThetaNext").value) },
     controller: $("#xController").value, reserve: Number($("#xReserve").value),
     refresh: $("#xRefresh").value, shed_p: Number($("#xShed").value), windows: $("#xWindows").value,
-    k_adapt: $("#xKAdapt").checked,
+    k_adapt: $("#xKAdapt").checked, topk_price: $("#xLearnedPrice").checked ? "learned" : "fixed",
     // load tests (loadtest/)
     target: $("#lTarget").value, engine: $("#lEngine").value, stages: $("#lStages").value.trim(),
     interactive: $("#lWeb").checked, rates: $("#lRates").value, duration: Number($("#lDuration").value),

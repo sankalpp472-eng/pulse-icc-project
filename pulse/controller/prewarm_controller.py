@@ -54,6 +54,9 @@ Settings (environment):
                      chance); a candidate is warmed only if hitRate x the tool's cold start reaches (1 - hitRate) x
                      the price (only a wrong prewarm wastes a slot)
   TOPK_FULL_X        the price's multiple when the tool nodes are full or pods wait for a slot (default 10)
+  TOPK_PRICE         fixed (default: the two settings above) | learned: price = TOPK_PRICE_S + fullness x how long
+                     tool pods are waiting for a node slot (measured here from the pods' created -> scheduled times;
+                     seeded so it starts as the fixed price; adaptive.py)
   ping mode, how long prewarmed pods live (pulse/controller/refresh.py; every one off by default):
   REFRESH_POLICY     always (default: every prediction pings) | never (a warm tool is not pinged: only real calls
                      extend its pods) | value (pinged only if p >= a threshold rising from 0 at REFRESH_FREE_HIGH
@@ -107,7 +110,23 @@ REFRESH = RefreshConfig.from_env()                       # ping mode: refresh / 
 K_ADAPT = os.getenv("K_ADAPT", "0") == "1"               # learn the k rule's warm time and budget (adaptive.py)
 PROM_URL = os.getenv("PROM_URL", "")
 WARM_POLL_S = float(os.getenv("WARM_POLL_S", "60"))
+TOPK_PRICE = os.getenv("TOPK_PRICE", "fixed")            # fixed | learned (adaptive.py)
+if TOPK_PRICE not in ("fixed", "learned"):
+    raise SystemExit(f"TOPK_PRICE must be fixed or learned, not {TOPK_PRICE!r}")
 ESTIMATES = Estimates(TOOL_WARM_S, TOOL_WARM)
+
+
+def price_kw() -> dict:
+    """worth_warming's extra arguments: the learned slot wait with TOPK_PRICE=learned, none otherwise."""
+    return {"wait_s": ESTIMATES.wait()} if TOPK_PRICE == "learned" else {}
+
+
+def slot_wait_s(pod) -> float | None:
+    """How long a scheduled pod waited for a node: PodScheduled time - created (None if not scheduled yet)."""
+    for c in (pod.status and pod.status.conditions) or []:
+        if c.type == "PodScheduled" and c.status == "True" and c.last_transition_time and pod.metadata.creation_timestamp:
+            return (c.last_transition_time - pod.metadata.creation_timestamp).total_seconds()
+    return None
 
 
 def k_inputs(tool: str, free: int | None = None) -> tuple[float, float]:
@@ -252,7 +271,7 @@ class Controller:
             k = max(1, int(k)) if k else pods_for(spec["tool"], spec.get("desiredReplicas"), room and room[0])
             if MODE == "ping":
                 if topk:                              # adaptive.py: worth a pod slot now?
-                    ok, why = worth_warming(spec["hitRate"], ESTIMATES.cold(spec["tool"]), *room)
+                    ok, why = worth_warming(spec["hitRate"], ESTIMATES.cold(spec["tool"]), *room, **price_kw())
                     if not ok:
                         return self.skip(name, spec, requested, why, "topk", pods_before=before, free_pods=room[0],
                                          pending_pods=room[1])
@@ -293,7 +312,8 @@ class Controller:
                      probability=spec.get("probability"), episode=spec.get("episodeId"), requested_at=requested,
                      effective_ttl_s=ttl, **dict(zip(("k_warm_s", "k_budget_s"),
                                                      (round(x, 4) for x in k_inputs(spec["tool"],
-                                                                                   room and room[0])))))
+                                                                                   room and room[0])))),
+                     **({"slot_wait_s": round(ESTIMATES.wait(), 2)} if TOPK_PRICE == "learned" else {}))
         except Exception as e:
             FAILURES.labels(spec.get("tool", "")).inc()
             self.set_status(name, phase="Failed", message=f"{type(e).__name__}: {e}"[:300])
@@ -336,8 +356,14 @@ class Controller:
         cpu_alloc = sum(parse_cpu_m(n.status.allocatable.get("cpu", "0")) for n in nodes)
         used_pods = used_cpu = pending = 0
         for p in self.core.list_pod_for_all_namespaces(field_selector="status.phase!=Succeeded,status.phase!=Failed").items:
-            pending_tool = not p.spec.node_name and "serving.knative.dev/service" in (p.metadata.labels or {})
+            tool_pod = "serving.knative.dev/service" in (p.metadata.labels or {})
+            pending_tool = tool_pod and not p.spec.node_name
             pending += pending_tool
+            if tool_pod and TOPK_PRICE == "learned" and p.spec.node_name:
+                waited = slot_wait_s(p)
+                if waited is not None and ESTIMATES.observe_wait(p.metadata.uid, waited):
+                    self.log(event="slot_wait", pod=p.metadata.name, wait_s=round(waited, 2),
+                             slot_wait_s=round(ESTIMATES.wait(), 2))
             if p.spec.node_name in names or pending_tool:
                 used_pods += 1
                 used_cpu += sum(parse_cpu_m(((c.resources and c.resources.requests) or {}).get("cpu", "0"))
@@ -360,7 +386,7 @@ class Controller:
         self.objects[tool] = (name, svc)
         free, have = self.free_pods(), self.pods(svc)
         if spec.get("hitRate") is not None:         # adaptive top-k: is this candidate worth a slot now?
-            ok, why = worth_warming(spec["hitRate"], ESTIMATES.cold(tool), free, self._pending)
+            ok, why = worth_warming(spec["hitRate"], ESTIMATES.cold(tool), free, self._pending, **price_kw())
             if not ok:
                 return self.skip(name, spec, requested, why, "topk", had=have, free_pods=free,
                                  pending_pods=self._pending)
@@ -469,6 +495,8 @@ class Controller:
                 print(f"metrics port {METRICS_PORT} not available ({e}); no /metrics")
         # both modes record when Knative scaled a tool back to zero; lease mode also runs the lease clock
         threading.Thread(target=self.sweep, daemon=True).start()
+        if TOPK_PRICE == "learned":
+            print(f"top-k slot price: learned (seed wait {ESTIMATES.wait():.3f} s, from the tool pods' slot waits)")
         if K_ADAPT:
             print(f"k rule: adaptive (cold starts from the pings; warm times "
                   f"{'from ' + PROM_URL if PROM_URL else 'as configured: no PROM_URL'})")

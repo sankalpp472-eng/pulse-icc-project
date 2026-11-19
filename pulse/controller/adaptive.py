@@ -25,6 +25,14 @@ the same learned one as above. With room (price 0.075 s) a 1.5 s tool is warmed 
 (0.75 s) from 33 %. So a step warms its top 3 when slots are free and only its likely ones when not. (Charging the
 whole price, not just the miss's share, turned away the best guess on a full node: p99 77 s vs top-1's 1.8 s in the
 simulator, retail at 15 slots.)
+
+Learned slot price (TOPK_PRICE=learned): the full-node part of the price is measured instead of TOPK_FULL_X:
+  price = TOPK_PRICE_S + fullness x W,
+W = how long a tool pod waited for a node slot (created -> scheduled), a running average over the pods that waited
+at least WAIT_MIN_S, capped at WAIT_MAX_S, seeded with TOPK_PRICE_S x (TOPK_FULL_X - 1) so that before any pod has
+waited the price is exactly the fixed one. A wrong prewarm on a full node costs the call that needed its slot about
+what pods are waiting now: with pods waiting ~10 s a 1.5 s tool is warmed only from 87 %, at ~30 s from 95 %.
+TOPK_PRICE_S stays a setting: what a slot costs when nobody waits is a preference (pod-seconds vs latency).
 """
 
 import json
@@ -40,6 +48,9 @@ WARM_MIN_CALLS = int(os.getenv("WARM_MIN_CALLS", "5"))
 K_FREE_HIGH = int(os.getenv("K_FREE_HIGH", "6"))
 TOPK_PRICE_S = float(os.getenv("TOPK_PRICE_S", "0.075"))
 TOPK_FULL_X = float(os.getenv("TOPK_FULL_X", "10"))
+WAIT_MIN_S = float(os.getenv("WAIT_MIN_S", "1"))      # a shorter wait is scheduling, not a queue for a slot
+WAIT_MAX_S = float(os.getenv("WAIT_MAX_S", "60"))
+WAIT_SEED_S = TOPK_PRICE_S * (TOPK_FULL_X - 1)        # the learned price starts as the fixed one
 WARM_QUERY = ('histogram_quantile(0.5, sum by (le, tool) (rate(pulse_tool_call_seconds_bucket{temperature="warm"}[10m])))'
               ' and on (tool) sum by (tool) (increase(pulse_tool_calls_total{temperature="warm"}[10m])) >= %d')
 
@@ -52,9 +63,12 @@ def budget(base_s: float, cold_s: float, free: int, free_high: int = K_FREE_HIGH
 
 
 def slot_price(free: int, pending: int = 0, price_s: float = TOPK_PRICE_S, full_x: float = TOPK_FULL_X,
-               free_high: int = K_FREE_HIGH) -> float:
-    """What a pod slot is worth now, in seconds of cold start: low with room, full_x times that when full."""
+               free_high: int = K_FREE_HIGH, wait_s: float | None = None) -> float:
+    """What a pod slot is worth now, in seconds of cold start: low with room, full_x times that when full;
+    with wait_s (the learned slot wait) price_s + fullness x wait_s instead."""
     full = 1.0 if pending > 0 else (max(0.0, 1.0 - max(0, free) / free_high) if free_high > 0 else 0.0)
+    if wait_s is not None:
+        return price_s + full * max(0.0, wait_s)
     return price_s * (1.0 + (full_x - 1.0) * full)
 
 
@@ -63,9 +77,10 @@ def worth_warming(hit_rate: float, cold_s: float, free: int, pending: int = 0, *
     A RIGHT prewarm takes no extra slot (the call would start that pod a moment later anyway) and saves the cold
     start; only a WRONG one holds a slot for nothing. So: hit x cold start >= (1 - hit) x slot price."""
     hit = min(1.0, max(0.0, float(hit_rate)))
-    gain, waste = hit * float(cold_s), (1.0 - hit) * slot_price(free, pending, **kw)
+    price = slot_price(free, pending, **kw)
+    gain, waste = hit * float(cold_s), (1.0 - hit) * price
     return gain >= waste, (f"top-k: hit {hit:.2f} x cold {cold_s:.2f} s = {gain:.3f} s vs (1 - hit) x slot "
-                           f"{slot_price(free, pending, **kw):.3f} s = {waste:.3f} s")
+                           f"{price:.3f} s = {waste:.3f} s")
 
 
 def parse_prom(result: dict) -> dict[str, float]:
@@ -90,6 +105,8 @@ class Estimates:
         self.alpha = alpha
         self.warm_learned: dict[str, float] = {}
         self.cold_learned: dict[str, float] = {}
+        self.wait_learned: float | None = None      # slot wait (learned slot price)
+        self.wait_seen: dict[str, None] = {}        # pod uids already counted, oldest first (bounded)
         self.lock = threading.Lock()
 
     def warm(self, tool: str) -> float:
@@ -113,10 +130,32 @@ class Estimates:
             old = self.cold_learned.get(tool)
             self.cold_learned[tool] = seconds if old is None else (1 - self.alpha) * old + self.alpha * seconds
 
+    def wait(self) -> float:
+        """How long a tool pod waits for a node slot now (the seed until one has waited)."""
+        with self.lock:
+            return WAIT_SEED_S if self.wait_learned is None else self.wait_learned
+
+    def observe_wait(self, uid: str, seconds: float) -> bool:
+        """Tool pod `uid` waited `seconds` between created and scheduled. Each pod counts once; waits under
+        WAIT_MIN_S are ignored. True if it was counted."""
+        with self.lock:
+            if uid in self.wait_seen:
+                return False
+            self.wait_seen[uid] = None
+            if len(self.wait_seen) > 5000:
+                self.wait_seen.pop(next(iter(self.wait_seen)))
+            if seconds < WAIT_MIN_S:
+                return False
+            s = min(WAIT_MAX_S, seconds)
+            old = self.wait_learned
+            self.wait_learned = s if old is None else (1 - self.alpha) * old + self.alpha * s
+            return True
+
     def snapshot(self) -> dict:
         with self.lock:
             return {"warm_s": {t: round(v, 4) for t, v in sorted(self.warm_learned.items())},
-                    "cold_s": {t: round(v, 3) for t, v in sorted(self.cold_learned.items())}}
+                    "cold_s": {t: round(v, 3) for t, v in sorted(self.cold_learned.items())},
+                    "slot_wait_s": None if self.wait_learned is None else round(self.wait_learned, 2)}
 
 
 def query_warm(prom_url: str, min_calls: int = WARM_MIN_CALLS, timeout: float = 5.0) -> dict[str, float]:

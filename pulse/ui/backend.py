@@ -497,12 +497,13 @@ class Services:
         return None
 
     def start_controller(self, mode: str = "ping", reserve: int = 4, refresh: str = "always",
-                         shed_p: float = 0.0, k_adapt: bool = False) -> dict:
+                         shed_p: float = 0.0, k_adapt: bool = False, topk_price: str = "fixed") -> dict:
         """mode ping = Option A (the Knative window is the TTL); lease = admission control: a prediction starts only
         the new pods that fit next to `reserve` free pods (pulse/controller/leases.py). Ping mode: refresh
         (always | never | value) and shed_p decide how long prewarmed pods live (pulse/controller/refresh.py)."""
         refresh = refresh if refresh in ("always", "never", "value") else "always"
         shed_p = max(0.0, float(shed_p or 0))
+        topk_price = "learned" if topk_price == "learned" else "fixed"
         self.stop("controller")
         if CONTROLLER_LOG.exists():
             CONTROLLER_LOG.unlink()
@@ -511,14 +512,16 @@ class Services:
         # PrewarmRequests name the service itself (retail-<tool> for retail): the airline Host template fits both domains
         env = {**self.cluster.tool_env("airline"), "CONTROLLER_LOG": str(CONTROLLER_LOG), "MAX_REQUEST_AGE_S": "30",
                "CONTROLLER_MODE": mode, "LEASE_RESERVE_PODS": str(int(reserve)),
-               "REFRESH_POLICY": refresh, "SHED_P": str(shed_p), "K_ADAPT": "1" if k_adapt else "0"}
+               "REFRESH_POLICY": refresh, "SHED_P": str(shed_p), "K_ADAPT": "1" if k_adapt else "0",
+               "TOPK_PRICE": topk_price}
         # k_adapt's warm times come from Prometheus only if PROM_URL is set for the UI (e.g. a port-forward to the
         # kind cluster's Prometheus); otherwise the controller learns the cold starts and fullness only
         if k_adapt and os.getenv("PROM_URL"):
             env["PROM_URL"] = os.environ["PROM_URL"]
         self.procs["controller"] = Proc("controller", [PY, "-m", "pulse.controller.prewarm_controller"], env,
                                         {"context": self.cluster.context, "mode": mode, "reserve": int(reserve),
-                                         "refresh": refresh, "shed_p": shed_p, "k_adapt": bool(k_adapt)})
+                                         "refresh": refresh, "shed_p": shed_p, "k_adapt": bool(k_adapt),
+                                         "topk_price": topk_price})
         return self.status()
 
     def controller_mode(self) -> str | None:
@@ -1040,6 +1043,8 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
     refresh = spec.get("refresh") if spec.get("refresh") in ("always", "never", "value") else "always"
     shed_p = max(0.0, float(spec.get("shed_p") or 0))
     k_adapt = bool(spec.get("k_adapt"))     # the k rule's warm time and budget learned at runtime (adaptive.py)
+    # adaptive top-k's slot price when full: fixed, or learned from how long tool pods wait for a slot (adaptive.py)
+    topk_price = "learned" if spec.get("topk_price") == "learned" else "fixed"
     window = "per-tool" if spec.get("windows") == "per-tool" else DEFAULT_WINDOW
     tasks = [str(int(t)) for t in spec.get("tasks") or []]
     if cluster.domain == "retail":
@@ -1081,8 +1086,8 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
         cenv = {**env, "MODE": mode, "CONFIG": config, "PREDICTOR": pred, "WORKLOAD": "none", "LABEL": label,
                 "PYTHON": PY, "CONTROLLER": ctl, "LEASE_RESERVE_PODS": str(reserve), "REFRESH_POLICY": refresh,
                 "SHED_P": f"{shed_p:g}", "TOOL_WINDOWS": "per-tool" if window == "per-tool" else "60",
-                "K_ADAPT": "1" if k_adapt else "0", "PREWARM_POLICY": pol["policy"], "TOP_K": str(pol["top_k"]),
-                "P_MIN": f"{pol['p_min']:g}"}
+                "K_ADAPT": "1" if k_adapt else "0", "TOPK_PRICE": topk_price, "PREWARM_POLICY": pol["policy"],
+                "TOP_K": str(pol["top_k"]), "P_MIN": f"{pol['p_min']:g}"}
         steps.append((f"{mode} {config} inside the cluster (run_cloud.sh)",
                       [b, "infra/cloud/run_cloud.sh", *args], cenv))
         return steps
@@ -1102,8 +1107,9 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
         cur_ctl = services.procs.get("controller")
         if not (services.controller_running() and services.controller_mode() == ctl
                 and cur_ctl.info.get("reserve", 4) == reserve and cur_ctl.info.get("refresh", "always") == refresh
-                and cur_ctl.info.get("shed_p", 0.0) == shed_p and cur_ctl.info.get("k_adapt", False) == k_adapt):
-            services.start_controller(ctl, reserve, refresh, shed_p, k_adapt)
+                and cur_ctl.info.get("shed_p", 0.0) == shed_p and cur_ctl.info.get("k_adapt", False) == k_adapt
+                and cur_ctl.info.get("topk_price", "fixed") == topk_price):
+            services.start_controller(ctl, reserve, refresh, shed_p, k_adapt, topk_price)
         steps.append(("__predictor__", [], {}))
         args += ["--predictor-url", PREDICTOR_URL]
         if pred in ("speculator", "pulse_v3") and mode == "replay":   # slower answers (an LLM / embeddings)
@@ -1111,7 +1117,8 @@ def build_run(spec: dict, cluster: Cluster, services: Services) -> list[tuple[st
         tag = ("-top%d" % policy["top_k"] if policy["policy"] == "topk" else "") + ("-look" if policy["lookahead"] else "")
         label = f"{label}-{pred}{tag}" + ("-lease" if ctl == "lease" else "") + \
             (f"-refresh_{refresh}" if ctl == "ping" and refresh != "always" else "") + \
-            (f"-shed{shed_p:g}" if ctl == "ping" and shed_p else "") + ("-kadapt" if k_adapt else "")
+            (f"-shed{shed_p:g}" if ctl == "ping" and shed_p else "") + ("-kadapt" if k_adapt else "") + \
+            ("-learnedprice" if topk_price == "learned" and policy["policy"] == "adaptive" else "")
     if window == "per-tool":
         label += "-tw"
     module = "pulse.experiments.replay" if mode == "replay" else "pulse.experiments.live"

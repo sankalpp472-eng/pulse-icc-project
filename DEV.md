@@ -150,8 +150,23 @@ rate) × the price of a pod slot` (only a wrong prewarm wastes a slot; a right o
 started anyway): 0.075 s with room (a 1.5 s tool from a 5 % chance) up to 10× that, 33 %, when the nodes are full or pods wait
 (`TOPK_PRICE_S`, `TOPK_FULL_X`; the cold start is learned from the controller's pings). So a step warms up to 3 tools
 with room and 1 or none when full; refused ones get `Skipped` and a `skipped` log line (`why: topk`). Sim:
-`--prewarm-policy adaptive|topk`. Not yet compared with θ in the simulator or on EKS: with room it warms more tools
-than θ did (more pod-seconds).
+`--prewarm-policy adaptive|topk`. On EKS (round 5, one run each) it beat top-1 and C0 for airline under pressure
+(p99 0.17 s vs 0.40 / 30 s, fewer pod-seconds) and halved the cold calls with room; for retail under pressure (16 tools
+on one worker) it started more pods than top-1 and was no better.
+
+**Learned slot price** (`TOPK_PRICE=learned`, `adaptive.py`; default `fixed`). The full-node part of the price is
+measured instead of `TOPK_FULL_X`: `price = TOPK_PRICE_S + fullness × W`, where W is how long tool pods waited for a
+node slot (created → `PodScheduled`, read from the pod list the controller already uses for free slots; each pod once,
+waits under 1 s ignored, capped at 60 s, a running average). W starts at 0.075 × 9 s, so until a pod has waited the
+price is the fixed one (5 % / 33 %). With pods waiting ~10 s a 1.5 s tool is warmed only from ~87 %, at ~30 s from
+~95 %: long queues shut off all but near-certain prewarms. `TOPK_PRICE_S` stays a setting (what a slot costs with
+nobody waiting is a preference). The `warmed` line records `slot_wait_s`; each measured wait logs a `slot_wait` line.
+Sim: `--topk-price learned`; UI: "learned slot price". **Simulator: no gain, so it stays off** (lightgbm, 60 episodes
+at 16/min, seed 252): with room it never moves (airline at 15 slots: identical); retail at 15 slots the same p99
+(2.27 s); overloaded it is the same or worse (airline at 10 slots p99 134 vs 136 s; retail at 10 slots 15.5 % cold vs
+12.8 %, 96 pods waited for a slot vs 75, pod-seconds +12 %). The queue there comes from the load, not from wrong
+prewarms, and a right prewarm takes no extra slot, so pricing a slot at the whole queue wait turns away good guesses
+whose calls then start the same pods later, cold. Not run on EKS.
 
 **The k rule's numbers at runtime** (`K_ADAPT=1`, `adaptive.py`; off = the fixed 0.05 s and 0.3 s). The warm call
 time per tool becomes the median of its warm calls in Prometheus (`pulse_tool_call_seconds{temperature="warm"}`,
