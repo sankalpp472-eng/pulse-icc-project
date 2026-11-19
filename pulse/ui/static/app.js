@@ -3,19 +3,20 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fmt = (v, d = 0) => (v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toFixed(d));
-// the four predictors (pulse/predictor/predictors/). INPUTS = what each one reads from a hint; the running predictor's
+// the five predictors (pulse/predictor/predictors/). INPUTS = what each one reads from a hint; the running predictor's
 // own GET /info overrides it. Old run names (gbt, ngram_action) still get a label.
 const PREDICTORS = {
   lightgbm: "LightGBM (next action) · main",
+  lightgbm_adapt: "LightGBM + online adapter",
   markov: "Markov chain (order 2)",
   speculator: "LLM speculator",
   pulse_v3: "pulse-v3 (text + tool graph)",
 };
 const PRED_INPUTS = {
-  lightgbm: ["trajectory", "signals"], markov: ["trajectory"],
+  lightgbm: ["trajectory", "signals"], lightgbm_adapt: ["trajectory", "signals"], markov: ["trajectory"],
   speculator: ["trajectory", "history"], pulse_v3: ["trajectory", "history"],
 };
-const LOOKAHEAD_OK = new Set(["lightgbm", "markov"]);
+const LOOKAHEAD_OK = new Set(["lightgbm", "lightgbm_adapt", "markov"]);
 const OLD_NAMES = { gbt: "LightGBM (gbt)", ngram_action: "n-gram (ngram_action)", lr_action: "Logistic regression (removed)",
                     ensemble: "Trajectory ensemble (removed)" };
 const predLabel = (k) => PREDICTORS[k] || OLD_NAMES[k] || k;

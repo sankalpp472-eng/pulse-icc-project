@@ -23,7 +23,7 @@ S3_URI = re.compile(r"s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](/[\w./-]+)?")   # th
 GROQ_NUMBERED = re.compile(r"GROQ_API_KEY_(\d+)")   # any number of extra Groq keys: GROQ_API_KEY_1, _2, ...
 MAX_GROQ_KEYS = 20
 SECRET = re.compile(r"KEY")               # values of these names are never shown, only "set"
-PREDICTORS = ("lightgbm", "markov", "speculator", "pulse_v3")
+PREDICTORS = ("lightgbm", "lightgbm_adapt", "markov", "speculator", "pulse_v3")
 CLOUD = paths.INFRA / "cloud"
 IMAGE_FILE = {"ecr": CLOUD / ".image-ecr", "kind": CLOUD / ".image-kind"}
 

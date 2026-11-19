@@ -8,7 +8,7 @@
 #   MODE=live CONFIG=C3 bash infra/cloud/run_cloud.sh --tasks 30 --agent-model qwen/qwen3.8-27b
 #
 # Settings: MODE replay|live (replay) · CONFIG C0|C1|C3 (C3)
-#           PREDICTOR lightgbm|markov|speculator|pulse_v3 (lightgbm): switches deploy/pulse-predictor to it
+#           PREDICTOR lightgbm|lightgbm_adapt|markov|speculator|pulse_v3 (lightgbm): switches deploy/pulse-predictor to it
 #           WORKLOAD heldout|taubench|none (heldout; replay only: --tasks 6 20 22 26 30 or all tau-bench runs)
 #           DOMAIN airline|retail (airline): replay or live on the retail tools (Setup -> Deploy the retail tools;
 #           pass --tasks, e.g. the held-out retail tasks); the speculator is airline only
@@ -78,9 +78,9 @@ if [ "$MODE" = replay ]; then
 fi
 if [ "$CONFIG" = C3 ]; then
   case "$PREDICTOR" in
-    lightgbm|markov) ;;
+    lightgbm|lightgbm_adapt|markov) ;;
     speculator|pulse_v3) [ "$MODE" = replay ] && ARGS+=(--hint-timeout 10) ;;   # slower answers (LLM / embeddings)
-    *) echo "Unknown PREDICTOR=$PREDICTOR (lightgbm, markov, speculator or pulse_v3)"; exit 1 ;;
+    *) echo "Unknown PREDICTOR=$PREDICTOR (lightgbm, lightgbm_adapt, markov, speculator or pulse_v3)"; exit 1 ;;
   esac
   # the hint senders read the predictor's /info and send the inputs it needs (signals and/or history)
   ARGS+=(--predictor-url http://pulse-predictor:8000)

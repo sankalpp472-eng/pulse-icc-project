@@ -12,7 +12,7 @@ The prediction API: one service, any of the four predictors (predictor/predictor
   GET  /docs      interactive test page (FastAPI)
 
 Settings (environment variables):
-  PREDICTOR        lightgbm (default) | markov | speculator | pulse_v3   (old names gbt, ngram_action also work;
+  PREDICTOR        lightgbm (default) | lightgbm_adapt | markov | speculator | pulse_v3   (old names gbt, ngram_action also work;
                    PREDICTOR_MODEL is read if PREDICTOR is unset). Each predictor's own settings are in its file.
   THETA            confidence threshold for prewarming             (default 0.3)
   PREWARM_POLICY   theta (every tool with P >= THETA) | topk (the TOP_K most likely tools, each with P >= P_MIN)

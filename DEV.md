@@ -63,13 +63,13 @@ What each part of the code does and how the parts fit together. For installing a
 | `run_tasks.py` | Runs the agent on tau-bench tasks from the command line |
 | `tau_airline/`, `tau_retail/` | tau-bench's tools, tasks, data and policy text (MIT, © Sierra) |
 
-### 3.2 `pulse.predictor`: the prediction service and its four predictors
+### 3.2 `pulse.predictor`: the prediction service and its five predictors
 
 | Module | Role |
 |---|---|
 | `contract.py` | The one contract: `PredictRequest` (trajectory; optional `signals`, `history`, `domain`, `workflow_id`) → `PredictionOut` (`ranked` actions with probabilities, `prewarm` tools with k, `lookahead`, latency, inputs used) |
 | `service.py` | FastAPI app: `POST /predict`, `GET /info` (the predictor's inputs and capabilities), `/healthz`, `/metrics`. Loads the predictor named by `PREDICTOR` and applies the shared policy, audit log and PrewarmRequest writer |
-| `predictors/` | One file per predictor behind `base.Predictor` (`inputs`, `predict()`, `fanout()`, `lookahead()`, `health()`); `action.py` loads the pickle lightgbm and markov share (local file or the registry); `__init__.py` is the registry (`PREDICTOR=lightgbm|markov|speculator|pulse_v3`) |
+| `predictors/` | One file per predictor behind `base.Predictor` (`inputs`, `predict()`, `fanout()`, `lookahead()`, `health()`); `action.py` loads the pickle lightgbm and markov share (local file or the registry); `__init__.py` is the registry (`PREDICTOR=lightgbm|lightgbm_adapt|markov|speculator|pulse_v3`) |
 | `policy.py` | Which ranked actions become prewarms: θ threshold or top-k with a floor; never `RESPOND`/`END` |
 | `crd_writer.py` | Writes `PrewarmRequest` objects (`CRD_MODE=k8s`), or to a file (`dryrun`), on a background thread |
 | `client.py` | What hint senders share: `inputs(url)` from `/info`, `make_hint()`, `compact()` messages |
@@ -79,14 +79,19 @@ What each part of the code does and how the parts fit together. For installing a
 | `train_action.py` | Trains lightgbm + markov (+ lookahead), scores them on 10 held-out tasks; with `--uri` the MLOps path (§5) |
 | `eval_policies.py` | Offline comparison of prewarm policies (θ / top-k / lookahead) on the held-out steps |
 
-**The four predictors**
+**The five predictors**
 
 | `PREDICTOR` | Inputs | Model |
 |---|---|---|
 | `lightgbm` | trajectory + signals | LightGBM over (workflow, last two tools, signals); without signals it answers with markov |
+| `lightgbm_adapt` | trajectory + signals | lightgbm + pulse-v3's online adapter: `softmax(log P_lightgbm + W·φ)`, φ = signals, last tool, bias; W starts at 0 and learns from each episode once it is idle for `SESSION_TIMEOUT_S` (`ADAPT_LR` 0.05). In memory: a restart starts again from lightgbm |
 | `markov` | trajectory | Order-2 Markov chain over actions with back-off to the last tool, then to the action frequencies |
 | `speculator` | trajectory + history | An LLM reads the last 10 messages and lists likely next actions with probabilities (`pulse.speculator`) |
 | `pulse_v3` | trajectory + history | `pulse.pulse_v3`: TF-IDF + sentence embedding of the conversation, a tool graph from the schemas (which IDs are known), state flags, an online adapter per agent model |
+
+On 11 live episodes (gpt-oss-120b, tasks no model trained on; each episode scored before the adapter learned
+from it) the adapter lifted lightgbm's top-1 from 64% to 71% (airline) and 39% to 57% (retail), but most of the
+retail gain came from one episode that repeated the same calls; ADAPT_LR 0.2 overfitted (retail 36%).
 
 **Adding a predictor:** subclass `predictors.base.Predictor` in `predictors/<name>.py` (set `name`, `inputs`,
 `domains`; implement `predict()` returning `{action: probability}`), and add it to `REGISTRY` in

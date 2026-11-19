@@ -1,7 +1,8 @@
 """
-The four predictors, behind one interface (base.Predictor), loaded by name (PREDICTOR=<name>):
+The five predictors, behind one interface (base.Predictor), loaded by name (PREDICTOR=<name>):
 
   lightgbm    LightGBM next-action model over the trajectory + signals (action_model.py, the main model)
+  lightgbm_adapt  lightgbm + pulse-v3's online adapter: adjusts to the deployed agent model from finished episodes
   markov      order-2 Markov chain over actions with back-off: P(next | last two tools) (action_model.NGramModel)
   speculator  an LLM reads the recent conversation and guesses the next action (pulse/speculator/)
   pulse_v3    conversation text + tool graph + state flags, online adapter, S3 model registry (pulse/pulse_v3/)
@@ -13,6 +14,7 @@ import importlib
 
 REGISTRY = {
     "lightgbm": "pulse.predictor.predictors.lightgbm:LightGBM",
+    "lightgbm_adapt": "pulse.predictor.predictors.lightgbm_adapt:LightGBMAdapt",
     "markov": "pulse.predictor.predictors.markov:Markov",
     "speculator": "pulse.predictor.predictors.speculator:Speculator",
     "pulse_v3": "pulse.predictor.predictors.pulse_v3:PulseV3",

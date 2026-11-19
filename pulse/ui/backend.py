@@ -392,8 +392,9 @@ class Proc:
 class Services:
     """The predictor (pulse.predictor.service with PREDICTOR=<name>) and the prewarm controller, run on the laptop."""
 
-    # the four predictors (pulse/predictor/predictors/); each one's inputs come from its GET /info once it runs
-    MODELS = {"lightgbm": "LightGBM next-action (main)", "markov": "Markov chain (order 2)",
+    # the five predictors (pulse/predictor/predictors/); each one's inputs come from its GET /info once it runs
+    MODELS = {"lightgbm": "LightGBM next-action (main)", "lightgbm_adapt": "LightGBM + online adapter",
+              "markov": "Markov chain (order 2)",
               "speculator": "LLM speculator", "pulse_v3": "pulse-v3 text + tool graph"}
     ALIASES = {"gbt": "lightgbm", "lgbm": "lightgbm", "ngram_action": "markov"}   # names in older runs
 
@@ -413,7 +414,7 @@ class Services:
         if domain == "retail" and model == "speculator":
             raise ValueError("the LLM speculator's prompt knows the airline tools only: pick lightgbm, markov or "
                              "pulse_v3 for retail")
-        if domain == "retail" and model in ("lightgbm", "markov") and model_version:
+        if domain == "retail" and model in ("lightgbm", "lightgbm_adapt", "markov") and model_version:
             raise ValueError("the registry holds the airline lightgbm + markov: with retail they use "
                              "models/action_model_retail.pkl (switch the domain to airline to use a version)")
         self.stop("predictor")
@@ -429,7 +430,7 @@ class Services:
             model_version = model_version or os.getenv("PULSE_MODEL_VERSION") or None   # pinned by GitOps (pulse-config)
             if model_version and MODEL_URI:
                 env.update(PULSE_MODEL_URI=MODEL_URI, PULSE_MODEL_VERSION=model_version)
-        elif model in ("lightgbm", "markov"):
+        elif model in ("lightgbm", "lightgbm_adapt", "markov"):
             model_version = model_version or os.getenv("ACTION_MODEL_VERSION") or None  # pinned by GitOps (pulse-config)
             if ACTION_URI and domain == "airline":                                       # the registry: airline only
                 env.update(ACTION_MODEL_URI=ACTION_URI, ACTION_MODEL_VERSION=model_version or "")
