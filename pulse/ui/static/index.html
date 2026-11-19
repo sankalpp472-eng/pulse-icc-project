@@ -169,7 +169,7 @@
       <div class="card">
         <div class="card-head"><h3>Episodes so far</h3><span class="muted">Run the same task with and without the predictor to compare</span></div>
         <div class="tbl-wrap"><table class="tbl" id="historyTbl"><thead><tr>
-          <th>Type</th><th>Task</th><th>Prewarming</th><th>Cluster</th><th>E2E</th><th>Tool wait</th><th>Calls</th><th>Cold</th><th title="Calls served warm by a pod the predictor prewarmed (a prewarm hit); Cold + Prewarmed never exceeds Calls">Prewarmed</th>
+          <th>Type</th><th>Task</th><th>Prewarming</th><th>Cluster</th><th>E2E</th><th>Tool wait</th><th>Calls</th><th title="Calls that did not run (tool unreachable, timed out, or its database was down): not counted as cold, nor in Mean">Failed</th><th>Cold</th><th title="Calls served warm by a pod the predictor prewarmed (a prewarm hit); Cold + Prewarmed never exceeds Calls">Prewarmed</th>
           <th>Mean</th><th>Cold wait</th><th title="Pod time the episode caused: during the episode plus the idle window its pods live through until they scale down (hover a value for the split)">Pod-s</th><th>Hint RTT</th></tr></thead><tbody></tbody></table></div>
       </div>
     </section>
