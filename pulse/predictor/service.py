@@ -3,7 +3,9 @@ The prediction API: one service, any of the four predictors (predictor/predictor
 
     PREDICTOR=lightgbm uvicorn service:app --app-dir predictor --port 8000          # run from the repo root
 
-  POST /predict   a PredictRequest (contract.py) -> ranked next actions + the tools to prewarm, each with k pods
+  POST /predict   a PredictRequest (contract.py) -> ranked next actions + the tools to prewarm, each with k pods.
+                  422 if the domain is not one of /info's domains, a trajectory name is not one of that domain's
+                  tools (RESPOND / END included), or a field is over its size limit (contract.py)
   GET  /info      the predictor's name, the inputs it reads (trajectory / signals / history), what it supports
                   (fan-out, lookahead), its domains, and the prewarm policy. Hint senders read it to send exactly
                   those inputs (pulse/agent/hints.py, pulse/ui/session.py, pulse/experiments/replay.py).
@@ -32,12 +34,13 @@ import json
 import os
 import time
 
-from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_client import CollectorRegistry, Counter, Histogram, make_asgi_app
 
 import pulse.predictor.predictors as predictors
-from pulse.predictor.contract import NO_PREWARM, RESPOND, ActionP, PredictionOut, PredictRequest
+from pulse.predictor.contract import END, NO_PREWARM, RESPOND, ActionP, PredictionOut, PredictRequest, unknown_tools
 from pulse.predictor.crd_writer import CRDWriter
 from pulse.predictor.policy import prewarm_select
 
@@ -68,6 +71,14 @@ app = FastAPI(title=f"Pulse next-tool predictor ({NAME})")
 app.mount("/metrics", make_asgi_app(registry=REGISTRY))
 
 
+@app.exception_handler(RequestValidationError)
+async def invalid_request(request, exc: RequestValidationError):
+    """422 naming each bad field, without echoing its value back (FastAPI's default repeats the whole input,
+    e.g. a 100,000-character tool name)."""
+    return JSONResponse(status_code=422, content={"detail": [
+        {"loc": list(e.get("loc", ())), "msg": e.get("msg", ""), "type": e.get("type", "")} for e in exc.errors()]})
+
+
 def policy():
     return {"name": PREWARM_POLICY, "theta": THETA, "top_k": TOP_K, "p_min": P_MIN, "ttl_s": TTL_S,
             "lookahead": {"on": LOOKAHEAD and PRED.supports_lookahead, "theta_next": THETA_NEXT,
@@ -90,8 +101,23 @@ async def healthz():
             "crd": {"mode": WRITER.mode, **WRITER.stats, "last_error": WRITER.last_error}}
 
 
+def validate(req: PredictRequest) -> None:
+    """422 for a hint the model cannot answer for (issues #23, #24): a domain this predictor does not serve, or a
+    trajectory with names that are not that domain's tools (RESPOND / END are actions, never in a trajectory).
+    Answering anyway would rank another domain's tools, or score input the model never saw, with no warning."""
+    if req.domain not in PRED.domains:
+        raise HTTPException(422, f"domain {req.domain!r} is not served by this predictor ({NAME}: "
+                                 f"{', '.join(PRED.domains)}); start a predictor for that domain")
+    bad = unknown_tools(req.domain, req.tools())
+    if bad:
+        shown = ", ".join(repr(n) for n in bad[:5]) + (f" and {len(bad) - 5} more" if len(bad) > 5 else "")
+        raise HTTPException(422, f"not {req.domain} tools: {shown}. A trajectory lists the tools called so far; "
+                                 f"{RESPOND} and {END} are not tools")
+
+
 @app.post("/predict", response_model=PredictionOut)
 def predict(req: PredictRequest):          # sync: FastAPI runs it in a thread pool (the speculator waits on an LLM)
+    validate(req)
     t0 = time.perf_counter()
     probs = PRED.predict(req)
     ranked = sorted(probs.items(), key=lambda kv: -kv[1])

@@ -14,29 +14,58 @@ RESPOND = the agent answers the customer, END = the session ends); prewarm = the
 (predictor/policy.py), each with k pods.
 """
 
-from typing import Optional
+from functools import cache
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, Field
 
 INPUTS = ("trajectory", "signals", "history")
 RESPOND, END = "RESPOND", "END"
 NO_PREWARM = {RESPOND, END}            # not functions: never prewarmed
+START = "START"                        # current_tool before the first call
+
+# Request size limits (issue #24): a tool name is a short identifier, and senders keep only the last 8 calls
+MAX_NAME = 64
+MAX_TRAJECTORY = 64
+MAX_HISTORY = 100
+Name = Annotated[str, Field(max_length=MAX_NAME)]
+
+
+@cache
+def domain_tools(domain: str) -> frozenset[str] | None:
+    """The tool names of a tau-bench domain (None = not a domain). RESPOND and END are actions, not tools."""
+    if domain == "airline":
+        from pulse.agent.tau_airline import ALL_TOOLS
+    elif domain == "retail":
+        from pulse.agent.tau_retail import ALL_TOOLS
+    else:
+        return None
+    return frozenset(t.get_info()["function"]["name"] for t in ALL_TOOLS)
+
+
+def unknown_tools(domain: str, names: list[str]) -> list[str]:
+    """The names that are not tools of `domain` (in order, once each)."""
+    known = domain_tools(domain) or frozenset()
+    return list(dict.fromkeys(n for n in names if n not in known))
 
 
 class PredictRequest(BaseModel):
-    workflow_id: Optional[str] = Field(None, description="W1, W2 ... (unknown / missing -> the domain's pooled model)")
-    episode_id: str = ""
-    domain: str = "airline"
-    trajectory: list[str] = Field(default_factory=list, description="tools called so far, in order")
-    current_tool: Optional[str] = Field(None, description="optional; used if trajectory is empty")
+    workflow_id: Optional[Name] = Field(None, description="W1, W2 ... (unknown / missing -> the domain's pooled model)")
+    episode_id: str = Field("", max_length=256)
+    domain: Name = Field("airline", description="must be one of the predictor's domains (GET /info), else 422")
+    trajectory: list[Name] = Field(default_factory=list, max_length=MAX_TRAJECTORY,
+                                   description="tools called so far, in order: tools of the domain only "
+                                               "(not RESPOND / END), else 422")
+    current_tool: Optional[Name] = Field(None, description="optional; used if trajectory is empty")
     ts: Optional[float] = None
     signals: Optional[dict[str, float]] = Field(None, description="predictor/signals.py (inputs: signals)")
-    history: list[dict] = Field(default_factory=list, description="compact messages (inputs: history)")
+    history: list[dict] = Field(default_factory=list, max_length=MAX_HISTORY,
+                                description="compact messages (inputs: history)")
 
     def tools(self) -> list[str]:
         if self.trajectory:
             return list(self.trajectory)
-        return [self.current_tool] if self.current_tool and self.current_tool != "START" else []
+        return [self.current_tool] if self.current_tool and self.current_tool != START else []
 
 
 class ActionP(BaseModel):
