@@ -4,16 +4,18 @@
 #   controller (Python, pulse/controller/prewarm_controller.py; a Go port can replace it)
 #                                                      READS   .spec, WRITES .status
 #
-# Mechanism = Option A, "warm-up request + Knative's idle window as the TTL":
+# Mechanism = "warm-up request + keep-alive for the TTL, then Knative's idle window scales it down":
 #   * On every new or refreshed request (new spec.requestedAt) the controller sends the tool's
 #     Knative service one lightweight MCP `ping` through the ingress (the same path the agent uses).
 #     If the tool is at zero, Knative's activator starts a pod -- a cold start, but BEFORE the agent
 #     needs the tool. If it is already warm, the ping just counts as activity.
-#   * Nothing is evicted by the controller: Knative scales the pod back to zero once it has seen
-#     no request for the service's idle window (autoscaling.knative.dev/window, 60s by default here).
-#     So the effective TTL = that window, counted from the LAST request (ping or real call).
-#   * spec.ttlSeconds is kept for compatibility but NOT used to warm or evict;
-#     status.effectiveTtlSeconds shows the window actually in force.
+#   * spec.ttlSeconds (FR-7) is how long the prediction keeps the tool warm, from status.readyAt.
+#     Knative scales a tool to zero after its idle window W (autoscaling.knative.dev/window) without
+#     requests, so if TTL > W the controller sends keep-alive pings (every W/2, the last at
+#     readyAt + TTL - W) and the pod scales down at about readyAt + TTL. If TTL <= W the pod lives
+#     for the window: W is a floor (deploy the tools with a shorter window to use shorter TTLs).
+#     status.effectiveTtlSeconds = max(TTL, W). The controller never deletes pods; real tool calls
+#     keep a tool warm as usual. TTL_KEEPALIVE=0 on the controller = the window alone (old behaviour).
 #   * spec.desiredReplicas = fan-out width k: a tool with fewer than k pods gets k pings at once
 #     (containerConcurrency 1 -> Knative starts k pods).
 #
@@ -69,7 +71,7 @@ spec:
                 threshold:       {type: number, minimum: 0, maximum: 1, description: "the prewarm policy's probability floor (P_MIN)"}
                 rank:            {type: integer, minimum: 1, description: "adaptive policy: this tool's place among the step's top-k candidates"}
                 hitRate:         {type: number, minimum: 0, maximum: 1, description: "adaptive policy: how often a candidate of this probability was really the next call (calibrated online); the controller warms it only if hitRate x the tool's cold start is worth a pod slot now"}
-                ttlSeconds:      {type: integer, minimum: 1, description: "predictor's intended TTL. Lease mode: the lease length; Option A: informational only (the real TTL is the Knative idle window, status.effectiveTtlSeconds)"}
+                ttlSeconds:      {type: integer, minimum: 1, description: "how long this prediction keeps the tool warm after the warm-up (FR-7). Ping mode: at least the Knative idle window, held with keep-alive pings when longer (status.effectiveTtlSeconds; TTL_KEEPALIVE=0 = the window only); lease mode: the lease length"}
                 desiredReplicas: {type: integer, minimum: 0, maximum: 5, description: "fan-out width k from the next-action predictor (pending-ID rule); the controller sends k pings at once to a tool with fewer than k pods"}
                 requestedAt:     {type: string, format: date-time, description: "time of the latest prediction (RFC 3339); a newer value triggers a new warm-up ping"}
                 episodeId:       {type: string}
@@ -88,9 +90,11 @@ spec:
                 readyAt:             {type: string, format: date-time, description: "when the ping was answered (the pod is warm)"}
                 pingLatencyMs:       {type: integer, description: "ping round trip: ~a cold start if wasCold, a few ms if the tool was already warm"}
                 wasCold:             {type: boolean, description: "true if the tool had no pod when the ping was sent (this ping caused the cold start)"}
-                effectiveTtlSeconds: {type: integer, description: "the service's Knative idle window = the real TTL under Option A"}
-                expiresAt:           {type: string, format: date-time, description: "readyAt + effectiveTtlSeconds: earliest scale-down if nothing else calls the tool"}
+                requestedTtlSeconds: {type: integer, description: "spec.ttlSeconds of the request acted on"}
+                windowSeconds:       {type: integer, description: "the tool's Knative idle window (the shortest possible TTL)"}
+                effectiveTtlSeconds: {type: integer, description: "how long the tool is kept warm: max(requestedTtlSeconds, windowSeconds)"}
+                expiresAt:           {type: string, format: date-time, description: "readyAt + effectiveTtlSeconds: about when the tool scales down if nothing else calls it"}
                 evictedAt:           {type: string, format: date-time, description: "first time the controller saw the tool back at zero pods"}
                 message:             {type: string}
-                # kept from the first version of the contract (Option B); not set by the Option A controller
+                # kept from the first version of the contract; not set by the controller
                 lastActivityAt:      {type: string, format: date-time}
