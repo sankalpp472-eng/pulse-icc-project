@@ -104,11 +104,15 @@ step_python() {
     "$PY" -m pulse.setup.download_data >/dev/null || die "download_data failed"
     return 0
   fi
-  local base
-  for base in python3.11 python3 python py; do command -v "$base" >/dev/null && break; done
+  local base="" b
+  # the first one that really runs and is 3.11+ (Windows: "python3" may be the Microsoft Store placeholder)
+  for b in python3.11 python3 python "py -3.11" py; do
+    $b -c "import sys; sys.exit(sys.version_info < (3, 11))" >/dev/null 2>&1 && { base=$b; break; }
+  done
+  [ -n "$base" ] || [ -d .venv ] || die "no Python 3.11 or newer found (install Python 3.11, then rerun)"
   if [ ! -d .venv ]; then
     say "creating .venv ($base) and installing the project (a few minutes)"
-    "$base" -m venv .venv || die "could not create .venv"
+    $base -m venv .venv || die "could not create .venv"
   fi
   PY=$( [ -x .venv/Scripts/python.exe ] && echo .venv/Scripts/python.exe || echo .venv/bin/python )
   if [ ! -f .venv/.pulse-installed ] || [ requirements.txt -nt .venv/.pulse-installed ]; then
