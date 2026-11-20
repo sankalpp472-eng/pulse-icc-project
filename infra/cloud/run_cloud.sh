@@ -102,17 +102,47 @@ s=sys.argv[2][len(sys.argv[3]):].replace("-","_"); print(f"{d.get(s, 60)}s")' "$
 }
 [ "$TOOL_WINDOWS" != per-tool ] || [ -f data/tool_windows.json ] || \
   { echo "No data/tool_windows.json: python -m pulse.experiments.tool_windows <C0 runs> --domain $DOMAIN"; exit 1; }
+# A changed min-scale / window is a new Knative revision, and by default a new revision must first start one pod
+# per tool. Going from C1 (one pod each) back to 0 would then need two pods per tool for a moment: more than two
+# small workers hold, and the revisions fail ("Initial scale was never achieved"). So new revisions may start at
+# zero pods (initial-scale 0; it changes nothing about cold starts, only how a revision is created).
+kubectl patch cm config-autoscaler -n knative-serving --type merge -p '{"data":{"allow-zero-initial-scale":"true"}}' >/dev/null
+tools_of() {   # ROLE -> "name min-scale window initial-scale" lines
+  kubectl get ksvc -l pulse/role=$1 -o jsonpath='{range .items[*]}{.metadata.name} {.spec.template.metadata.annotations.autoscaling\.knative\.dev/min-scale} {.spec.template.metadata.annotations.autoscaling\.knative\.dev/window} {.spec.template.metadata.annotations.autoscaling\.knative\.dev/initial-scale}{"\n"}{end}'
+}
+patch_tool() {   # name min-scale window
+  kubectl patch ksvc "$1" --type merge -p \
+    "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"autoscaling.knative.dev/min-scale\":\"$2\",\"autoscaling.knative.dev/window\":\"$3\",\"autoscaling.knative.dev/initial-scale\":\"$2\"}}}}}" >/dev/null
+}
+# the other domain's tools back at zero (a C1 run of it leaves one pod per tool): they would take the workers'
+# CPU and memory from this run
+OTHER_ROLE=$([ "$ROLE" = mcp-tool ] && echo mcp-tool-retail || echo mcp-tool)
+other=0
+while read -r s min win init; do
+  [ -n "$s" ] || continue
+  if [ "${min:-0}" != 0 ] || [ "${init:-}" != 0 ]; then
+    [ $other = 0 ] && echo "Setting the other domain's tools ($OTHER_ROLE) back to min-scale 0 ..."
+    patch_tool "$s" 0 "${win:-60s}"; other=1
+  fi
+done < <(tools_of $OTHER_ROLE 2>/dev/null)
 patched=0
-while read -r s min win; do
+while read -r s min win init; do
+  [ -n "$s" ] || continue
   want=$(window_for "$s")
-  if [ "$min/$win" != "$want_min/$want" ]; then
+  if [ "$min/$win/$init" != "$want_min/$want/$want_min" ]; then
     [ $patched = 0 ] && echo "Setting the $DOMAIN tools to min-scale $want_min, idle window(s) $([ "$TOOL_WINDOWS" = per-tool ] && echo per-tool || echo "$want_window") ..."
-    kubectl patch ksvc "$s" --type merge -p \
-      "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"autoscaling.knative.dev/min-scale\":\"$want_min\",\"autoscaling.knative.dev/window\":\"$want\"}}}}}" >/dev/null
+    patch_tool "$s" "$want_min" "$want"
     patched=1
   fi
-done < <(kubectl get ksvc -l pulse/role=$ROLE -o jsonpath='{range .items[*]}{.metadata.name} {.spec.template.metadata.annotations.autoscaling\.knative\.dev/min-scale} {.spec.template.metadata.annotations.autoscaling\.knative\.dev/window}{"\n"}{end}')
+done < <(tools_of $ROLE)
 [ $patched = 0 ] || kubectl wait ksvc -l pulse/role=$ROLE --for=condition=Ready --timeout=600s >/dev/null
+if [ $other = 1 ]; then
+  kubectl wait ksvc -l pulse/role=$OTHER_ROLE --for=condition=Ready --timeout=600s >/dev/null
+  for i in $(seq 1 60); do      # their pods gone (the idle window, then Knative's grace period): at most 10 min
+    [ -z "$(kubectl get pods -l pulse/role=$OTHER_ROLE --field-selector=status.phase=Running -o name 2>/dev/null)" ] && break
+    sleep 10
+  done
+fi
 
 # ---- arguments for the runner
 [ "$CONFIG" = C3 ] && LABEL="$LABEL-$PREDICTOR"     # e.g. ..._cloud-lightgbm
