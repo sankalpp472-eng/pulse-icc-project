@@ -7,6 +7,8 @@
 #   TARGET=kind bash infra/cloud/cloud_up.sh         # local kind cluster
 #   PREWARM_POLICY=topk bash infra/cloud/cloud_up.sh # a fixed top-k (TOP_K) instead of adaptive (default)
 #   PREDICTOR=markov bash infra/cloud/cloud_up.sh    # lightgbm (default) | markov | speculator | pulse_v3
+#   EMBED=0 bash infra/cloud/cloud_up.sh             # no pulse-embed (only pulse_v3 needs it): saves a model
+#                                                      download and ~0.5 GB, e.g. on a small kind cluster
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
@@ -46,5 +48,11 @@ sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__PREWARM_POLICY__|${PREWARM_POLICY:-adaptiv
     -e "s|value: lightgbm}|value: ${PREDICTOR:-lightgbm}}|" \
   "$HERE/pulse-cloud.yaml" | kubectl apply -f -
 kubectl delete deploy/pulse-speculator svc/pulse-speculator --ignore-not-found >/dev/null   # replaced by PREDICTOR=speculator
-for d in pulse-predictor pulse-controller pulse-embed; do kubectl rollout status deploy/$d --timeout=600s; done
+if [ "${EMBED:-1}" = 0 ]; then                    # pulse_v3's embedding server is not wanted: none running
+  kubectl scale deploy/pulse-embed --replicas=0 >/dev/null
+  WAIT="pulse-predictor pulse-controller"
+else
+  WAIT="pulse-predictor pulse-controller pulse-embed"
+fi
+for d in $WAIT; do kubectl rollout status deploy/$d --timeout=600s; done
 kubectl get pods -l pulse/role=system -o wide
