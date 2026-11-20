@@ -7,7 +7,7 @@
 #   bash infra/knative/deploy.sh                   # build + push the image first (needs `docker login` as the image owner)
 #   SKIP_BUILD=1 bash infra/knative/deploy.sh 1    # C1: min-scale 1 (always warm) instead of C0 (min-scale 0)
 #   DOMAIN=retail bash infra/knative/deploy.sh     # the retail tools: services retail-<tool>, pods pulse/role=mcp-tool-retail,
-#                                    #   Redis DB 1, image :0.3 (build + push it once; :0.2 has no retail tools)
+#                                    #   Redis DB 1 (image :0.4 has both domains; :0.2 has no retail tools)
 #
 # IMAGE=<repo:tag> overrides the image (e.g. your own Docker Hub account).
 # NO_REDIS=1 skips the shared database (each tool pod keeps its own in-memory copy).
@@ -25,9 +25,9 @@ export PATH="$HOME/.arkade/bin:$PATH"
 MIN_SCALE=${1:-0}
 DOMAIN=${DOMAIN:-airline}
 if [ "$DOMAIN" = retail ]; then
-  IMAGE=${IMAGE:-docker.io/sankalps2003/pulse-mcp-tools:0.3}; DB=1; ROLE=mcp-tool-retail; OUT=tools-retail.yaml
+  IMAGE=${IMAGE:-docker.io/sankalps2003/pulse-mcp-tools:0.4}; DB=1; ROLE=mcp-tool-retail; OUT=tools-retail.yaml
 else
-  IMAGE=${IMAGE:-docker.io/sankalps2003/pulse-mcp-tools:0.2}; DB=0; ROLE=mcp-tool; OUT=tools.yaml
+  IMAGE=${IMAGE:-docker.io/sankalps2003/pulse-mcp-tools:0.4}; DB=0; ROLE=mcp-tool; OUT=tools.yaml
 fi
 ROOT=../..
 

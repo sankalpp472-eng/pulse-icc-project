@@ -83,6 +83,19 @@ class LocalToolBackend:
         return hashlib.sha256(json.dumps(self.data, sort_keys=True).encode()).hexdigest()
 
 
+def describe_error(e: BaseException) -> str:
+    """'Type: message' of the error that actually happened. The MCP client runs in anyio task groups, which wrap
+    it in ExceptionGroup("unhandled errors in a TaskGroup"): unwrap to the innermost errors so the cause shows."""
+    leaves, stack = [], [e]
+    while stack:
+        x = stack.pop(0)
+        if isinstance(x, BaseExceptionGroup):
+            stack.extend(x.exceptions)
+        else:
+            leaves.append(x)
+    return "; ".join(dict.fromkeys(f"{type(x).__name__}: {x}" for x in leaves)) or f"{type(e).__name__}: {e}"
+
+
 class MCPToolBackend:
     """Calls each tool on its own MCP server over Streamable HTTP.
 
@@ -107,6 +120,9 @@ class MCPToolBackend:
         self._names = {s["function"]["name"] for s in self.schemas}
         self.url_tpl = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:9000/{tool}/mcp")
         self.host_tpl = os.getenv("MCP_HOST_TEMPLATE") or None
+        # Upper bound on one call (cold start included): a tool whose pods never become ready fails after this
+        # instead of after Knative's 300 s request timeout
+        self.timeout_s = float(os.getenv("MCP_CALL_TIMEOUT_S", "120"))
 
     @property
     def names(self) -> list[str]:
@@ -125,9 +141,12 @@ class MCPToolBackend:
             return f"Error: unknown tool {name}", 0.0, t_wall
         transport_ok = True
         try:
-            out = await self._call(name, args)
-        except Exception as e:  # server down, timeout ... -> the agent sees an error, run continues
-            out, transport_ok = f"Error: MCP call to {name} failed: {type(e).__name__}: {e}", False
+            out = await asyncio.wait_for(self._call(name, args), self.timeout_s)
+        except TimeoutError:
+            out, transport_ok = (f"Error: MCP call to {name} failed: no answer within {self.timeout_s:.0f} s "
+                                 f"(is the tool's pod failing to start? kubectl get pods -l pulse/tool={name})"), False
+        except Exception as e:  # server down ... -> the agent sees an error, run continues
+            out, transport_ok = f"Error: MCP call to {name} failed: {describe_error(e)}", False
         latency = time.perf_counter() - t0
         CALL_LOG.append({"tool": name, "t_start": t_wall, "latency_s": latency, "transport_ok": transport_ok,
                          "tool_error": out.startswith("Error"), "result_head": out[:80]})
