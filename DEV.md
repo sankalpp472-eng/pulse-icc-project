@@ -29,6 +29,63 @@ What each part of the code does and how the parts fit together. For installing a
 **Configurations compared:** C0 scale-to-zero without prewarming (the cold baseline), C1 always warm
 (min-scale 1: the latency floor and resource ceiling), C3 scale-to-zero with predictor and controller (Pulse).
 
+### Prewarming design: what gets warmed, how many pods, for how long
+
+Every prediction goes through five decisions. The first is the predictor's; the rest are the controller's (ping
+mode, the default). Each "no" leaves a trace: the `PrewarmRequest`'s status becomes `Skipped` with the reason, the
+controller logs a `skipped` line (`why`: `topk`, `refresh` or `pressure`) and counts it in
+`pulse_controller_skips_total`.
+
+```mermaid
+flowchart LR
+  H["Hint<br/>tools so far + signals"] --> P["Predictor (lightgbm)<br/>top 3 with p ≥ 0.05,<br/>each with its hit rate"]
+  P --> R[("PrewarmRequest")]
+  R --> A{"1 · Worth a<br/>pod slot?"}
+  A -- no --> S1["Skipped: topk"]
+  A -- yes --> B["2 · How many pods?<br/>at most 5, then the k rule"]
+  B --> C{"3 · Start, refresh<br/>or skip?"}
+  C -- skip --> S2["Skipped: refresh / pressure"]
+  C -- start / refresh --> D["4 · k pings:<br/>Knative starts k pods"]
+  D --> E{"5 · TTL longer than<br/>the idle window?"}
+  E -- yes --> F["keep-alive pings until the TTL ends,<br/>each rechecked as in 3"]
+  E -- no --> G["Knative removes idle pods<br/>after the window"]
+  F --> G
+```
+
+| # | Decision | Rule | Code | Default |
+|---|---|---|---|---|
+| 0 | Which tools are candidates | The predictor ranks every action; the top `TOP_K_MAX` tools with p ≥ `P_MIN` become candidates. Each carries its rank and a **hit rate**: how often a candidate of that probability really was the next call, learned online from each episode's next hint | `predictor/policy.py`, `predictor/calibration.py` | `PREWARM_POLICY=adaptive`, 3, 0.05 |
+| 1 | Is this candidate worth a pod slot now? | Warm it iff `hit × cold start ≥ (1 − hit) × slot price`. Only a wrong prewarm wastes a slot; a right one starts the pod the call would have started anyway. The price is `TOPK_PRICE_S` with free slots, rising to `TOPK_FULL_X` times that when the tool nodes are full or pods wait for a slot. For a 1.5 s cold start that means warming from a 5 % hit rate with room and 33 % when full. Cold starts are learned per tool from the controller's own pings | `controller/adaptive.py` | 0.075 s, ×10 |
+| 2 | How many pods | The predictor's fan-out k (parallel calls expected), capped at `MAX_REPLICAS` = 5 (#34), then cut by the k rule `min(k, ceil(k × warm call time / budget))`: one pod per call only when calls are slow enough to queue. Today's ~45 ms tools get 1 | `controller/leases.py` (`rule_k`), `prewarm_controller.py` (`pods_for`) | 0.05 s / 0.3 s; `K_ADAPT=1` learns both |
+| 3 | Start, refresh or skip | No pods yet: start them. Already warm: re-ping to restart the idle window (`always`), only let real calls extend it (`never`), or re-ping only likely tools as the nodes fill (`value`). While pods wait for a slot, predictions below `SHED_P` neither start nor refresh pods | `controller/refresh.py` | `always`, `SHED_P=0` |
+| 4 | Warm | k concurrent MCP pings through the ingress; with one request per pod, Knative starts k pods | `prewarm_controller.py` | — |
+| 5 | How long | Knative removes a tool's idle pods after its window (60 s, or each tool's own 20–60 s from `data/tool_windows.json`). If the prediction's TTL is longer than the window, the controller holds the tool with keep-alive pings until the TTL ends (#37). A keep-alive ping counts as a refresh, so step 3's rules can end a hold early | `prewarm_controller.py` (`keepalive`) | `TTL_KEEPALIVE=1`; windows 60 s |
+
+**Why it is built this way:**
+- **Knative cannot evict.** Deleting a pod makes the autoscaler start it again, so the controller shapes pod lifetime
+  only by when it pings (or doesn't): it never deletes pods.
+- **A fixed probability cutoff (θ = 0.3, before) ignores capacity.** Adaptive top-k warms more when slots are free
+  and only near-certain guesses when they are not.
+- **Extending and shortening pod life are one decision.** Keep-alive (longer) and the refresh policy and shedding
+  (shorter) go through the same check, so under pressure they don't work against each other.
+
+**The alternative: lease mode** (`CONTROLLER_MODE=lease`, `controller/leases.py`). Admission control: a
+prediction's new pods start only if they fit next to a reserve of free slots (`LEASE_RESERVE_PODS`, 4), and the
+lease, not keep-alive, decides the TTL. Steps 1 and 2 apply too; 3 and the keep-alive do not.
+
+**What the measurements say** (one run each, seed 252; on EKS the same setup run twice differed by about 2× in its
+worst call, so small differences are noise):
+
+| Setup | Result | Status |
+|---|---|---|
+| lightgbm + adaptive top-k + ping controller, defaults | EKS, airline on one worker at 16 episodes/min: p99 0.17 s vs 30 s without prewarming (C0), 27 % fewer pod-seconds. With room: cold calls 0.6 % vs 7.7 % | **The recommended setup** |
+| Retail on one worker | p99 80–125 s with or without prewarming: 16 tools don't fit, pods queue for a slot | Capacity-bound, not a prediction problem |
+| Learned slot price (`TOPK_PRICE=learned`) | Simulator: no gain with room, worse when overloaded (it turns away good guesses) | Off by default |
+| `lightgbm_adapt` (online adapter) | EKS replays: top-1 accuracy 2–4 points lower once it had learned | Not recommended for replays; untested with repeating tasks |
+| Adaptive k, refresh policy, shedding, per-tool windows, keep-alive | Simulated (adaptive k, refresh, shedding, windows) or unit-tested only | Not yet run on EKS |
+
+Details of each piece, its settings and its simulator flags are in §3.5.
+
 ---
 
 ## 2. Repository layout
