@@ -93,6 +93,8 @@ from pulse import paths  # noqa: E402
 from pulse.controller.leases import LeaseBook, LeaseConfig, rule_k  # noqa: E402
 from pulse.controller.refresh import RefreshConfig, decide  # noqa: E402
 from pulse.controller.adaptive import K_FREE_HIGH, Estimates, budget, query_warm, worth_warming  # noqa: E402
+
+MAX_REPLICAS = 5     # desiredReplicas upper bound: keep equal to `maximum` in infra/prewarm/prewarmrequest-crd.yaml and K_CAP in predictor/action_model.py
 NS = os.getenv("CRD_NAMESPACE", "default")
 URL_TPL = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 HOST_TPL = os.getenv("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
@@ -138,8 +140,9 @@ def k_inputs(tool: str, free: int | None = None) -> tuple[float, float]:
 
 
 def pods_for(tool: str, k_predicted, free: int | None = None) -> int:
-    """The pods a prediction gets: the predictor's fan-out k, cut by the k rule (fast tools: 1)."""
-    k = max(1, int(k_predicted or 1))
+    """The pods a prediction gets: the predictor's fan-out k (at most MAX_REPLICAS, #34), cut by the k rule
+    (fast tools: 1)."""
+    k = min(MAX_REPLICAS, max(1, int(k_predicted or 1)))
     return rule_k(k, *k_inputs(tool, free)) if K_RULE else k
 TOOL_NODES = os.getenv("TOOL_NODES", "pulse/role=worker")
 TOOL_CPU_M = int(os.getenv("TOOL_CPU_M", "75"))         # 50m tool + 25m Knative queue-proxy (measured on EKS)
@@ -266,9 +269,11 @@ class Controller:
             # desiredReplicas = the predictor's fan-out width k. With containerConcurrency 1 every in-flight
             # request needs its own pod, so k pings at once make Knative start k pods. A tool that already
             # has k pods gets one ping, which just restarts its idle window. Lease mode passes the granted k.
+            # Either way at most MAX_REPLICAS, the CRD schema's cap, enforced here too (#34).
             topk = spec.get("hitRate") is not None    # an adaptive top-k candidate (pulse/predictor/policy.py)
             room = self.capacity() if (REFRESH.needs_capacity() or K_ADAPT or topk) and MODE == "ping" else None
-            k = max(1, int(k)) if k else pods_for(spec["tool"], spec.get("desiredReplicas"), room and room[0])
+            k = min(MAX_REPLICAS, max(1, int(k))) if k else \
+                pods_for(spec["tool"], spec.get("desiredReplicas"), room and room[0])
             if MODE == "ping":
                 if topk:                              # adaptive.py: worth a pod slot now?
                     ok, why = worth_warming(spec["hitRate"], ESTIMATES.cold(spec["tool"]), *room, **price_kw())

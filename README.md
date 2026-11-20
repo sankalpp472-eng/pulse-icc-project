@@ -156,6 +156,12 @@ One episode at a time, on screen: the **live agent** with an AI or a human custo
 same task with prewarming **off (C0)** and **on (C3)** and compare end-to-end time, tool wait and cold calls. On
 Knative, *Background load* adds more replayed agents on the same tools while the episode runs.
 
+**What is stored.** A finished live run is saved as a recording (`.ui-state/recordings/live-*.json`) with the 
+conversation text, so it can be replayed exactly. Runs where a person types the customer's messages are *not* 
+recorded unless you set `PULSE_RECORD_HUMAN=1`. The `speculator` and `pulse_v3` predictors also receive the last 
+messages (`history`) in each `/predict` request; the predictor's audit log and the PrewarmRequest objects hold 
+only tool names, probabilities, timing and the episode / workflow ids, no message text.
+
 ### Experiments
 
 Batch runs that write a result folder to `results/`:

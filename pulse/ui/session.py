@@ -15,6 +15,7 @@ simulated cluster (ui/sim_cluster.py: the session itself applies the predictor's
 import asyncio
 import json
 import math
+import os
 import queue
 import random
 import threading
@@ -265,6 +266,12 @@ class Session(threading.Thread):
         """A live episode with at least one tool call -> record_dir/<id>.json, replayable with kind=recorded."""
         r = self.rec
         if not (r and self.record_dir and any(s["kind"] == "tool" for s in r["steps"])):
+            return
+        if r.get("user") == "human" and os.getenv("PULSE_RECORD_HUMAN") != "1":
+            # a recording keeps the conversation text (that is what makes a replay exact); a person typing as the
+            # customer may type something private, so those runs are not saved unless the operator opts in (#35)
+            self.emit("info", text="Not recorded: the customer was a person, and a recording stores the conversation "
+                                   "text (set PULSE_RECORD_HUMAN=1 to record such runs).")
             return
         r.update(state=self.state, live_e2e_s=round(self.t_end - self.t_start, 2) if self.t_start and self.t_end else None,
                  live_tool_wait_s=round(self.tool_wait, 2),
