@@ -22,7 +22,8 @@
 
 set -uo pipefail
 export MSYS_NO_PATHCONV=1              # Git Bash on Windows: keep pod paths as they are
-export PYTHONUTF8=1 PYTHONIOENCODING=utf-8   # Windows: Python output to a log file is cp1252 otherwise (θ, ≤ ...)
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8
+export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never   # git never waits for a password prompt overnight   # Windows: Python output to a log file is cp1252 otherwise (θ, ≤ ...)
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
@@ -50,6 +51,8 @@ MONITORING=${MONITORING:-1}
 [ "$QUICK" = 1 ] && PUBLISH=${PUBLISH:-0}      # a smoke test is never published
 RUN_CLOUD=${RUN_CLOUD:-infra/cloud/run_cloud.sh}       # (tests replace it)
 RETRY_WAIT_S=${RETRY_WAIT_S:-120}
+# EKS nodes are x86: an Apple Silicon Mac would otherwise build arm64 images they cannot run
+[ "$CLUSTER" = kind ] || export DOCKER_DEFAULT_PLATFORM=linux/amd64
 # quick (smoke-test) runs get their own folder: the real runs must not skip them as done
 OUT=results/team/$SCRIPT$([ "$CLUSTER" = kind ] && echo -kind)$([ "$QUICK" = 1 ] && [ "$CLUSTER" != kind ] && echo -quick)
 # EKS set up by any script (the same cluster serves every script of this account): one marker for all of them
@@ -71,6 +74,7 @@ native() { command -v cygpath >/dev/null && cygpath -m "$1" || echo "$1"; }   # 
 # ------------------------------------------------------------------ preflight
 step_preflight() {
   [ -n "$TEAM_MEMBER" ] || die "set TEAM_MEMBER=<your name> (used for your branch: exp/$SCRIPT-<name>)"
+  [[ "$TEAM_MEMBER" =~ ^[A-Za-z0-9._-]+$ ]] || die "TEAM_MEMBER may only have letters, digits, '.', '_' and '-' (it names a git branch)"
   local missing="" tools="git aws eksctl kubectl helm docker curl"
   export PATH="$HOME/.arkade/bin:$PATH"
   [ "$CLUSTER" = kind ] && tools="git kubectl helm docker curl kind"
@@ -206,6 +210,12 @@ step_cluster() {
   [ "$CLUSTER" = kind ] && { step_cluster_kind; return; }
   if cluster_ready; then
     say "cluster ready (context $KUBE_CONTEXT, image $(cat infra/cloud/.image-ecr))"
+    if [ "${REBUILD:-0}" = 1 ]; then          # code pulled since the cluster was set up: into the image and services
+      say "REBUILD=1: runner image from the current code -> your ECR, then the Pulse services"
+      TARGET=ecr bash infra/cloud/build_image.sh > "$LOGDIR/build_image.log" 2>&1 || die "build_image failed: $LOGDIR/build_image.log"
+      EMBED=0 PREDICTOR=lightgbm_adapt bash infra/cloud/cloud_up.sh > "$LOGDIR/cloud_up.log" 2>&1 || die "cloud_up failed: $LOGDIR/cloud_up.log"
+      record_environment
+    fi
     [ -f "$OUT/environment.txt" ] || record_environment
     return
   fi
@@ -272,6 +282,7 @@ run_one() {
   if [ "$rc" = 0 ] && [ -n "$result" ] && [ -d "$result" ]; then
     printf '%s\t%s\t%s\t%s\tdone\t%s\t%s\t%s\n' "$exp" "$domain" "$arm" "$trial" "$result" "$start" "$end" >> "$MANIFEST"
     say "    done in $(( (end - start) / 60 )) min: $result"
+    export_telemetry "$exp" "$domain/$arm/t$trial" || true   # now, while Prometheus still has it
   else
     printf '%s\t%s\t%s\t%s\tfailed(rc=%s)\t%s\t%s\t%s\n' "$exp" "$domain" "$arm" "$trial" "$rc" "${pod:-}" "$start" "$end" >> "$MANIFEST"
     say "    FAILED (rc=$rc); see $log (rerun the script to retry it)"
@@ -282,47 +293,63 @@ replay_tasks() {   # the replay arguments of a domain's held-out tasks
 }
 
 # ------------------------------------------------------------------ telemetry
-step_telemetry() {   # step_telemetry EXP: Prometheus export + summary
-  local exp=$1 pf
+export_telemetry() {   # export_telemetry EXP [RUN]: Prometheus -> $OUT/EXP/prometheus (one run, or all done runs)
+  local exp=$1 run=${2:-} pf ok=1 i
+  kubectl get svc prometheus-operated -n monitoring >/dev/null 2>&1 || return 1
+  mkdir -p "$OUT/$exp"
+  kubectl -n monitoring port-forward svc/prometheus-operated 19090:9090 > "$LOGDIR/port-forward.log" 2>&1 &
+  pf=$!
+  for i in $(seq 1 30); do                       # ready, not just started (Windows can take a while)
+    curl -sf --max-time 3 http://127.0.0.1:19090/-/ready >/dev/null 2>&1 && break
+    sleep 2
+  done
+  "$PY" -m pulse.experiments.prom_export --url http://127.0.0.1:19090 --manifest "$MANIFEST" --exp "$exp" \
+    --out "$OUT/$exp/prometheus" ${run:+--run "$run"} >> "$LOGDIR/telemetry.log" 2>&1 || ok=0
+  kill "$pf" 2>/dev/null; wait "$pf" 2>/dev/null
+  [ "$ok" = 1 ] || say "  Prometheus export failed${run:+ for $run} (see $LOGDIR/telemetry.log)"
+  return 0
+}
+step_telemetry() {   # step_telemetry EXP: Prometheus export (every done run again; earlier rows are kept) + summary
+  local exp=$1
   wanted "$exp" || return 0
   say "telemetry: $exp"
   mkdir -p "$OUT/$exp"
-  if kubectl get svc prometheus-operated -n monitoring >/dev/null 2>&1; then
-    kubectl -n monitoring port-forward svc/prometheus-operated 19090:9090 > "$LOGDIR/port-forward.log" 2>&1 &
-    pf=$!
-    sleep 5
-    "$PY" -m pulse.experiments.prom_export --url http://127.0.0.1:19090 --manifest "$MANIFEST" --exp "$exp" \
-      --out "$OUT/$exp/prometheus" >> "$LOGDIR/telemetry.log" 2>&1 || say "  Prometheus export failed (see $LOGDIR/telemetry.log)"
-    kill "$pf" 2>/dev/null
-  else
+  export_telemetry "$exp" ||
     say "  no Prometheus in the cluster: CPU / memory not exported (pod-seconds and latencies are in the runs)"
-  fi
   "$PY" -m pulse.experiments.team_summary --manifest "$MANIFEST" --exp "$exp" --out "$OUT/$exp" \
     > "$OUT/$exp/summary.txt" 2>&1 || say "  summary failed (see $OUT/$exp/summary.txt)"
   say "  $OUT/$exp/$exp.md"
 }
 
 # ------------------------------------------------------------------ publish
-step_publish() {
+step_publish() {   # never fatal: a failed push must not keep the cluster (and its bill) running
   [ "${PUBLISH:-1}" = 1 ] || { say "not published (PUBLISH=0$([ "$CLUSTER" = kind ] && echo ', local test')): results stay in $OUT"; return 0; }
-  say "packaging $PUBLISH_DIR"
-  rm -rf "$PUBLISH_DIR"; mkdir -p "$PUBLISH_DIR/runs"
+  local branch="exp/$SCRIPT-$TEAM_MEMBER" orig
+  orig=$(git rev-parse --abbrev-ref HEAD)
+  say "packaging $PUBLISH_DIR on $branch"
+  rm -rf "$PUBLISH_DIR"                          # before switching: untracked copies would block the switch
+  if ! { git switch -c "$branch" 2>/dev/null || git switch "$branch"; }; then
+    say "PUBLISH FAILED: cannot switch to $branch (results are safe in $OUT; publish later with: PUBLISH=1 SKIP_TRAIN=1 SKIP_CLUSTER=1 and the same command)"
+    return 1
+  fi
+  mkdir -p "$PUBLISH_DIR/runs"
   cp -r "$OUT"/. "$PUBLISH_DIR"/
-  rm -f "$PUBLISH_DIR/kubeconfig" "$PUBLISH_DIR/.confirmed"
+  rm -f "$PUBLISH_DIR/kubeconfig" "$PUBLISH_DIR/.confirmed" "$PUBLISH_DIR/models.json.ok"
   awk -F'\t' '$5=="done" {print $6}' "$MANIFEST" | while read -r d; do [ -d "$d" ] && cp -r "$d" "$PUBLISH_DIR/runs/"; done
   # the manifest as committed points at runs/<name>
   awk -F'\t' 'BEGIN{OFS="\t"} {sub(/^results\/(cloud|local)_runs\//, "runs/", $6); print}' "$MANIFEST" > "$PUBLISH_DIR/manifest.tsv"
-  local branch="exp/$SCRIPT-$TEAM_MEMBER"
-  git switch -c "$branch" 2>/dev/null || git switch "$branch" || die "cannot switch to $branch"
   git add -f "$PUBLISH_DIR"
-  git commit -q -m "results: $SCRIPT ($TEAM_MEMBER)" -m "$(cat "$OUT/environment.txt" 2>/dev/null | head -3)" || say "nothing new to commit"
-  git push -u origin "$branch" || die "push failed: git push -u origin $branch"
-  if command -v gh >/dev/null; then
+  git commit -q -m "results: $SCRIPT ($TEAM_MEMBER)" -m "$(head -3 "$OUT/environment.txt" 2>/dev/null)" || say "nothing new to commit"
+  local pushed=1
+  git push -u origin "$branch" || { pushed=0; say "PUSH FAILED: the results are committed on $branch; push it later with: git push -u origin $branch"; }
+  if [ "$pushed" = 1 ] && command -v gh >/dev/null; then
     gh pr view "$branch" >/dev/null 2>&1 || gh pr create --base exp/team-scripts --head "$branch" \
       --title "Results: $SCRIPT ($TEAM_MEMBER)" --body "$(cat "$PUBLISH_DIR"/*/*.md 2>/dev/null | head -150)" || \
       say "open the pull request by hand: $branch -> exp/team-scripts"
   fi
-  say "published on $branch"
+  git switch "$orig" >/dev/null 2>&1 || say "still on $branch (git switch $orig to get back)"
+  [ "$pushed" = 1 ] && say "published on $branch"
+  return 0
 }
 
 # ------------------------------------------------------------------ down
@@ -353,7 +380,7 @@ run_script() {   # run_script <function that runs the experiments> <experiment i
     say "some runs did not finish:"; echo "$missing"
     say "rerun the same command to retry them (finished runs are skipped); publishing what is there"
   fi
-  step_publish
+  step_publish || true
   step_down
   say "finished ($failed failed attempt(s) recorded in $MANIFEST)"
 }

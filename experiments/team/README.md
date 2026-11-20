@@ -61,10 +61,18 @@ Each script also needs about 1 h of set-up: about 25 min to create the cluster, 
   ```
 - **Keep the laptop awake and online for the whole run.** On Windows, set Power & battery → Screen and sleep →
   "Never" while plugged in.
-  - If the laptop drops off for less than 1 h, the run continues: the run pod keeps its results for 1 h.
+  - If the laptop drops off, the run continues in the cluster. The script waits up to 30 min for the cluster to
+    answer again, then retries collecting the results; the run pod keeps them for 4 h.
   - If it's off for longer, that run is retried the next time you start the script.
 
 ## Run it
+
+Get the latest version first (fixes may have landed since you cloned):
+
+```bash
+git switch exp/team-scripts && git pull
+```
+
 
 ```bash
 TEAM_MEMBER=<your-name> bash experiments/team/script<N>_<...>.sh
@@ -90,6 +98,8 @@ Useful settings:
 | `DOMAINS` | airline | scripts 2 and 3: `"airline retail"` adds retail (doubles the time) |
 | `SKIP_TRAIN=1` / `SKIP_CLUSTER=1` | | reuse the models / cluster already there |
 | `PUBLISH=0` | | do not commit and push |
+| `REBUILD=1` | | with an existing cluster: rebuild the runner image and restart the Pulse services from the current code (after a `git pull`) |
+| `KEEP_CLUSTER=1` | | never delete the cluster at the end |
 | `REGION` | ap-south-1 | AWS region |
 
 ## What you get
@@ -101,12 +111,14 @@ Useful settings:
 - **`<experiment>/<experiment>.md`, `.json`, `_<domain>.png`:** the summary table and plots (median over trials, with
   min and max).
   - Replays: p50/p95/p99, cold calls, pod-seconds, new pods and their start-up time, concurrent conversations,
-    prewarms, wasted prewarms, plus CPU and memory.
+    prewarms, wasted prewarms, calls that got no answer (`transport_failures`), plus CPU and memory.
   - Load tests: latency per hint rate.
   - Cold start: per-tool cold and warm latency, and the start-up breakdown.
 - **`<experiment>/prometheus/*.csv`:** the raw telemetry for each run's time window. It includes CPU and memory per
   pod, tool pods per tool, pending pods, node CPU and memory, the predictor's p95 and the controller's actions. The
-  queries are in `queries.json`. Prometheus loses this data when the cluster is deleted, so it's exported first.
+  queries are in `queries.json`. Each run is exported right after it finishes, for its own time window and its own
+  domain's tool pods only. Prometheus loses this data when the cluster is deleted, so it's exported first; exporting
+  again later never removes runs that were already exported.
 - **`runs/<run>/`:** each run's raw files: `calls.csv` (every tool call), `pods.csv`, `summary.json`,
   `controller.jsonl`, `run_config.json`.
 - **`environment.txt`, `models.json`:** the git commit, runner image, nodes, held-out tasks and model fingerprints.
@@ -152,4 +164,5 @@ CLUSTER=kind QUICK=1 TRIALS=1 MONITORING=0 TEAM_MEMBER=<name> bash experiments/t
 | A run `FAILED` | Read its log in `results/team/<script>/logs/`, then rerun the script; only the missing runs are repeated. |
 | `eks_up failed` | Usually quota or permissions. Read `logs/eks_up.log`. |
 | `Docker is not running` | Start Docker Desktop. It's needed to build the runner and retail tool images. |
+| `PUSH FAILED` | The results are committed on your branch locally: `git push -u origin exp/<script>-<name>`, then open the PR. |
 | Your IP changed | Rerun the script. The load balancer only accepts the IP that set it up, but the experiments don't need it: runs happen inside the cluster. |

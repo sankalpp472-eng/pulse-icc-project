@@ -9,6 +9,12 @@ before the cluster is deleted (experiments/team/lib.sh does it after every exper
 
 Each CSV is long format: run (the manifest row's arm/trial/domain), unix time, the series' labels (JSON) and the
 value; plus queries.json (the PromQL of every file). Step 15 s.
+
+A run's window is its own activity, not the manifest's start / end (those include run_cloud.sh's set-up, e.g. an
+earlier C1 run's pods draining): for a replay, from its first call to the last moment one of its tool pods was seen
+(calls.csv, pods.csv), padded by 15 s; other runs (load test, cold start) the manifest's start / end, padded.
+Exporting again keeps every run's earlier rows unless the new query returned data for that run, so a rerun on a new
+cluster (whose Prometheus no longer has the old runs) never wipes what was exported before.
 """
 
 import argparse
@@ -52,13 +58,54 @@ def query_range(url: str, q: str, start: float, end: float, step: int) -> list[d
     return body["data"]["result"]
 
 
-def windows(manifest: Path, exp: str, pad: float) -> list[tuple[str, float, float]]:
+def run_window(run_dir: Path) -> tuple[float, float] | None:
+    """A replay's own activity: its first call to the last sighting of one of its tool pods (or its last call's end)."""
+    calls = run_dir / "calls.csv"
+    if not calls.exists():
+        return None
+    starts, ends = [], []
+    with open(calls, newline="", encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            try:
+                t = float(r["t_start"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            starts.append(t)
+            ends.append(t + float(r.get("latency_ms") or 0) / 1000)
+    pods = run_dir / "pods.csv"
+    if pods.exists():
+        with open(pods, newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                try:
+                    ends.append(float(r["last_seen"]))
+                except (KeyError, TypeError, ValueError):
+                    pass
+    return (min(starts), max(ends)) if starts else None
+
+
+def windows(manifest: Path, exp: str, pad: float, only: str | None = None) -> list[tuple[str, float, float]]:
     """(run name, start, end) of the experiment's finished runs: columns exp domain arm trial status dir start end."""
     out = []
     for r in csv.reader(open(manifest, encoding="utf-8"), delimiter="\t"):
         if len(r) >= 8 and r[0] == exp and r[4] == "done" and r[6] and r[7]:
-            out.append((f"{r[1]}/{r[2]}/t{r[3]}", float(r[6]) - pad, float(r[7]) + pad))
+            name = f"{r[1]}/{r[2]}/t{r[3]}"
+            if only and name != only:
+                continue
+            own = run_window(Path(r[5])) if r[5] else None
+            if own:
+                out.append((name, own[0] - 15, own[1] + 15))
+            else:
+                out.append((name, float(r[6]) - pad, float(r[7]) + pad))
     return out
+
+
+def read_rows(f: Path) -> list[list[str]]:
+    if not f.exists():
+        return []
+    with open(f, newline="", encoding="utf-8") as fh:
+        rd = csv.reader(fh)
+        next(rd, None)
+        return [r for r in rd if r]
 
 
 def main():
@@ -68,33 +115,49 @@ def main():
     ap.add_argument("--exp", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--step", type=int, default=15)
-    ap.add_argument("--pad", type=float, default=60, help="seconds before / after each run")
+    ap.add_argument("--pad", type=float, default=60, help="seconds before / after a run without its own window")
+    ap.add_argument("--run", help="only this run (domain/arm/tN), e.g. right after it finished")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    runs = windows(Path(a.manifest), a.exp, a.pad)
+    runs = windows(Path(a.manifest), a.exp, a.pad, a.run)
     if not runs:
         print(f"no finished runs of {a.exp} in {a.manifest}")
         return 0
-    failed = []
+    failed, ok = [], 0
     for name, q in QUERIES.items():
-        rows = []
+        new, fresh = [], set()                 # fresh: the runs this query returned data for now
         for run, start, end in runs:
             try:
+                got = []
                 for series in query_range(a.url, q, start, end, a.step):
                     labels = json.dumps(series.get("metric", {}), sort_keys=True)
-                    rows += [(run, int(float(t)), labels, v) for t, v in series.get("values", [])]
+                    got += [(run, int(float(t)), labels, v) for t, v in series.get("values", [])]
+                ok += 1
+                if got:
+                    new += got
+                    fresh.add(run)
             except Exception as e:
                 failed.append(f"{name} ({run}): {type(e).__name__}: {e}")
-        with open(out / f"{name}.csv", "w", newline="", encoding="utf-8") as f:
+        path = out / f"{name}.csv"
+        kept = [r for r in read_rows(path) if r[0] not in fresh]
+        with open(path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(["run", "time", "labels", "value"])
-            w.writerows(rows)
-        print(f"  {name}: {len(rows)} samples")
-    (out / "queries.json").write_text(json.dumps({"exported_at": time.time(), "step_s": a.step, "queries": QUERIES,
-                                                  "runs": runs, "errors": failed}, indent=2))
+            w.writerows(kept)
+            w.writerows(new)
+        print(f"  {name}: {len(new)} new samples ({len(fresh)} run(s)), {len(kept)} kept")
+    qf = out / "queries.json"
+    old = json.loads(qf.read_text(encoding="utf-8")) if qf.exists() else {}
+    known = {r[0]: list(r) for r in old.get("runs", [])}
+    known.update({r[0]: list(r) for r in runs})
+    qf.write_text(json.dumps({"exported_at": time.time(), "step_s": a.step, "queries": QUERIES,
+                              "runs": list(known.values()), "errors": failed}, indent=2), encoding="utf-8")
     for f in failed[:10]:
         print(f"  error: {f}")
+    if failed and not ok:
+        print("every query failed: is Prometheus reachable?")
+        return 1
     return 0
 
 

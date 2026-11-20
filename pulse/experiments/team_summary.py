@@ -89,6 +89,7 @@ def replay_metrics(run: Path) -> dict:
     st = (s.get("startup") or {}).get("startup_s") or {}
     return {"p50_ms": lat.get("p50"), "p95_ms": lat.get("p95"), "p99_ms": lat.get("p99"), "mean_ms": lat.get("mean"),
             "calls": s.get("tool_calls"), "cold_calls": s.get("cold_calls"),
+            "transport_failures": s.get("transport_failures"),
             "cold_pct": round(100 * s["cold_share"], 1) if s.get("cold_share") is not None else None,
             "pod_s": s.get("pod_seconds_seen"), "pods_started": s.get("pods_started"),
             "startup_s": st.get("median") if isinstance(st, dict) else None,
@@ -111,15 +112,17 @@ def resource_metrics(prom: Path, run_key: str) -> dict:
     cpu, mem = rows("pod_cpu_cores"), rows("pod_memory_bytes")
     if not cpu and not mem:
         return {}
-    tool = lambda lb: "-deployment-" in lb.get("pod", "")                               # noqa: E731 (Knative pods)
+    retail = run_key.split("/")[0] == "retail"         # only this run's domain: the other's pods are not its cost
+    tool = lambda lb: "-deployment-" in lb.get("pod", "") and lb["pod"].startswith("retail-") == retail  # noqa: E731
     pulse = lambda lb: lb.get("pod", "").startswith(("pulse-predictor", "pulse-controller"))  # noqa: E731
     mem_t = defaultdict(float)
     for t, lb, v in mem:
         if tool(lb):
             mem_t[t] += v
     pods_t = defaultdict(float)
-    for t, _, v in rows("tool_pods"):
-        pods_t[t] += v
+    for t, lb, v in rows("tool_pods"):
+        if lb.get("label_serving_knative_dev_service", "").startswith("retail-") == retail:
+            pods_t[t] += v
     node = [v for _, _, v in rows("node_cpu_busy")]
     return {"tool_cpu_core_s": round(sum(v for _, lb, v in cpu if tool(lb)) * step, 1),
             "tool_mem_mib": round(sum(mem_t.values()) / len(mem_t) / 2**20, 1) if mem_t else None,
@@ -182,8 +185,8 @@ def main():
         kind = kinds[keys[0]]
         lines += [f"## {domain}", ""]
         if kind == "replay":
-            cols = ["p50_ms", "p95_ms", "p99_ms", "cold_calls", "cold_pct", "pod_s", "pods_started", "startup_s",
-                    "concurrent_mean", "prewarms", "wasted_pct", "skipped"]
+            cols = ["p50_ms", "p95_ms", "p99_ms", "cold_calls", "cold_pct", "transport_failures", "pod_s",
+                    "pods_started", "startup_s", "concurrent_mean", "prewarms", "wasted_pct", "skipped"]
             res = ["tool_cpu_core_s", "tool_mem_mib", "pulse_cpu_core_s", "node_cpu_busy_pct", "tool_pods_peak"]
             if any(x.get(c) is not None for k in keys for x in groups[k] for c in res):
                 cols += res

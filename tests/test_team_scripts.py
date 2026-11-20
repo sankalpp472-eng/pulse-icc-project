@@ -98,6 +98,56 @@ def test_the_summary_adds_resource_use_from_prometheus(tmp_path):
                  "tool_pods_peak": 3.0}
 
 
+def test_a_replay_window_is_its_own_activity_not_the_set_up(tmp_path):
+    """The manifest's start includes run_cloud.sh's set-up (an earlier C1 run's pods draining): not this run's."""
+    from pulse.experiments.prom_export import windows
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "calls.csv").write_text("t_start,latency_ms\n1300,500\n1900,2000\n", encoding="utf-8")
+    (run / "pods.csv").write_text("pod,last_seen\na,1990\n", encoding="utf-8")
+    man = tmp_path / "m.tsv"
+    man.write_text(f"e\tairline\tC0\t1\tdone\t{run}\t1000\t2100\n", encoding="utf-8")
+    assert windows(man, "e", 60) == [("airline/C0/t1", 1285.0, 2005.0)]
+
+
+def test_resource_use_counts_only_this_domains_tool_pods(tmp_path):
+    from pulse.experiments.team_summary import resource_metrics
+    prom = tmp_path / "prometheus"
+    prom.mkdir()
+    def write(name, rows):
+        with open(prom / f"{name}.csv", "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["run", "time", "labels", "value"])
+            w.writerows(rows)
+    air = json.dumps({"pod": "think-00002-deployment-x", "container": "user-container"})
+    ret = json.dumps({"pod": "retail-think-00002-deployment-y", "container": "user-container"})
+    write("pod_cpu_cores", [("retail/C0/t1", 0, air, 1.0), ("retail/C0/t1", 0, ret, 0.2)])
+    write("tool_pods", [("retail/C0/t1", 0, json.dumps({"label_serving_knative_dev_service": "think"}), 14),
+                        ("retail/C0/t1", 0, json.dumps({"label_serving_knative_dev_service": "retail-think"}), 2)])
+    m = resource_metrics(prom, "retail/C0/t1")
+    assert m["tool_cpu_core_s"] == 3.0 and m["tool_pods_peak"] == 2
+
+
+def test_exporting_again_keeps_runs_prometheus_no_longer_has(tmp_path, monkeypatch):
+    import pulse.experiments.prom_export as pe
+    man = tmp_path / "m.tsv"
+    man.write_text("e\tairline\tC0\t1\tdone\tnone\t1000\t2000\ne\tairline\tC0\t2\tdone\tnone\t3000\t4000\n")
+    out = tmp_path / "out"
+    data = {"t1": [{"metric": {"pod": "p"}, "values": [[1000, "1"]]}], "t2": []}
+    monkeypatch.setattr(pe, "query_range", lambda url, q, s, e, step: data["t1" if s < 2500 else "t2"])
+    monkeypatch.setattr("sys.argv", ["pe", "--manifest", str(man), "--exp", "e", "--out", str(out)])
+    assert pe.main() == 0
+    data["t1"] = []                       # a new cluster: Prometheus no longer has trial 1
+    assert pe.main() == 0
+    rows = list(csv.DictReader(open(out / "pod_cpu_cores.csv", encoding="utf-8")))
+    assert [r["run"] for r in rows] == ["airline/C0/t1"]
+    def refused(*a):
+        raise OSError("refused")
+    monkeypatch.setattr(pe, "query_range", refused)
+    assert pe.main() == 1                 # every query failed: reported, and nothing is wiped
+    assert len(list(csv.DictReader(open(out / "pod_cpu_cores.csv", encoding="utf-8")))) == 1
+
+
 def test_model_fingerprint_is_stable():
     if not (paths.MODELS / "action_model.pkl").exists():
         pytest.skip("no airline model")

@@ -30,7 +30,7 @@
 #           COLLECT=<run pod>: fetch an already running/finished run instead of starting one (after a lost connection)
 # Needs cloud_up.sh done. Results: results/cloud_runs/ (EKS) or results/local_runs/ (kind); load tests and
 # cold-start checks land in the same place. C3 runs get controller.jsonl; the pod's log goes to infra/eks/logs/.
-# Exit code: 0 ok, 1 failed, 2 lost the cluster for 30 min (the run pod keeps its results for 1 h: use COLLECT).
+# Exit code: 0 ok, 1 failed, 2 lost the cluster for 30 min (the run pod keeps its results for 4 h: use COLLECT).
 set -euo pipefail
 export MSYS_NO_PATHCONV=1    # Git Bash on Windows would rewrite the pod paths (/home/app/...) into C:/Program Files/Git/...
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -86,11 +86,19 @@ RDIR=/home/app/results
 if [ -n "${COLLECT:-}" ]; then
   POD=$COLLECT
   echo "Collecting $POD (CONFIG=$CONFIG) | context $CTX"
-  kubectl get pod "$POD" >/dev/null || { echo "No pod $POD"; exit 1; }
+  if ! out=$(kubectl get pod "$POD" --request-timeout=20s -o name 2>&1); then
+    echo "$out" | grep -qi notfound && { echo "No pod $POD"; exit 1; }
+    echo "No answer from the cluster ($(echo "$out" | tail -1 | cut -c1-120))"; exit 2
+  fi
 else
 # ---- tools: scale-to-zero for C0 / C3, one warm replica for C1, and the idle window: WINDOW (60 s), or each
 #      tool's own (TOOL_WINDOWS=per-tool: data/tool_windows.json, pulse/controller/refresh.py). Patched only where
 #      it differs; the rest of each tool's settings stays as infra/knative/deploy.sh made it
+old=$(kubectl get pods -l app=pulse-run -o name 2>/dev/null || true)
+if [ -n "$old" ]; then
+  echo "Deleting leftover run pod(s) of an earlier run: $(echo $old)"
+  kubectl delete $old --wait=true --timeout=120s >/dev/null 2>&1 || true
+fi
 want_min=$([ "$CONFIG" = C1 ] && echo 1 || echo 0)
 [ -n "$(kubectl get ksvc -l pulse/role=$ROLE -o name)" ] || \
   { echo "No $DOMAIN tools in this cluster$([ "$DOMAIN" = retail ] && echo ' (Setup -> Deploy the retail tools)')"; exit 1; }
@@ -239,7 +247,7 @@ YAML
       env:
         - {name: PULSE_RESULTS_DIR, value: $RDIR}
         - {name: PULSE_RUNNER, value: "pod $POD"}
-        - {name: HOLD_S, value: "3600"}
+        - {name: HOLD_S, value: "14400"}
         - {name: PULSE_METRICS_PORT, value: "9105"}
         - {name: DOMAIN, value: "$DOMAIN"}
         - {name: MCP_URL_TEMPLATE, value: "http://$PREFIX{svc}.default.svc.cluster.local/mcp"}
@@ -248,8 +256,19 @@ YAML
       resources: {requests: {cpu: 500m, memory: 1Gi}, limits: {memory: 3Gi}}
 YAML
 } | kubectl apply -f - >/dev/null
-trap 'echo "(pod $POD left running; delete with: kubectl delete pod $POD)"' INT
 fi
+LOGPID=""
+KEEP_POD=0
+cleanup() {
+  local rc=$?
+  [ -z "$LOGPID" ] || kill "$LOGPID" 2>/dev/null || true
+  if [ "$rc" != 0 ] && [ "$rc" != 2 ] && [ "$KEEP_POD" = 0 ]; then
+    echo "(run failed: deleting $POD so it cannot run alongside the next run)"
+    kubectl delete pod "$POD" --wait=false --ignore-not-found >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
 
 kubectl wait --for=condition=Ready "pod/$POD" --timeout=900s >/dev/null
 LOG="infra/eks/logs/${STAMP}_${POD}.log"
@@ -257,18 +276,20 @@ kubectl logs -f "$POD" > "$LOG" 2>&1 &
 LOGPID=$!
 echo "  running; log: $LOG"
 # A failed kubectl call is not a gone pod: the laptop may be offline for a while (sleep, Wi-Fi, VPN, a dropped
-# connection like "http2: server sent GOAWAY"). Keep waiting; the pod holds its results for HOLD_S (1 h).
-fails=0
-until kubectl exec "$POD" -- test -f "$RDIR/.done" 2>/dev/null; do
-  if out=$(kubectl get pod "$POD" -o jsonpath='{.status.phase}' 2>&1); then
-    fails=0
+# connection like "http2: server sent GOAWAY"). Keep waiting; the pod holds its results for HOLD_S (4 h).
+# Give up (rc 2: the caller retries with COLLECT=<pod>) after 30 min without an answer, by the clock.
+fails=0; first_fail=0
+until kubectl exec --request-timeout=30s "$POD" -- test -f "$RDIR/.done" 2>/dev/null; do
+  if out=$(kubectl get pod "$POD" --request-timeout=20s -o jsonpath='{.status.phase}' 2>&1); then
+    fails=0; first_fail=0
     case "$out" in Failed|Succeeded) echo "Pod ended ($out) before finishing; see $LOG"; exit 1 ;; esac
   elif echo "$out" | grep -qi "notfound"; then
     echo "Pod $POD is gone before finishing; see $LOG"; exit 1
   else
     fails=$((fails + 1))
+    [ "$first_fail" = 0 ] && first_fail=$SECONDS
     [ $((fails % 4)) = 1 ] && echo "  (no answer from the cluster: $(echo "$out" | tail -1 | cut -c1-120); still waiting)"
-    if [ "$fails" -ge 120 ]; then
+    if [ $((SECONDS - first_fail)) -ge 1800 ]; then
       echo "No answer from the cluster for 30 min. Resume with: COLLECT=$POD CONFIG=$CONFIG MODE=$MODE bash $HERE/run_cloud.sh"
       exit 2
     fi
@@ -277,7 +298,7 @@ until kubectl exec "$POD" -- test -f "$RDIR/.done" 2>/dev/null; do
 done
 CODE=""
 for try in 1 2 3 4 5; do
-  CODE=$(kubectl exec "$POD" -- cat "$RDIR/.exit_code" 2>/dev/null) && break
+  CODE=$(kubectl exec --request-timeout=30s "$POD" -- cat "$RDIR/.exit_code" 2>/dev/null) && break
   sleep 10
 done
 
@@ -297,11 +318,18 @@ for d in "$RESULTS/$INCOMING"/*/; do
   RUNS+=("$RESULTS/$name")
 done
 rm -rf "$RESULTS/$INCOMING"
+if [ ${#RUNS[@]} = 0 ] && [ -n "$CODE" ]; then   # finished but not copied: keep the pod for a COLLECT retry
+  echo "Could not copy the results. Resume with: COLLECT=$POD CONFIG=$CONFIG MODE=$MODE bash $HERE/run_cloud.sh"
+  exit 2
+fi
 if [ "$CONFIG" = C3 ] && [ "$MODE" != load ] && [ ${#RUNS[@]} -gt 0 ]; then
-  kubectl logs deploy/pulse-controller | grep '^{' > "${RUNS[0]}/controller.jsonl" || true
+  for try in 1 2 3; do                       # an empty file would read as "no prewarms"
+    kubectl logs deploy/pulse-controller --request-timeout=60s | grep '^{' > "${RUNS[0]}/controller.jsonl" && break
+    sleep 10
+  done
+  [ -s "${RUNS[0]}/controller.jsonl" ] || echo "WARNING: no controller log copied (prewarm counts will be missing)"
 fi
 kubectl exec "$POD" -- touch /tmp/collected >/dev/null 2>&1 || true
-kill "$LOGPID" 2>/dev/null || true
-kubectl delete pod "$POD" --wait=false >/dev/null
+kubectl delete pod "$POD" --wait=false >/dev/null || true
 echo "Done (runner exit code $CODE). Result: ${RUNS[*]:-none}"
 [ "$CODE" = 0 ]
