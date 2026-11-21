@@ -1,0 +1,310 @@
+Creating cluster pulse-eks (15-20 min) ...
+2026-11-20 23:29:03 [ℹ]  eksctl version 0.232.0
+2026-11-20 23:29:03 [ℹ]  using region ap-south-1
+2026-11-20 23:29:03 [ℹ]  setting availability zones to [ap-south-1c ap-south-1b ap-south-1a]
+2026-11-20 23:29:03 [ℹ]  subnets for ap-south-1c - public:192.168.0.0/19 private:192.168.96.0/19
+2026-11-20 23:29:03 [ℹ]  subnets for ap-south-1b - public:192.168.32.0/19 private:192.168.128.0/19
+2026-11-20 23:29:03 [ℹ]  subnets for ap-south-1a - public:192.168.64.0/19 private:192.168.160.0/19
+2026-11-20 23:29:03 [ℹ]  nodegroup "workers" will use "" [AmazonLinux2023/1.37]
+2026-11-20 23:29:03 [ℹ]  nodegroup "system" will use "" [AmazonLinux2023/1.37]
+2026-11-20 23:29:03 [ℹ]  nodegroup "client" will use "" [AmazonLinux2023/1.37]
+2026-11-20 23:29:03 [!]  Auto Mode will be enabled by default in an upcoming release of eksctl. This means managed node groups and managed networking add-ons will no longer be created by default. To maintain current behavior, explicitly set 'autoModeConfig.enabled: false' in your cluster configuration. Learn more: https://eksctl.io/usage/auto-mode/
+2026-11-20 23:29:03 [ℹ]  using Kubernetes version 1.37
+2026-11-20 23:29:03 [ℹ]  creating EKS cluster "pulse-eks" in "ap-south-1" region with managed nodes
+2026-11-20 23:29:03 [ℹ]  3 nodegroups (client, system, workers) were included (based on the include/exclude rules)
+2026-11-20 23:29:03 [ℹ]  will create a CloudFormation stack for cluster itself and 3 managed nodegroup stack(s)
+2026-11-20 23:29:03 [ℹ]  if you encounter any issues, check CloudFormation console or try 'eksctl utils describe-stacks --region=ap-south-1 --cluster=pulse-eks'
+2026-11-20 23:29:03 [ℹ]  Kubernetes API endpoint access will use default of {publicAccess=true, privateAccess=false} for cluster "pulse-eks" in "ap-south-1"
+2026-11-20 23:29:03 [ℹ]  CloudWatch logging will not be enabled for cluster "pulse-eks" in "ap-south-1"
+2026-11-20 23:29:03 [ℹ]  you can enable it with 'eksctl utils update-cluster-logging --enable-types={SPECIFY-YOUR-LOG-TYPES-HERE (e.g. all)} --region=ap-south-1 --cluster=pulse-eks'
+2026-11-20 23:29:03 [ℹ]  default addons kube-proxy, coredns, metrics-server, vpc-cni were not specified, will install them as EKS addons
+2026-11-20 23:29:03 [ℹ]  
+2 sequential tasks: { create cluster control plane "pulse-eks", 
+    2 sequential sub-tasks: { 
+        2 sequential sub-tasks: { 
+            1 task: { create addons },
+            wait for control plane to become ready,
+        },
+        3 parallel sub-tasks: { 
+            create managed nodegroup "workers",
+            create managed nodegroup "system",
+            create managed nodegroup "client",
+        },
+    } 
+}
+2026-11-20 23:29:03 [ℹ]  building cluster stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:29:04 [ℹ]  deploying stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:29:34 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:30:04 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:31:05 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:32:05 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:33:05 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:34:06 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:35:06 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:36:06 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:37:07 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-20 23:37:09 [ℹ]  creating addon: kube-proxy
+2026-11-20 23:37:09 [ℹ]  successfully created addon: kube-proxy
+2026-11-20 23:37:09 [ℹ]  creating addon: coredns
+2026-11-20 23:37:10 [ℹ]  successfully created addon: coredns
+2026-11-20 23:37:10 [!]  recommended policies were found for "vpc-cni" addon, but since OIDC is disabled on the cluster, eksctl cannot configure the requested permissions; the recommended way to provide IAM permissions for "vpc-cni" addon is via pod identity associations; after addon creation is completed, add all recommended policies to the config file, under `addon.PodIdentityAssociations`, and run `eksctl update addon`
+2026-11-20 23:37:10 [ℹ]  creating addon: vpc-cni
+2026-11-20 23:37:11 [ℹ]  successfully created addon: vpc-cni
+2026-11-20 23:39:12 [ℹ]  building managed nodegroup stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-20 23:39:12 [ℹ]  building managed nodegroup stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-20 23:39:12 [ℹ]  building managed nodegroup stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-20 23:39:13 [ℹ]  deploying stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-20 23:39:13 [ℹ]  deploying stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-20 23:39:13 [ℹ]  deploying stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-20 23:39:13 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-20 23:39:13 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-20 23:39:13 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-20 23:39:43 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-20 23:39:43 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-20 23:39:43 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-20 23:40:29 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-20 23:40:43 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-20 23:40:43 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-20 23:41:51 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-20 23:42:05 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-20 23:42:29 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-20 23:42:29 [ℹ]  waiting for the control plane to become ready
+2026-11-20 23:42:31 [✔]  saved kubeconfig as "C:\\Users\\aniru\\.kube\\config"
+2026-11-20 23:42:31 [ℹ]  no tasks
+2026-11-20 23:42:31 [✔]  all EKS cluster resources for "pulse-eks" have been created
+2026-11-20 23:42:32 [ℹ]  nodegroup "workers" has 2 node(s)
+2026-11-20 23:42:32 [ℹ]  node "ip-192-168-13-108.ap-south-1.compute.internal" is ready
+2026-11-20 23:42:32 [ℹ]  node "ip-192-168-37-210.ap-south-1.compute.internal" is ready
+2026-11-20 23:42:32 [ℹ]  waiting for at least 2 node(s) to become ready in "workers"
+2026-11-20 23:42:32 [ℹ]  nodegroup "workers" has 2 node(s)
+2026-11-20 23:42:32 [ℹ]  node "ip-192-168-13-108.ap-south-1.compute.internal" is ready
+2026-11-20 23:42:32 [ℹ]  node "ip-192-168-37-210.ap-south-1.compute.internal" is ready
+2026-11-20 23:42:33 [ℹ]  nodegroup "system" has 1 node(s)
+2026-11-20 23:42:33 [ℹ]  node "ip-192-168-37-192.ap-south-1.compute.internal" is ready
+2026-11-20 23:42:33 [ℹ]  waiting for at least 1 node(s) to become ready in "system"
+2026-11-20 23:42:33 [ℹ]  nodegroup "system" has 1 node(s)
+2026-11-20 23:42:33 [ℹ]  node "ip-192-168-37-192.ap-south-1.compute.internal" is ready
+2026-11-20 23:42:33 [ℹ]  nodegroup "client" has 1 node(s)
+2026-11-20 23:42:33 [ℹ]  node "ip-192-168-11-25.ap-south-1.compute.internal" is ready
+2026-11-20 23:42:33 [ℹ]  waiting for at least 1 node(s) to become ready in "client"
+2026-11-20 23:42:33 [ℹ]  nodegroup "client" has 1 node(s)
+2026-11-20 23:42:33 [ℹ]  node "ip-192-168-11-25.ap-south-1.compute.internal" is ready
+2026-11-20 23:42:33 [✔]  created 3 managed nodegroup(s) in cluster "pulse-eks"
+2026-11-20 23:42:33 [ℹ]  creating addon: metrics-server
+2026-11-20 23:42:34 [ℹ]  successfully created addon: metrics-server
+2026-11-20 23:42:36 [ℹ]  kubectl command should work with "C:\\Users\\aniru\\.kube\\config", try 'kubectl get nodes'
+2026-11-20 23:42:36 [✔]  EKS cluster "pulse-eks" in "ap-south-1" region is ready
+Switched to context "pulse-experiments@pulse-eks.ap-south-1.eksctl.io".
+NAME                                            STATUS   ROLES    AGE    VERSION
+ip-192-168-11-25.ap-south-1.compute.internal    Ready    <none>   104s   v1.37.1-eks-9adbfea
+ip-192-168-13-108.ap-south-1.compute.internal   Ready    <none>   2m3s   v1.37.1-eks-9adbfea
+ip-192-168-37-192.ap-south-1.compute.internal   Ready    <none>   108s   v1.37.1-eks-9adbfea
+ip-192-168-37-210.ap-south-1.compute.internal   Ready    <none>   2m7s   v1.37.1-eks-9adbfea
+No model registry in this AWS account yet (policy pulse-model-reader): create it first
+(Setup -> Cloud extras -> Terraform apply), then run this again. Without it the predictors use the models
+in the image.
+Switched to context "pulse-experiments@pulse-eks.ap-south-1.eksctl.io".
+Installing Knative knative-v1.23.0 on context: pulse-experiments@pulse-eks.ap-south-1.eksctl.io
+customresourcedefinition.apiextensions.k8s.io/certificates.networking.internal.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/configurations.serving.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/clusterdomainclaims.networking.internal.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/domainmappings.serving.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/ingresses.networking.internal.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/metrics.autoscaling.internal.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/podautoscalers.autoscaling.internal.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/revisions.serving.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/routes.serving.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/serverlessservices.networking.internal.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/services.serving.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/images.caching.internal.knative.dev created
+customresourcedefinition.apiextensions.k8s.io/applicationnetworkpolicies.networking.k8s.aws condition met
+customresourcedefinition.apiextensions.k8s.io/certificates.networking.internal.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/clusterdomainclaims.networking.internal.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/clusternetworkpolicies.networking.k8s.aws condition met
+customresourcedefinition.apiextensions.k8s.io/clusterpolicyendpoints.networking.k8s.aws condition met
+customresourcedefinition.apiextensions.k8s.io/cninodes.vpcresources.k8s.aws condition met
+customresourcedefinition.apiextensions.k8s.io/configurations.serving.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/domainmappings.serving.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/eniconfigs.crd.k8s.amazonaws.com condition met
+customresourcedefinition.apiextensions.k8s.io/images.caching.internal.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/ingresses.networking.internal.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/metrics.autoscaling.internal.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/podautoscalers.autoscaling.internal.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/policyendpoints.networking.k8s.aws condition met
+customresourcedefinition.apiextensions.k8s.io/revisions.serving.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/routes.serving.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/securitygrouppolicies.vpcresources.k8s.aws condition met
+customresourcedefinition.apiextensions.k8s.io/serverlessservices.networking.internal.knative.dev condition met
+customresourcedefinition.apiextensions.k8s.io/services.serving.knative.dev condition met
+namespace/knative-serving created
+role.rbac.authorization.k8s.io/knative-serving-activator created
+clusterrole.rbac.authorization.k8s.io/knative-serving-activator-cluster created
+clusterrole.rbac.authorization.k8s.io/knative-serving-aggregated-addressable-resolver created
+clusterrole.rbac.authorization.k8s.io/knative-serving-addressable-resolver created
+clusterrole.rbac.authorization.k8s.io/knative-serving-namespaced-admin created
+clusterrole.rbac.authorization.k8s.io/knative-serving-namespaced-edit created
+clusterrole.rbac.authorization.k8s.io/knative-serving-namespaced-view created
+clusterrole.rbac.authorization.k8s.io/knative-serving-core created
+clusterrole.rbac.authorization.k8s.io/knative-serving-podspecable-binding created
+serviceaccount/controller created
+clusterrole.rbac.authorization.k8s.io/knative-serving-admin created
+clusterrolebinding.rbac.authorization.k8s.io/knative-serving-controller-admin created
+clusterrolebinding.rbac.authorization.k8s.io/knative-serving-controller-addressable-resolver created
+serviceaccount/activator created
+rolebinding.rbac.authorization.k8s.io/knative-serving-activator created
+clusterrolebinding.rbac.authorization.k8s.io/knative-serving-activator-cluster created
+customresourcedefinition.apiextensions.k8s.io/images.caching.internal.knative.dev unchanged
+certificate.networking.internal.knative.dev/routing-serving-certs created
+customresourcedefinition.apiextensions.k8s.io/certificates.networking.internal.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/configurations.serving.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/clusterdomainclaims.networking.internal.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/domainmappings.serving.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/ingresses.networking.internal.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/metrics.autoscaling.internal.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/podautoscalers.autoscaling.internal.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/revisions.serving.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/routes.serving.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/serverlessservices.networking.internal.knative.dev unchanged
+customresourcedefinition.apiextensions.k8s.io/services.serving.knative.dev unchanged
+image.caching.internal.knative.dev/queue-proxy created
+configmap/config-autoscaler created
+configmap/config-certmanager created
+configmap/config-defaults created
+configmap/config-deployment created
+configmap/config-domain created
+configmap/config-features created
+configmap/config-gc created
+configmap/config-leader-election created
+configmap/config-logging created
+configmap/config-network created
+configmap/config-observability created
+configmap/config-tracing created
+horizontalpodautoscaler.autoscaling/activator created
+poddisruptionbudget.policy/activator-pdb created
+deployment.apps/activator created
+service/activator-service created
+deployment.apps/autoscaler created
+service/autoscaler created
+deployment.apps/controller created
+service/controller created
+horizontalpodautoscaler.autoscaling/webhook created
+poddisruptionbudget.policy/webhook-pdb created
+deployment.apps/webhook created
+service/webhook created
+validatingwebhookconfiguration.admissionregistration.k8s.io/config.webhook.serving.knative.dev created
+mutatingwebhookconfiguration.admissionregistration.k8s.io/webhook.serving.knative.dev created
+validatingwebhookconfiguration.admissionregistration.k8s.io/validation.webhook.serving.knative.dev created
+secret/webhook-certs created
+namespace/kourier-system created
+configmap/kourier-bootstrap created
+configmap/config-kourier created
+serviceaccount/net-kourier created
+clusterrole.rbac.authorization.k8s.io/net-kourier created
+clusterrolebinding.rbac.authorization.k8s.io/net-kourier created
+deployment.apps/net-kourier-controller created
+service/net-kourier-controller created
+deployment.apps/3scale-kourier-gateway created
+service/kourier created
+service/kourier-internal created
+horizontalpodautoscaler.autoscaling/3scale-kourier-gateway created
+poddisruptionbudget.policy/3scale-kourier-gateway-pdb created
+configmap/config-network patched
+configmap/config-domain patched
+service/kourier patched
+Load balancer restricted to 14.139.128.54/32
+deployment.apps/activator condition met
+deployment.apps/autoscaler condition met
+deployment.apps/controller condition met
+deployment.apps/net-kourier-controller condition met
+deployment.apps/webhook condition met
+deployment.apps/3scale-kourier-gateway condition met
+Waiting for the Kourier load balancer hostname...
+
+Knative ready. Ingress: http://a917a9c3e402d480cb960786007f699c-2078487149.ap-south-1.elb.amazonaws.com   (DNS for a new ELB can take a few more minutes to resolve)
+Next: KUBE_CONTEXT=pulse-experiments@pulse-eks.ap-south-1.eksctl.io SKIP_BUILD=1 bash infra/knative/deploy.sh
+Switched to context "pulse-experiments@pulse-eks.ap-south-1.eksctl.io".
+deployment.apps/redis created
+service/redis created
+Waiting for deployment "redis" rollout to finish: 0 of 1 updated replicas are available...
+deployment "redis" successfully rolled out
+deployment "coredns" successfully rolled out
+pod/redis-seed created
+pod/redis-seed condition met
+seeded airline data into redis://redis.default.svc.cluster.local:6379/0: flights=300, reservations=2000, users=500
+pod "redis-seed" deleted from default namespace
+wrote infra/knative/tools.yaml: 14 airline services, min-scale=0, concurrency=1, max-scale=10, image=docker.io/sankalps2003/pulse-mcp-tools:0.4, db=redis://redis.default.svc.cluster.local:6379/0
+Warning: Kubernetes default value is insecure, Knative may default this to secure in a future release: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation, spec.template.spec.containers[0].securityContext.capabilities, spec.template.spec.containers[0].securityContext.runAsNonRoot, spec.template.spec.containers[0].securityContext.seccompProfile
+service.serving.knative.dev/book-reservation created
+service.serving.knative.dev/calculate created
+service.serving.knative.dev/cancel-reservation created
+service.serving.knative.dev/get-reservation-details created
+service.serving.knative.dev/get-user-details created
+service.serving.knative.dev/list-all-airports created
+service.serving.knative.dev/search-direct-flight created
+service.serving.knative.dev/search-onestop-flight created
+service.serving.knative.dev/send-certificate created
+service.serving.knative.dev/think created
+service.serving.knative.dev/transfer-to-human-agents created
+service.serving.knative.dev/update-reservation-baggages created
+service.serving.knative.dev/update-reservation-flights created
+service.serving.knative.dev/update-reservation-passengers created
+service.serving.knative.dev/book-reservation condition met
+service.serving.knative.dev/calculate condition met
+service.serving.knative.dev/cancel-reservation condition met
+service.serving.knative.dev/get-reservation-details condition met
+service.serving.knative.dev/get-user-details condition met
+service.serving.knative.dev/list-all-airports condition met
+service.serving.knative.dev/search-direct-flight condition met
+service.serving.knative.dev/search-onestop-flight condition met
+service.serving.knative.dev/send-certificate condition met
+service.serving.knative.dev/think condition met
+service.serving.knative.dev/transfer-to-human-agents condition met
+service.serving.knative.dev/update-reservation-baggages condition met
+service.serving.knative.dev/update-reservation-flights condition met
+service.serving.knative.dev/update-reservation-passengers condition met
+NAME                            URL                                                        LATESTCREATED                         LATESTREADY                           READY   REASON
+book-reservation                http://book-reservation.default.example.com                book-reservation-00001                book-reservation-00001                True    
+calculate                       http://calculate.default.example.com                       calculate-00001                       calculate-00001                       True    
+cancel-reservation              http://cancel-reservation.default.example.com              cancel-reservation-00001              cancel-reservation-00001              True    
+get-reservation-details         http://get-reservation-details.default.example.com         get-reservation-details-00001         get-reservation-details-00001         True    
+get-user-details                http://get-user-details.default.example.com                get-user-details-00001                get-user-details-00001                True    
+list-all-airports               http://list-all-airports.default.example.com               list-all-airports-00001               list-all-airports-00001               True    
+search-direct-flight            http://search-direct-flight.default.example.com            search-direct-flight-00001            search-direct-flight-00001            True    
+search-onestop-flight           http://search-onestop-flight.default.example.com           search-onestop-flight-00001           search-onestop-flight-00001           True    
+send-certificate                http://send-certificate.default.example.com                send-certificate-00001                send-certificate-00001                True    
+think                           http://think.default.example.com                           think-00001                           think-00001                           True    
+transfer-to-human-agents        http://transfer-to-human-agents.default.example.com        transfer-to-human-agents-00001        transfer-to-human-agents-00001        True    
+update-reservation-baggages     http://update-reservation-baggages.default.example.com     update-reservation-baggages-00001     update-reservation-baggages-00001     True    
+update-reservation-flights      http://update-reservation-flights.default.example.com      update-reservation-flights-00001      update-reservation-flights-00001      True    
+update-reservation-passengers   http://update-reservation-passengers.default.example.com   update-reservation-passengers-00001   update-reservation-passengers-00001   True    
+
+Agent settings for these tools:
+  TOOL_BACKEND=mcp
+  MCP_URL_TEMPLATE=http://<Kourier's load balancer>/mcp   (source infra/eks/use_eks.sh sets it)
+  MCP_HOST_TEMPLATE={svc}.default.example.com
+customresourcedefinition.apiextensions.k8s.io/prewarmrequests.pulse.iisc.ac.in created
+Using EKS: context pulse-experiments@pulse-eks.ap-south-1.eksctl.io
+           tools at http://a917a9c3e402d480cb960786007f699c-2078487149.ap-south-1.elb.amazonaws.com/mcp (Host: {svc}.default.example.com)
+Waiting for the load balancer's DNS name to resolve ...
+tool                                cold     warm  result
+book_reservation                  2337ms    428ms  'Error: TypeError: BookReservation.invoke() mi'
+calculate                         2018ms    607ms  '4.0'
+cancel_reservation                2056ms    580ms  '{"reservation_id": "Z7GOZK", "user_id": "oliv'
+get_reservation_details           1915ms    515ms  '{"reservation_id": "Z7GOZK", "user_id": "oliv'
+get_user_details                  1910ms    534ms  '{"name": {"first_name": "Mia", "last_name": "'
+list_all_airports                 1884ms    605ms  '{"SFO": "San Francisco", "JFK": "New York", "'
+search_direct_flight              1999ms    696ms  '[{"flight_number": "HAT069", "origin": "JFK",'
+search_onestop_flight             2112ms    683ms  '[[{"flight_number": "HAT218", "origin": "JFK"'
+send_certificate                  1945ms    591ms  'Certificate certificate_3221322 added to user'
+think                             1927ms    532ms  ''
+transfer_to_human_agents          2196ms    698ms  'Transfer successful'
+update_reservation_baggages       2087ms    511ms  'Error: payment method not found'
+update_reservation_flights        2313ms    675ms  'Error: payment method not found'
+update_reservation_passengers     1993ms    602ms  'Error: number of passengers does not match'
+
+14/14 tools OK | cold p50 2009 ms (min 1884, max 2337) | warm p50 596 ms
+saved C:\Users\aniru\OneDrive\Desktop\ICC\pulse-icc-project\data\coldstart\2026-11-20_2356_C0_tools-cold-warm.csv
+
+EKS is ready. In the UI (python -m pulse.ui.server): Setup -> Deploy Pulse services, then Knative + Experiments.
+Or: bash infra/cloud/cloud_up.sh, then CONFIG=C3 bash infra/cloud/run_cloud.sh --fanout
+When done for the day: REGION=ap-south-1 bash infra/eks/eks_down.sh

@@ -1,0 +1,10 @@
+# ttl
+
+## airline
+
+| arm | trials | p50_ms | p95_ms | p99_ms | cold_calls | cold_pct | transport_failures | pod_s | pods_started | startup_s | concurrent_mean | prewarms | wasted_pct | skipped | tool_cpu_core_s | tool_mem_mib | pulse_cpu_core_s | node_cpu_busy_pct | tool_pods_peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ttl30 | 3 | 61.3 | 1426.4 | 1641.9 | 34 | 11.6 | 0 | 9437.0 | 104 | 2.0 | 2.8 | 462 | 50.6 | 218 | 90.2 | 439.7 | 59.0 | 8.8 | 15.0 |
+| ttl60 | 3 | 62.1 | 1400.2 | 1516.8 | 24 | 8.2 | 0 | 10072.0 | 74 | 2.0 | 2.8 | 454 | 48.7 | 217 | 74.5 | 489.4 | 59.7 | 8.1 | 16.0 |
+| ttl120 | 3 | 57.1 | 746.4 | 1476.1 | 18 | 6.1 | 0 | 10715.0 | 45 | 2.0 | 2.8 | 452 | 49.1 | 221 | 56.9 | 512.5 | 59.7 | 7.3 | 16.0 |
+

@@ -1,0 +1,28 @@
+$ python -m pulse.predictor.build_action_data
+train:  40 tasks,  480 traces,  5711 LLM steps
+test :  10 tasks,  120 traces,  1417 LLM steps
+RESPOND share: 45%   classes: 15 (14 tools + RESPOND)
+-> C:\Users\aniru\OneDrive\Desktop\ICC\pulse-icc-project\data\predictor\action_rows.csv
+$ python -m pulse.predictor.train_action
+Held-out test: 10 unseen tasks, 1417 LLM steps (45% RESPOND). Trained on 40 tasks, 5711 steps.
+
+| Model | Top-1 | Top-3 | Log-loss | ECE | Tool-step top-1 | RESPOND prec / recall | p50 / p95 |
+|---|---|---|---|---|---|---|---|
+| Markov chain (markov) | 0.464 | 0.828 | 1.587 | 0.107 | 0.323 | 0.53 / 0.63 | 0.045 / 0.057 ms |
+| LightGBM GBT (lightgbm, main) | 0.637 | 0.875 | 1.114 | 0.052 | 0.471 | 0.60 / 0.84 | 0.416 / 0.618 ms |
+
+| Model | θ=0.2: hit / wasted / quiet-on-RESPOND | θ=0.3: hit / wasted / quiet-on-RESPOND | θ=0.5: hit / wasted / quiet-on-RESPOND |
+|---|---|---|---|
+| Markov chain (markov) | 0.50 / 0.63 / 0.22 | 0.31 / 0.32 / 0.57 | 0.16 / 0.09 / 0.88 |
+| LightGBM GBT (lightgbm, main) | 0.62 / 0.31 / 0.60 | 0.56 / 0.18 / 0.73 | 0.41 / 0.07 / 0.87 |
+
+Fan-out k (pending-ID rule; ID tools learned from training: get_reservation_details), on tool steps:
+  exact k: rule 0.88 vs always-1 0.79 · mean error: rule 0.18 vs always-1 0.45 · steps with a real fan-out (k>1): 166, rule exact there 0.54
+  replicas: 0.05 too many and 0.13 too few per tool step
+
+GBT feature importance (gain, top 10): last1, out_size, pending_ids, step, calls_since_user, n_distinct, n_calls, kw_cancel, kw_human, kw_bag
+
+Lookahead (gbt, trained on 2561 reply steps): on the 529 held-out reply steps that are followed by a tool call, the next tool is top-1 0.357 / top-3 0.595; prewarmed at θ=0.2: 0.38 (wasted 0.40/step), θ=0.3: 0.31 (wasted 0.21/step), θ=0.5: 0.19 (wasted 0.08/step)
+
+-> C:\Users\aniru\OneDrive\Desktop\ICC\pulse-icc-project\models\action_model.pkl
+-> C:\Users\aniru\OneDrive\Desktop\ICC\pulse-icc-project\results\training\action_eval_20261120-232744.json

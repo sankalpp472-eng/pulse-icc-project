@@ -1,0 +1,66 @@
+[23:24:16] AWS account 375255020913 | region ap-south-1 | member aniruth | script script2_topk_ttl | trials 3
+[23:27:00] training lightgbm + markov: airline (held out: 6 11 20 21 22 26 30 38 45 46)
+[23:27:45] training lightgbm + markov: retail (held out: 3 14 19 21 23 26 28 29 38 42 44 48 50 51 57 67 68 72 73 82 94 98 106)
+  airline held-out tasks: [6, 11, 20, 21, 22, 26, 30, 38, 45, 46]
+  retail held-out tasks: [3, 14, 19, 21, 23, 26, 28, 29, 38, 42, 44, 48, 50, 51, 57, 67, 68, 72, 73, 82, 94, 98, 106]
+  airline model fingerprint a697978ccce97271... (as expected)
+  retail model fingerprint ac60a495efc54971... (as expected)
+[23:28:57] EKS cluster + Knative + airline tools (about 25 min the first time)
+[23:56:06] runner image (with the models just trained) -> your ECR
+[23:59:56] Pulse services (predictor, controller, embeddings) on the system node
+[00:00:21] retail tools (image -> your ECR)
+[00:02:09] Prometheus + Grafana (telemetry)
+[00:05:08] experiments: topk_adaptive ttl
+[00:05:09]   run: topk_adaptive | airline | top1 | trial 1   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_top1_t1.log)
+[00:29:21]     done in 24 min: results/cloud_runs/2026-11-21_0007_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-top1-t1-lightgbm_adapt-top1
+[00:29:28]   run: topk_adaptive | airline | top2 | trial 1   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_top2_t1.log)
+[00:52:04]     done in 22 min: results/cloud_runs/2026-11-21_0029_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-top2-t1-lightgbm_adapt-top2
+[00:52:11]   run: topk_adaptive | airline | top3 | trial 1   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_top3_t1.log)
+[01:14:46]     done in 22 min: results/cloud_runs/2026-11-21_0052_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-top3-t1-lightgbm_adapt-top3
+[01:14:53]   run: topk_adaptive | airline | adaptive | trial 1   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_adaptive_t1.log)
+[01:37:57]     done in 23 min: results/cloud_runs/2026-11-21_0115_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-adaptive-t1-lightgbm_adapt
+[01:38:06]   run: topk_adaptive | airline | adaptive-kadapt | trial 1   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_adaptive-kadapt_t1.log)
+[02:00:57]     done in 22 min: results/cloud_runs/2026-11-21_0138_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-adaptive-kadapt-t1-lightgbm_adapt-kadapt
+[02:01:07]   run: ttl | airline | ttl30 | trial 1   (log: results/team/script2_topk_ttl/logs/ttl_airline_ttl30_t1.log)
+[02:23:43]     done in 22 min: results/cloud_runs/2026-11-21_0202_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl30-t1-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S30-TTL_KEEPALIVE1
+[02:23:50]   run: ttl | airline | ttl60 | trial 1   (log: results/team/script2_topk_ttl/logs/ttl_airline_ttl60_t1.log)
+[02:46:18]     done in 22 min: results/cloud_runs/2026-11-21_0224_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl60-t1-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S60-TTL_KEEPALIVE1
+[02:46:25]   run: ttl | airline | ttl120 | trial 1   (log: results/team/script2_topk_ttl/logs/ttl_airline_ttl120_t1.log)
+[03:10:01]     done in 23 min: results/cloud_runs/2026-11-21_0246_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl120-t1-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S120-TTL_KEEPALIVE1
+[03:10:07]   run: topk_adaptive | airline | top1 | trial 2   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_top1_t2.log)
+[03:33:07]     done in 23 min: results/cloud_runs/2026-11-21_0310_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-top1-t2-lightgbm_adapt-top1
+[03:33:13]   run: topk_adaptive | airline | top2 | trial 2   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_top2_t2.log)
+[03:55:36]     done in 22 min: results/cloud_runs/2026-11-21_0333_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-top2-t2-lightgbm_adapt-top2
+[03:55:42]   run: topk_adaptive | airline | top3 | trial 2   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_top3_t2.log)
+[04:18:07]     done in 22 min: results/cloud_runs/2026-11-21_0356_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-top3-t2-lightgbm_adapt-top3
+[04:18:13]   run: topk_adaptive | airline | adaptive | trial 2   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_adaptive_t2.log)
+[04:40:53]     done in 22 min: results/cloud_runs/2026-11-21_0418_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-adaptive-t2-lightgbm_adapt
+[04:40:59]   run: topk_adaptive | airline | adaptive-kadapt | trial 2   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_adaptive-kadapt_t2.log)
+[05:03:24]     done in 22 min: results/cloud_runs/2026-11-21_0441_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-adaptive-kadapt-t2-lightgbm_adapt-kadapt
+[05:03:30]   run: ttl | airline | ttl30 | trial 2   (log: results/team/script2_topk_ttl/logs/ttl_airline_ttl30_t2.log)
+[05:25:56]     done in 22 min: results/cloud_runs/2026-11-21_0504_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl30-t2-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S30-TTL_KEEPALIVE1
+[05:26:01]   run: ttl | airline | ttl60 | trial 2   (log: results/team/script2_topk_ttl/logs/ttl_airline_ttl60_t2.log)
+[05:48:27]     done in 22 min: results/cloud_runs/2026-11-21_0526_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl60-t2-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S60-TTL_KEEPALIVE1
+[05:48:33]   run: ttl | airline | ttl120 | trial 2   (log: results/team/script2_topk_ttl/logs/ttl_airline_ttl120_t2.log)
+[06:12:09]     done in 23 min: results/cloud_runs/2026-11-21_0549_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl120-t2-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S120-TTL_KEEPALIVE1
+[06:12:15]   run: topk_adaptive | airline | top1 | trial 3   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_top1_t3.log)
+[06:34:59]     done in 22 min: results/cloud_runs/2026-11-21_0613_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-top1-t3-lightgbm_adapt-top1
+[06:35:06]   run: topk_adaptive | airline | top2 | trial 3   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_top2_t3.log)
+[06:57:31]     done in 22 min: results/cloud_runs/2026-11-21_0635_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-top2-t3-lightgbm_adapt-top2
+[06:57:37]   run: topk_adaptive | airline | top3 | trial 3   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_top3_t3.log)
+[07:20:06]     done in 22 min: results/cloud_runs/2026-11-21_0658_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-top3-t3-lightgbm_adapt-top3
+[07:20:16]   run: topk_adaptive | airline | adaptive | trial 3   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_adaptive_t3.log)
+[07:43:02]     done in 22 min: results/cloud_runs/2026-11-21_0720_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-adaptive-t3-lightgbm_adapt
+[07:43:15]   run: topk_adaptive | airline | adaptive-kadapt | trial 3   (log: results/team/script2_topk_ttl/logs/topk_adaptive_airline_adaptive-kadapt_t3.log)
+[08:05:49]     done in 22 min: results/cloud_runs/2026-11-21_0743_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-topk_adaptive-adaptive-kadapt-t3-lightgbm_adapt-kadapt
+[08:05:56]   run: ttl | airline | ttl30 | trial 3   (log: results/team/script2_topk_ttl/logs/ttl_airline_ttl30_t3.log)
+[08:28:26]     done in 22 min: results/cloud_runs/2026-11-21_0806_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl30-t3-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S30-TTL_KEEPALIVE1
+[08:28:32]   run: ttl | airline | ttl60 | trial 3   (log: results/team/script2_topk_ttl/logs/ttl_airline_ttl60_t3.log)
+[08:50:56]     done in 22 min: results/cloud_runs/2026-11-21_0829_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl60-t3-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S60-TTL_KEEPALIVE1
+[08:51:02]   run: ttl | airline | ttl120 | trial 3   (log: results/team/script2_topk_ttl/logs/ttl_airline_ttl120_t3.log)
+[09:14:42]     done in 23 min: results/cloud_runs/2026-11-21_0851_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl120-t3-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S120-TTL_KEEPALIVE1
+[09:14:49] telemetry: topk_adaptive
+[09:15:34]   results/team/script2_topk_ttl/topk_adaptive/topk_adaptive.md
+[09:15:34] telemetry: ttl
+[09:16:04]   results/team/script2_topk_ttl/ttl/ttl.md
+[09:16:04] packaging experiments/results/script2_topk_ttl on exp/script2_topk_ttl-aniruth
