@@ -1,0 +1,300 @@
+Login Succeeded
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.mcp
+#1 transferring dockerfile: 34B 0.0s
+#1 transferring dockerfile: 1.21kB 0.1s done
+#1 DONE 0.2s
+
+#2 [internal] load metadata for docker.io/library/python:3.11-slim
+#2 DONE 2.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 432B 0.0s done
+#3 DONE 0.1s
+
+#4 [internal] load build context
+#4 DONE 0.0s
+
+#5 [1/9] FROM docker.io/library/python:3.11-slim@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535
+#5 resolve docker.io/library/python:3.11-slim@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535 0.1s done
+#5 CACHED
+
+#4 [internal] load build context
+#4 transferring context: 7.88MB 2.1s done
+#4 DONE 2.3s
+
+#6 [2/9] RUN pip install --no-cache-dir "mcp>=2.3" "uvicorn>=0.30" "redis>=5"
+#6 10.26 Collecting mcp>=2.3
+#6 10.63   Downloading mcp-2.3.0-py3-none-any.whl.metadata (6.6 kB)
+#6 10.84 Collecting uvicorn>=0.30
+#6 10.90   Downloading uvicorn-0.54.0-py3-none-any.whl.metadata (6.6 kB)
+#6 11.09 Collecting redis>=5
+#6 11.15   Downloading redis-8.1.0-py3-none-any.whl.metadata (16 kB)
+#6 11.33 Collecting anyio>=4.9 (from mcp>=2.3)
+#6 11.39   Downloading anyio-4.16.0-py3-none-any.whl.metadata (4.7 kB)
+#6 11.49 Collecting httpx2>=2.10.0 (from mcp>=2.3)
+#6 11.55   Downloading httpx2-2.16.2-py3-none-any.whl.metadata (10.0 kB)
+#6 11.70 Collecting jsonschema>=4.20.0 (from mcp>=2.3)
+#6 11.76   Downloading jsonschema-4.26.0-py3-none-any.whl.metadata (7.6 kB)
+#6 11.86 Collecting mcp-types==2.3.0 (from mcp>=2.3)
+#6 11.92   Downloading mcp_types-2.3.0-py3-none-any.whl.metadata (1.9 kB)
+#6 12.06 Collecting opentelemetry-api>=1.28.0 (from mcp>=2.3)
+#6 12.12   Downloading opentelemetry_api-1.45.2-py3-none-any.whl.metadata (1.4 kB)
+#6 12.89 Collecting pydantic>=2.12.0 (from mcp>=2.3)
+#6 12.95   Downloading pydantic-2.14.4-py3-none-any.whl.metadata (143 kB)
+#6 13.08      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 144.0/144.0 kB 1.1 MB/s eta 0:00:00
+#6 13.20 Collecting pyjwt>=2.10.1 (from pyjwt[crypto]>=2.10.1->mcp>=2.3)
+#6 13.27   Downloading pyjwt-2.15.1-py3-none-any.whl.metadata (3.5 kB)
+#6 13.36 Collecting python-multipart>=0.0.9 (from mcp>=2.3)
+#6 13.47   Downloading python_multipart-0.0.34-py3-none-any.whl.metadata (6.3 kB)
+#6 13.58 Collecting sse-starlette>=3.0.0 (from mcp>=2.3)
+#6 13.68   Downloading sse_starlette-3.7.0-py3-none-any.whl.metadata (15 kB)
+#6 13.85 Collecting starlette>=0.27 (from mcp>=2.3)
+#6 13.91   Downloading starlette-1.10.0-py3-none-any.whl.metadata (6.6 kB)
+#6 14.05 Collecting typing-extensions>=4.13.0 (from mcp>=2.3)
+#6 14.12   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+#6 14.20 Collecting typing-inspection>=0.4.1 (from mcp>=2.3)
+#6 14.26   Downloading typing_inspection-0.4.5-py3-none-any.whl.metadata (2.6 kB)
+#6 14.41 Collecting click>=7.0 (from uvicorn>=0.30)
+#6 14.47   Downloading click-8.5.1-py3-none-any.whl.metadata (2.6 kB)
+#6 14.56 Collecting h11>=0.8 (from uvicorn>=0.30)
+#6 14.63   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+#6 14.78 Collecting idna>=2.8 (from anyio>=4.9->mcp>=2.3)
+#6 14.84   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+#6 14.97 Collecting httpcore2==2.16.2 (from httpx2>=2.10.0->mcp>=2.3)
+#6 15.04   Downloading httpcore2-2.16.2-py3-none-any.whl.metadata (28 kB)
+#6 15.15 Collecting truststore>=0.10 (from httpx2>=2.10.0->mcp>=2.3)
+#6 15.21   Downloading truststore-0.10.5-py3-none-any.whl.metadata (4.5 kB)
+#6 15.43 Collecting attrs>=22.2.0 (from jsonschema>=4.20.0->mcp>=2.3)
+#6 15.49   Downloading attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+#6 15.58 Collecting jsonschema-specifications>=2023.03.6 (from jsonschema>=4.20.0->mcp>=2.3)
+#6 15.64   Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+#6 15.80 Collecting referencing>=0.28.4 (from jsonschema>=4.20.0->mcp>=2.3)
+#6 15.86   Downloading referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+#6 17.45 Collecting rpds-py>=0.25.0 (from jsonschema>=4.20.0->mcp>=2.3)
+#6 17.51   Downloading rpds_py-2026.9.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.1 kB)
+#6 17.63 Collecting annotated-types>=0.6.0 (from pydantic>=2.12.0->mcp>=2.3)
+#6 17.69   Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+#6 21.81 Collecting pydantic-core==2.50.5 (from pydantic>=2.12.0->mcp>=2.3)
+#6 21.87   Downloading pydantic_core-2.50.5-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (6.6 kB)
+#6 22.65 Collecting cryptography>=3.4.0 (from pyjwt[crypto]>=2.10.1->mcp>=2.3)
+#6 22.71   Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.4 kB)
+#6 23.35 Collecting cffi>=2.0.0 (from cryptography>=3.4.0->pyjwt[crypto]>=2.10.1->mcp>=2.3)
+#6 23.42   Downloading cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+#6 23.63 Collecting pycparser (from cffi>=2.0.0->cryptography>=3.4.0->pyjwt[crypto]>=2.10.1->mcp>=2.3)
+#6 23.69   Downloading pycparser-3.12-py3-none-any.whl.metadata (9.7 kB)
+#6 23.78 Downloading mcp-2.3.0-py3-none-any.whl (368 kB)
+#6 23.89    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 368.7/368.7 kB 3.8 MB/s eta 0:00:00
+#6 23.96 Downloading mcp_types-2.3.0-py3-none-any.whl (69 kB)
+#6 23.98    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 69.1/69.1 kB 5.6 MB/s eta 0:00:00
+#6 24.05 Downloading uvicorn-0.54.0-py3-none-any.whl (87 kB)
+#6 24.07    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 87.4/87.4 kB 5.9 MB/s eta 0:00:00
+#6 24.14 Downloading redis-8.1.0-py3-none-any.whl (560 kB)
+#6 24.23    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 560.6/560.6 kB 7.2 MB/s eta 0:00:00
+#6 24.30 Downloading anyio-4.16.0-py3-none-any.whl (134 kB)
+#6 24.32    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 134.5/134.5 kB 7.5 MB/s eta 0:00:00
+#6 24.39 Downloading click-8.5.1-py3-none-any.whl (126 kB)
+#6 24.42    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 126.2/126.2 kB 5.8 MB/s eta 0:00:00
+#6 24.48 Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+#6 24.56 Downloading httpx2-2.16.2-py3-none-any.whl (97 kB)
+#6 24.58    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 97.9/97.9 kB 5.7 MB/s eta 0:00:00
+#6 24.64 Downloading httpcore2-2.16.2-py3-none-any.whl (85 kB)
+#6 24.66    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 85.6/85.6 kB 9.9 MB/s eta 0:00:00
+#6 24.72 Downloading jsonschema-4.26.0-py3-none-any.whl (90 kB)
+#6 24.73    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 90.6/90.6 kB 14.3 MB/s eta 0:00:00
+#6 24.80 Downloading opentelemetry_api-1.45.2-py3-none-any.whl (60 kB)
+#6 24.80    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 60.3/60.3 kB 42.0 MB/s eta 0:00:00
+#6 24.86 Downloading pydantic-2.14.4-py3-none-any.whl (494 kB)
+#6 24.91    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 494.9/494.9 kB 10.8 MB/s eta 0:00:00
+#6 24.98 Downloading pydantic_core-2.50.5-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.3 MB)
+#6 25.18    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.3/2.3 MB 11.9 MB/s eta 0:00:00
+#6 25.25 Downloading pyjwt-2.15.1-py3-none-any.whl (33 kB)
+#6 25.32 Downloading python_multipart-0.0.34-py3-none-any.whl (32 kB)
+#6 25.39 Downloading sse_starlette-3.7.0-py3-none-any.whl (18 kB)
+#6 25.46 Downloading starlette-1.10.0-py3-none-any.whl (80 kB)
+#6 25.47    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 80.6/80.6 kB 11.9 MB/s eta 0:00:00
+#6 25.53 Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+#6 25.54    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 45.6/45.6 kB 13.0 MB/s eta 0:00:00
+#6 25.61 Downloading typing_inspection-0.4.5-py3-none-any.whl (14 kB)
+#6 25.67 Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+#6 25.74 Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+#6 25.75    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 67.5/67.5 kB 8.0 MB/s eta 0:00:00
+#6 25.84 Downloading cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl (4.8 MB)
+#6 27.01    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.8/4.8 MB 4.1 MB/s eta 0:00:00
+#6 27.08 Downloading idna-3.20-py3-none-any.whl (69 kB)
+#6 27.10    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 69.6/69.6 kB 5.4 MB/s eta 0:00:00
+#6 27.17 Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+#6 27.24 Downloading referencing-0.37.0-py3-none-any.whl (26 kB)
+#6 27.31 Downloading rpds_py-2026.9.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (375 kB)
+#6 27.36    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 375.4/375.4 kB 9.7 MB/s eta 0:00:00
+#6 27.43 Downloading truststore-0.10.5-py3-none-any.whl (19 kB)
+#6 27.51 Downloading cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (217 kB)
+#6 27.54    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 217.8/217.8 kB 12.6 MB/s eta 0:00:00
+#6 27.62 Downloading pycparser-3.12-py3-none-any.whl (62 kB)
+#6 27.64    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.6/62.6 kB 4.7 MB/s eta 0:00:00
+#6 28.19 Installing collected packages: typing-extensions, truststore, rpds-py, redis, python-multipart, pyjwt, pycparser, idna, h11, click, attrs, annotated-types, uvicorn, typing-inspection, referencing, pydantic-core, opentelemetry-api, httpcore2, cffi, anyio, starlette, pydantic, jsonschema-specifications, httpx2, cryptography, sse-starlette, mcp-types, jsonschema, mcp
+#6 37.54 Successfully installed annotated-types-0.8.0 anyio-4.16.0 attrs-26.1.0 cffi-2.1.1 click-8.5.1 cryptography-50.0.2 h11-0.16.0 httpcore2-2.16.2 httpx2-2.16.2 idna-3.20 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 mcp-2.3.0 mcp-types-2.3.0 opentelemetry-api-1.45.2 pycparser-3.12 pydantic-2.14.4 pydantic-core-2.50.5 pyjwt-2.15.1 python-multipart-0.0.34 redis-8.1.0 referencing-0.37.0 rpds-py-2026.9.1 sse-starlette-3.7.0 starlette-1.10.0 truststore-0.10.5 typing-extensions-4.16.0 typing-inspection-0.4.5 uvicorn-0.54.0
+#6 37.54 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+#6 38.08 
+#6 38.08 [notice] A new release of pip is available: 24.0 -> 26.3
+#6 38.08 [notice] To update, run: pip install --upgrade pip
+#6 DONE 40.6s
+
+#7 [3/9] RUN useradd -m app
+#7 DONE 2.0s
+
+#8 [4/9] WORKDIR /home/app
+#8 DONE 0.1s
+
+#9 [5/9] COPY pulse/__init__.py pulse/paths.py pulse/
+#9 DONE 0.1s
+
+#10 [6/9] COPY pulse/agent/__init__.py pulse/agent/mcp_server.py pulse/agent/
+#10 DONE 0.2s
+
+#11 [7/9] COPY pulse/agent/tau_airline/ pulse/agent/tau_airline/
+#11 DONE 0.3s
+
+#12 [8/9] COPY pulse/agent/tau_retail/ pulse/agent/tau_retail/
+#12 DONE 0.2s
+
+#13 [9/9] RUN printf 'import runpy\nrunpy.run_module("pulse.agent.mcp_server", run_name="__main__")\n' > mcp_server.py
+#13 DONE 0.6s
+
+#14 exporting to image
+#14 exporting layers
+#14 exporting layers 7.7s done
+#14 exporting manifest sha256:7fcdd71ef92f615902c35d3baa146fc06c464b079cfe036d6e30d1b9fcc7d079
+#14 exporting manifest sha256:7fcdd71ef92f615902c35d3baa146fc06c464b079cfe036d6e30d1b9fcc7d079 0.0s done
+#14 exporting config sha256:5b8243c015cb4f4d7533a0b9cf54c561f297a9845e81bc18e4297e61ec499c7a 0.0s done
+#14 exporting attestation manifest sha256:98f61a132f17f84780bf3d3842274a000516bdd55b491cd09b63e9a0235ff3ce
+#14 exporting attestation manifest sha256:98f61a132f17f84780bf3d3842274a000516bdd55b491cd09b63e9a0235ff3ce 0.0s done
+#14 exporting manifest list sha256:14fa011a327210451a73c06df40f6c2fb66d7f4da25c3878c1ce8089334d0fa0 0.0s done
+#14 naming to 436908790807.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261121-0210 done
+#14 unpacking to 436908790807.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261121-0210
+#14 unpacking to 436908790807.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261121-0210 3.4s done
+#14 DONE 11.4s
+The push refers to repository [436908790807.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools]
+44136fa355b3: Waiting
+37fb86c2a767: Waiting
+53daecf7856e: Waiting
+2a96a05db28c: Waiting
+53daecf7856e: Waiting
+2a96a05db28c: Waiting
+44136fa355b3: Waiting
+37fb86c2a767: Waiting
+2a96a05db28c: Waiting
+44136fa355b3: Waiting
+37fb86c2a767: Waiting
+53daecf7856e: Waiting
+53daecf7856e: Waiting
+2a96a05db28c: Waiting
+44136fa355b3: Waiting
+37fb86c2a767: Waiting
+53daecf7856e: Waiting
+2a96a05db28c: Waiting
+44136fa355b3: Pushed
+7efbce397249: Waiting
+7efbce397249: Waiting
+0d9ae0796123: Waiting
+2a96a05db28c: Pushed
+bbe7053e6def: Waiting
+bbe7053e6def: Waiting
+7efbce397249: Waiting
+0d9ae0796123: Waiting
+990396da458c: Waiting
+bbe7053e6def: Pushed
+990396da458c: Waiting
+53daecf7856e: Pushed
+990396da458c: Waiting
+4f4fb700ef54: Waiting
+4f4fb700ef54: Waiting
+c6feab23d3ed: Waiting
+990396da458c: Pushed
+c6feab23d3ed: Waiting
+33ff595558ba: Waiting
+4f4fb700ef54: Pushed
+33ff595558ba: Waiting
+c6feab23d3ed: Pushed
+46ffe55bada8: Waiting
+46ffe55bada8: Waiting
+d4a4abb982db: Waiting
+33ff595558ba: Pushed
+46ffe55bada8: Waiting
+d4a4abb982db: Waiting
+a8392ae86086: Waiting
+d4a4abb982db: Pushed
+a8392ae86086: Waiting
+46ffe55bada8: Pushed
+a8392ae86086: Pushed
+7efbce397249: Pushed
+0d9ae0796123: Pushed
+37fb86c2a767: Pushed
+retail-20261121-0210: digest: sha256:14fa011a327210451a73c06df40f6c2fb66d7f4da25c3878c1ce8089334d0fa0 size: 856
+retail tools image: 436908790807.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261121-0210
+Switched to context "arn:aws:eks:ap-south-1:436908790807:cluster/pulse-eks".
+deployment.apps/redis unchanged
+service/redis unchanged
+deployment "redis" successfully rolled out
+deployment "coredns" successfully rolled out
+pod/redis-seed created
+pod/redis-seed condition met
+seeded retail data into redis://redis.default.svc.cluster.local:6379/1: products=50, orders=1000, users=500
+pod "redis-seed" deleted from default namespace
+wrote infra/knative/tools-retail.yaml: 16 retail services, min-scale=0, concurrency=1, max-scale=10, image=436908790807.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261121-0210, db=redis://redis.default.svc.cluster.local:6379/1
+Warning: Kubernetes default value is insecure, Knative may default this to secure in a future release: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation, spec.template.spec.containers[0].securityContext.capabilities, spec.template.spec.containers[0].securityContext.runAsNonRoot, spec.template.spec.containers[0].securityContext.seccompProfile
+service.serving.knative.dev/retail-calculate created
+service.serving.knative.dev/retail-cancel-pending-order created
+service.serving.knative.dev/retail-exchange-delivered-order-items created
+service.serving.knative.dev/retail-find-user-id-by-email created
+service.serving.knative.dev/retail-find-user-id-by-name-zip created
+service.serving.knative.dev/retail-get-order-details created
+service.serving.knative.dev/retail-get-product-details created
+service.serving.knative.dev/retail-get-user-details created
+service.serving.knative.dev/retail-list-all-product-types created
+service.serving.knative.dev/retail-modify-pending-order-address created
+service.serving.knative.dev/retail-modify-pending-order-items created
+service.serving.knative.dev/retail-modify-pending-order-payment created
+service.serving.knative.dev/retail-modify-user-address created
+service.serving.knative.dev/retail-return-delivered-order-items created
+service.serving.knative.dev/retail-think created
+service.serving.knative.dev/retail-transfer-to-human-agents created
+service.serving.knative.dev/retail-calculate condition met
+service.serving.knative.dev/retail-cancel-pending-order condition met
+service.serving.knative.dev/retail-exchange-delivered-order-items condition met
+service.serving.knative.dev/retail-find-user-id-by-email condition met
+service.serving.knative.dev/retail-find-user-id-by-name-zip condition met
+service.serving.knative.dev/retail-get-order-details condition met
+service.serving.knative.dev/retail-get-product-details condition met
+service.serving.knative.dev/retail-get-user-details condition met
+service.serving.knative.dev/retail-list-all-product-types condition met
+service.serving.knative.dev/retail-modify-pending-order-address condition met
+service.serving.knative.dev/retail-modify-pending-order-items condition met
+service.serving.knative.dev/retail-modify-pending-order-payment condition met
+service.serving.knative.dev/retail-modify-user-address condition met
+service.serving.knative.dev/retail-return-delivered-order-items condition met
+service.serving.knative.dev/retail-think condition met
+service.serving.knative.dev/retail-transfer-to-human-agents condition met
+NAME                                    URL                                                                LATESTCREATED                                 LATESTREADY                                   READY   REASON
+retail-calculate                        http://retail-calculate.default.example.com                        retail-calculate-00001                        retail-calculate-00001                        True    
+retail-cancel-pending-order             http://retail-cancel-pending-order.default.example.com             retail-cancel-pending-order-00001             retail-cancel-pending-order-00001             True    
+retail-exchange-delivered-order-items   http://retail-exchange-delivered-order-items.default.example.com   retail-exchange-delivered-order-items-00001   retail-exchange-delivered-order-items-00001   True    
+retail-find-user-id-by-email            http://retail-find-user-id-by-email.default.example.com            retail-find-user-id-by-email-00001            retail-find-user-id-by-email-00001            True    
+retail-find-user-id-by-name-zip         http://retail-find-user-id-by-name-zip.default.example.com         retail-find-user-id-by-name-zip-00001         retail-find-user-id-by-name-zip-00001         True    
+retail-get-order-details                http://retail-get-order-details.default.example.com                retail-get-order-details-00001                retail-get-order-details-00001                True    
+retail-get-product-details              http://retail-get-product-details.default.example.com              retail-get-product-details-00001              retail-get-product-details-00001              True    
+retail-get-user-details                 http://retail-get-user-details.default.example.com                 retail-get-user-details-00001                 retail-get-user-details-00001                 True    
+retail-list-all-product-types           http://retail-list-all-product-types.default.example.com           retail-list-all-product-types-00001           retail-list-all-product-types-00001           True    
+retail-modify-pending-order-address     http://retail-modify-pending-order-address.default.example.com     retail-modify-pending-order-address-00001     retail-modify-pending-order-address-00001     True    
+retail-modify-pending-order-items       http://retail-modify-pending-order-items.default.example.com       retail-modify-pending-order-items-00001       retail-modify-pending-order-items-00001       True    
+retail-modify-pending-order-payment     http://retail-modify-pending-order-payment.default.example.com     retail-modify-pending-order-payment-00001     retail-modify-pending-order-payment-00001     True    
+retail-modify-user-address              http://retail-modify-user-address.default.example.com              retail-modify-user-address-00001              retail-modify-user-address-00001              True    
+retail-return-delivered-order-items     http://retail-return-delivered-order-items.default.example.com     retail-return-delivered-order-items-00001     retail-return-delivered-order-items-00001     True    
+retail-think                            http://retail-think.default.example.com                            retail-think-00001                            retail-think-00001                            True    
+retail-transfer-to-human-agents         http://retail-transfer-to-human-agents.default.example.com         retail-transfer-to-human-agents-00001         retail-transfer-to-human-agents-00001         True    
+
+Agent settings for these tools:
+  TOOL_BACKEND=mcp
+  MCP_URL_TEMPLATE=http://<Kourier's load balancer>/mcp   (source infra/eks/use_eks.sh sets it)
+  MCP_HOST_TEMPLATE=retail-{svc}.default.example.com

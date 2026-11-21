@@ -1,0 +1,5 @@
+Run pulse-run-1121-062753 | replay C3 (lightgbm_adapt, ping controller) | airline | context arn:aws:eks:ap-south-1:436908790807:cluster/pulse-eks
+  predictor env: none | controller env: K_RULE=1
+  args: --label script3_kfanout_concurrency-k_fanout-k-rule-t2-lightgbm_adapt-K_RULE1 --tasks 6 20 22 26 30 --predictor-url http://pulse-predictor:8000 --fanout
+  running; log: infra/eks/logs/2026-11-21_062753_pulse-run-1121-062753.log
+Done (runner exit code 0). Result: results/cloud_runs/2026-11-21_0628_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-rule-t2-lightgbm_adapt-K_RULE1

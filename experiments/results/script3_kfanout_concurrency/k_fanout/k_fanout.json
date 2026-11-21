@@ -1,0 +1,358 @@
+{
+  "airline/k-rule": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 49.7,
+        "min": 49.0,
+        "max": 49.9
+      },
+      "p95_ms": {
+        "median": 451.1,
+        "min": 290.2,
+        "max": 503.9
+      },
+      "p99_ms": {
+        "median": 1452.9,
+        "min": 1440.1,
+        "max": 1475.5
+      },
+      "cold_calls": {
+        "median": 17,
+        "min": 16,
+        "max": 17
+      },
+      "cold_pct": {
+        "median": 5.8,
+        "min": 5.5,
+        "max": 5.8
+      },
+      "transport_failures": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "pod_s": {
+        "median": 10632.0,
+        "min": 10080.0,
+        "max": 10907.0
+      },
+      "pods_started": {
+        "median": 60,
+        "min": 54,
+        "max": 63
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 1.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 2.8,
+        "min": 2.8,
+        "max": 2.8
+      },
+      "prewarms": {
+        "median": 453,
+        "min": 452,
+        "max": 455
+      },
+      "wasted_pct": {
+        "median": 48.6,
+        "min": 48.6,
+        "max": 48.7
+      },
+      "skipped": {
+        "median": 214,
+        "min": 214,
+        "max": 216
+      },
+      "tool_cpu_core_s": {
+        "median": 62.2,
+        "min": 56.9,
+        "max": 66.2
+      },
+      "tool_mem_mib": {
+        "median": 515.7,
+        "min": 499.2,
+        "max": 531.6
+      },
+      "pulse_cpu_core_s": {
+        "median": 41.8,
+        "min": 40.4,
+        "max": 44.6
+      },
+      "node_cpu_busy_pct": {
+        "median": 6.8,
+        "min": 6.5,
+        "max": 7.0
+      },
+      "tool_pods_peak": {
+        "median": 15.0,
+        "min": 12.0,
+        "max": 15.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0309_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-rule-t1-lightgbm_adapt-K_RULE1",
+        "p50_ms": 49.9,
+        "p95_ms": 451.1,
+        "p99_ms": 1452.9,
+        "mean_ms": 134.9,
+        "calls": 293,
+        "cold_calls": 17,
+        "transport_failures": 0,
+        "cold_pct": 5.8,
+        "pod_s": 10080.0,
+        "pods_started": 54,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 455,
+        "prewarm_pings": 455,
+        "skipped": 216,
+        "wasted": 221,
+        "wasted_pct": 48.6,
+        "tool_cpu_core_s": 56.9,
+        "tool_mem_mib": 499.2,
+        "pulse_cpu_core_s": 40.4,
+        "node_cpu_busy_pct": 6.5,
+        "tool_pods_peak": 12.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0628_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-rule-t2-lightgbm_adapt-K_RULE1",
+        "p50_ms": 49.0,
+        "p95_ms": 290.2,
+        "p99_ms": 1440.1,
+        "mean_ms": 128.0,
+        "calls": 293,
+        "cold_calls": 17,
+        "transport_failures": 0,
+        "cold_pct": 5.8,
+        "pod_s": 10632.0,
+        "pods_started": 60,
+        "startup_s": 1.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 453,
+        "prewarm_pings": 453,
+        "skipped": 214,
+        "wasted": 220,
+        "wasted_pct": 48.6,
+        "tool_cpu_core_s": 62.2,
+        "tool_mem_mib": 515.7,
+        "pulse_cpu_core_s": 41.8,
+        "node_cpu_busy_pct": 6.8,
+        "tool_pods_peak": 15.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_0947_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-rule-t3-lightgbm_adapt-K_RULE1",
+        "p50_ms": 49.7,
+        "p95_ms": 503.9,
+        "p99_ms": 1475.5,
+        "mean_ms": 133.3,
+        "calls": 293,
+        "cold_calls": 16,
+        "transport_failures": 0,
+        "cold_pct": 5.5,
+        "pod_s": 10907.0,
+        "pods_started": 63,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 452,
+        "prewarm_pings": 452,
+        "skipped": 214,
+        "wasted": 220,
+        "wasted_pct": 48.7,
+        "tool_cpu_core_s": 66.2,
+        "tool_mem_mib": 531.6,
+        "pulse_cpu_core_s": 44.6,
+        "node_cpu_busy_pct": 7.0,
+        "tool_pods_peak": 15.0
+      }
+    ]
+  },
+  "airline/k-static": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 48.2,
+        "min": 47.4,
+        "max": 48.5
+      },
+      "p95_ms": {
+        "median": 292.8,
+        "min": 280.8,
+        "max": 452.1
+      },
+      "p99_ms": {
+        "median": 1531.2,
+        "min": 1422.6,
+        "max": 1554.6
+      },
+      "cold_calls": {
+        "median": 23,
+        "min": 23,
+        "max": 24
+      },
+      "cold_pct": {
+        "median": 7.8,
+        "min": 7.8,
+        "max": 8.2
+      },
+      "transport_failures": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "pod_s": {
+        "median": 11334.0,
+        "min": 11273.0,
+        "max": 11554.0
+      },
+      "pods_started": {
+        "median": 67,
+        "min": 67,
+        "max": 70
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 2.8,
+        "min": 2.8,
+        "max": 2.8
+      },
+      "prewarms": {
+        "median": 457,
+        "min": 453,
+        "max": 458
+      },
+      "wasted_pct": {
+        "median": 48.8,
+        "min": 48.7,
+        "max": 48.8
+      },
+      "skipped": {
+        "median": 217,
+        "min": 215,
+        "max": 219
+      },
+      "tool_cpu_core_s": {
+        "median": 70.3,
+        "min": 69.2,
+        "max": 73.1
+      },
+      "tool_mem_mib": {
+        "median": 552.2,
+        "min": 546.3,
+        "max": 560.4
+      },
+      "pulse_cpu_core_s": {
+        "median": 44.8,
+        "min": 43.9,
+        "max": 45.0
+      },
+      "node_cpu_busy_pct": {
+        "median": 7.1,
+        "min": 7.0,
+        "max": 7.4
+      },
+      "tool_pods_peak": {
+        "median": 16.0,
+        "min": 15.0,
+        "max": 16.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0332_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-static-t1-lightgbm_adapt-K_RULE0",
+        "p50_ms": 47.4,
+        "p95_ms": 280.8,
+        "p99_ms": 1554.6,
+        "mean_ms": 134.1,
+        "calls": 293,
+        "cold_calls": 24,
+        "transport_failures": 0,
+        "cold_pct": 8.2,
+        "pod_s": 11334.0,
+        "pods_started": 67,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 457,
+        "prewarm_pings": 565,
+        "skipped": 219,
+        "wasted": 223,
+        "wasted_pct": 48.8,
+        "tool_cpu_core_s": 70.3,
+        "tool_mem_mib": 546.3,
+        "pulse_cpu_core_s": 43.9,
+        "node_cpu_busy_pct": 7.0,
+        "tool_pods_peak": 15.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0651_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-static-t2-lightgbm_adapt-K_RULE0",
+        "p50_ms": 48.2,
+        "p95_ms": 292.8,
+        "p99_ms": 1422.6,
+        "mean_ms": 129.2,
+        "calls": 293,
+        "cold_calls": 23,
+        "transport_failures": 0,
+        "cold_pct": 7.8,
+        "pod_s": 11273.0,
+        "pods_started": 67,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 458,
+        "prewarm_pings": 563,
+        "skipped": 215,
+        "wasted": 223,
+        "wasted_pct": 48.7,
+        "tool_cpu_core_s": 69.2,
+        "tool_mem_mib": 552.2,
+        "pulse_cpu_core_s": 45.0,
+        "node_cpu_busy_pct": 7.1,
+        "tool_pods_peak": 16.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_1010_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-static-t3-lightgbm_adapt-K_RULE0",
+        "p50_ms": 48.5,
+        "p95_ms": 452.1,
+        "p99_ms": 1531.2,
+        "mean_ms": 132.9,
+        "calls": 293,
+        "cold_calls": 23,
+        "transport_failures": 0,
+        "cold_pct": 7.8,
+        "pod_s": 11554.0,
+        "pods_started": 70,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 453,
+        "prewarm_pings": 557,
+        "skipped": 217,
+        "wasted": 221,
+        "wasted_pct": 48.8,
+        "tool_cpu_core_s": 73.1,
+        "tool_mem_mib": 560.4,
+        "pulse_cpu_core_s": 44.8,
+        "node_cpu_busy_pct": 7.4,
+        "tool_pods_peak": 16.0
+      }
+    ]
+  }
+}

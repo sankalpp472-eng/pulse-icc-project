@@ -1,0 +1,1025 @@
+{
+  "airline/C0-rate3": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 50.4,
+        "min": 48.1,
+        "max": 52.1
+      },
+      "p95_ms": {
+        "median": 1476.2,
+        "min": 1473.3,
+        "max": 1576.3
+      },
+      "p99_ms": {
+        "median": 1948.1,
+        "min": 1933.3,
+        "max": 2063.9
+      },
+      "cold_calls": {
+        "median": 69,
+        "min": 68,
+        "max": 70
+      },
+      "cold_pct": {
+        "median": 15.2,
+        "min": 15.0,
+        "max": 15.4
+      },
+      "transport_failures": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "pod_s": {
+        "median": 11124.0,
+        "min": 11082.0,
+        "max": 11170.0
+      },
+      "pods_started": {
+        "median": 70,
+        "min": 69,
+        "max": 71
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 4.0,
+        "min": 4.0,
+        "max": 4.0
+      },
+      "prewarms": {
+        "median": null,
+        "min": null,
+        "max": null
+      },
+      "wasted_pct": {
+        "median": null,
+        "min": null,
+        "max": null
+      },
+      "skipped": {
+        "median": null,
+        "min": null,
+        "max": null
+      },
+      "tool_cpu_core_s": {
+        "median": 73.4,
+        "min": 70.0,
+        "max": 73.6
+      },
+      "tool_mem_mib": {
+        "median": 567.7,
+        "min": 567.0,
+        "max": 570.1
+      },
+      "pulse_cpu_core_s": {
+        "median": 4.0,
+        "min": 4.0,
+        "max": 4.1
+      },
+      "node_cpu_busy_pct": {
+        "median": 6.8,
+        "min": 6.8,
+        "max": 7.0
+      },
+      "tool_pods_peak": {
+        "median": 17.0,
+        "min": 17.0,
+        "max": 18.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0355_C0_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate3-t1",
+        "p50_ms": 50.4,
+        "p95_ms": 1473.3,
+        "p99_ms": 1948.1,
+        "mean_ms": 289.5,
+        "calls": 454,
+        "cold_calls": 69,
+        "transport_failures": 0,
+        "cold_pct": 15.2,
+        "pod_s": 11124.0,
+        "pods_started": 70,
+        "startup_s": 2.0,
+        "concurrent_mean": 4.0,
+        "concurrent_max": 9.0,
+        "tool_cpu_core_s": 73.6,
+        "tool_mem_mib": 570.1,
+        "pulse_cpu_core_s": 4.0,
+        "node_cpu_busy_pct": 6.8,
+        "tool_pods_peak": 18.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0714_C0_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate3-t2",
+        "p50_ms": 48.1,
+        "p95_ms": 1476.2,
+        "p99_ms": 1933.3,
+        "mean_ms": 358.0,
+        "calls": 454,
+        "cold_calls": 68,
+        "transport_failures": 0,
+        "cold_pct": 15.0,
+        "pod_s": 11082.0,
+        "pods_started": 69,
+        "startup_s": 2.0,
+        "concurrent_mean": 4.0,
+        "concurrent_max": 9.0,
+        "tool_cpu_core_s": 70.0,
+        "tool_mem_mib": 567.0,
+        "pulse_cpu_core_s": 4.0,
+        "node_cpu_busy_pct": 6.8,
+        "tool_pods_peak": 17.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_1033_C0_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate3-t3",
+        "p50_ms": 52.1,
+        "p95_ms": 1576.3,
+        "p99_ms": 2063.9,
+        "mean_ms": 415.5,
+        "calls": 454,
+        "cold_calls": 70,
+        "transport_failures": 0,
+        "cold_pct": 15.4,
+        "pod_s": 11170.0,
+        "pods_started": 71,
+        "startup_s": 2.0,
+        "concurrent_mean": 4.0,
+        "concurrent_max": 9.0,
+        "tool_cpu_core_s": 73.4,
+        "tool_mem_mib": 567.7,
+        "pulse_cpu_core_s": 4.1,
+        "node_cpu_busy_pct": 7.0,
+        "tool_pods_peak": 17.0
+      }
+    ]
+  },
+  "airline/C3-lightgbm_adapt-rate3": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 47.0,
+        "min": 46.9,
+        "max": 47.1
+      },
+      "p95_ms": {
+        "median": 158.3,
+        "min": 131.9,
+        "max": 196.5
+      },
+      "p99_ms": {
+        "median": 1462.5,
+        "min": 1442.5,
+        "max": 1487.4
+      },
+      "cold_calls": {
+        "median": 18,
+        "min": 17,
+        "max": 19
+      },
+      "cold_pct": {
+        "median": 4.0,
+        "min": 3.7,
+        "max": 4.2
+      },
+      "transport_failures": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "pod_s": {
+        "median": 10748.0,
+        "min": 10613.0,
+        "max": 10754.0
+      },
+      "pods_started": {
+        "median": 40,
+        "min": 40,
+        "max": 42
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 4.0,
+        "min": 4.0,
+        "max": 4.0
+      },
+      "prewarms": {
+        "median": 688,
+        "min": 688,
+        "max": 712
+      },
+      "wasted_pct": {
+        "median": 47.5,
+        "min": 47.4,
+        "max": 48.5
+      },
+      "skipped": {
+        "median": 315,
+        "min": 290,
+        "max": 318
+      },
+      "tool_cpu_core_s": {
+        "median": 52.7,
+        "min": 51.5,
+        "max": 52.9
+      },
+      "tool_mem_mib": {
+        "median": 550.2,
+        "min": 549.1,
+        "max": 558.5
+      },
+      "pulse_cpu_core_s": {
+        "median": 56.1,
+        "min": 55.8,
+        "max": 57.5
+      },
+      "node_cpu_busy_pct": {
+        "median": 6.7,
+        "min": 6.7,
+        "max": 6.9
+      },
+      "tool_pods_peak": {
+        "median": 13.0,
+        "min": 12.0,
+        "max": 13.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0417_C3_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate3-t1-lightgbm_adapt",
+        "p50_ms": 47.1,
+        "p95_ms": 131.9,
+        "p99_ms": 1462.5,
+        "mean_ms": 115.8,
+        "calls": 454,
+        "cold_calls": 17,
+        "transport_failures": 0,
+        "cold_pct": 3.7,
+        "pod_s": 10613.0,
+        "pods_started": 40,
+        "startup_s": 2.0,
+        "concurrent_mean": 4.0,
+        "concurrent_max": 9.0,
+        "prewarms": 688,
+        "prewarm_pings": 688,
+        "skipped": 318,
+        "wasted": 327,
+        "wasted_pct": 47.5,
+        "tool_cpu_core_s": 52.7,
+        "tool_mem_mib": 549.1,
+        "pulse_cpu_core_s": 55.8,
+        "node_cpu_busy_pct": 6.7,
+        "tool_pods_peak": 12.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0736_C3_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate3-t2-lightgbm_adapt",
+        "p50_ms": 46.9,
+        "p95_ms": 158.3,
+        "p99_ms": 1442.5,
+        "mean_ms": 147.6,
+        "calls": 454,
+        "cold_calls": 19,
+        "transport_failures": 0,
+        "cold_pct": 4.2,
+        "pod_s": 10748.0,
+        "pods_started": 42,
+        "startup_s": 2.0,
+        "concurrent_mean": 4.0,
+        "concurrent_max": 9.0,
+        "prewarms": 688,
+        "prewarm_pings": 688,
+        "skipped": 315,
+        "wasted": 326,
+        "wasted_pct": 47.4,
+        "tool_cpu_core_s": 51.5,
+        "tool_mem_mib": 550.2,
+        "pulse_cpu_core_s": 56.1,
+        "node_cpu_busy_pct": 6.7,
+        "tool_pods_peak": 13.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_1055_C3_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate3-t3-lightgbm_adapt",
+        "p50_ms": 47.0,
+        "p95_ms": 196.5,
+        "p99_ms": 1487.4,
+        "mean_ms": 150.1,
+        "calls": 454,
+        "cold_calls": 18,
+        "transport_failures": 0,
+        "cold_pct": 4.0,
+        "pod_s": 10754.0,
+        "pods_started": 40,
+        "startup_s": 2.0,
+        "concurrent_mean": 4.0,
+        "concurrent_max": 9.0,
+        "prewarms": 712,
+        "prewarm_pings": 712,
+        "skipped": 290,
+        "wasted": 345,
+        "wasted_pct": 48.5,
+        "tool_cpu_core_s": 52.9,
+        "tool_mem_mib": 558.5,
+        "pulse_cpu_core_s": 57.5,
+        "node_cpu_busy_pct": 6.9,
+        "tool_pods_peak": 13.0
+      }
+    ]
+  },
+  "airline/C0-rate7": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 47.9,
+        "min": 47.7,
+        "max": 48.7
+      },
+      "p95_ms": {
+        "median": 1218.1,
+        "min": 1186.6,
+        "max": 1242.0
+      },
+      "p99_ms": {
+        "median": 1513.2,
+        "min": 1486.4,
+        "max": 1642.8
+      },
+      "cold_calls": {
+        "median": 90,
+        "min": 88,
+        "max": 90
+      },
+      "cold_pct": {
+        "median": 8.3,
+        "min": 8.1,
+        "max": 8.3
+      },
+      "transport_failures": {
+        "median": 15,
+        "min": 15,
+        "max": 16
+      },
+      "pod_s": {
+        "median": 14615.0,
+        "min": 14557.0,
+        "max": 14647.0
+      },
+      "pods_started": {
+        "median": 59,
+        "min": 59,
+        "max": 59
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 7.1,
+        "min": 7.1,
+        "max": 7.1
+      },
+      "prewarms": {
+        "median": null,
+        "min": null,
+        "max": null
+      },
+      "wasted_pct": {
+        "median": null,
+        "min": null,
+        "max": null
+      },
+      "skipped": {
+        "median": null,
+        "min": null,
+        "max": null
+      },
+      "tool_cpu_core_s": {
+        "median": 89.1,
+        "min": 86.3,
+        "max": 90.5
+      },
+      "tool_mem_mib": {
+        "median": 653.3,
+        "min": 645.7,
+        "max": 661.0
+      },
+      "pulse_cpu_core_s": {
+        "median": 4.8,
+        "min": 4.7,
+        "max": 4.8
+      },
+      "node_cpu_busy_pct": {
+        "median": 6.8,
+        "min": 6.8,
+        "max": 7.0
+      },
+      "tool_pods_peak": {
+        "median": 16.0,
+        "min": 15.0,
+        "max": 16.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0439_C0_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate7-t1",
+        "p50_ms": 47.7,
+        "p95_ms": 1242.0,
+        "p99_ms": 1642.8,
+        "mean_ms": 198.2,
+        "calls": 1096,
+        "cold_calls": 90,
+        "transport_failures": 15,
+        "cold_pct": 8.3,
+        "pod_s": 14647.0,
+        "pods_started": 59,
+        "startup_s": 2.0,
+        "concurrent_mean": 7.1,
+        "concurrent_max": 13.0,
+        "tool_cpu_core_s": 89.1,
+        "tool_mem_mib": 653.3,
+        "pulse_cpu_core_s": 4.7,
+        "node_cpu_busy_pct": 6.8,
+        "tool_pods_peak": 16.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0758_C0_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate7-t2",
+        "p50_ms": 47.9,
+        "p95_ms": 1218.1,
+        "p99_ms": 1486.4,
+        "mean_ms": 196.7,
+        "calls": 1096,
+        "cold_calls": 88,
+        "transport_failures": 16,
+        "cold_pct": 8.1,
+        "pod_s": 14557.0,
+        "pods_started": 59,
+        "startup_s": 2.0,
+        "concurrent_mean": 7.1,
+        "concurrent_max": 13.0,
+        "tool_cpu_core_s": 86.3,
+        "tool_mem_mib": 645.7,
+        "pulse_cpu_core_s": 4.8,
+        "node_cpu_busy_pct": 6.8,
+        "tool_pods_peak": 16.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_1117_C0_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate7-t3",
+        "p50_ms": 48.7,
+        "p95_ms": 1186.6,
+        "p99_ms": 1513.2,
+        "mean_ms": 206.2,
+        "calls": 1096,
+        "cold_calls": 90,
+        "transport_failures": 15,
+        "cold_pct": 8.3,
+        "pod_s": 14615.0,
+        "pods_started": 59,
+        "startup_s": 2.0,
+        "concurrent_mean": 7.1,
+        "concurrent_max": 13.0,
+        "tool_cpu_core_s": 90.5,
+        "tool_mem_mib": 661.0,
+        "pulse_cpu_core_s": 4.8,
+        "node_cpu_busy_pct": 7.0,
+        "tool_pods_peak": 15.0
+      }
+    ]
+  },
+  "airline/C3-lightgbm_adapt-rate7": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 46.6,
+        "min": 46.2,
+        "max": 48.0
+      },
+      "p95_ms": {
+        "median": 1017.5,
+        "min": 756.7,
+        "max": 1032.9
+      },
+      "p99_ms": {
+        "median": 1434.8,
+        "min": 1398.1,
+        "max": 1439.0
+      },
+      "cold_calls": {
+        "median": 59,
+        "min": 51,
+        "max": 61
+      },
+      "cold_pct": {
+        "median": 5.5,
+        "min": 4.7,
+        "max": 5.6
+      },
+      "transport_failures": {
+        "median": 15,
+        "min": 15,
+        "max": 15
+      },
+      "pod_s": {
+        "median": 14896.0,
+        "min": 14880.0,
+        "max": 14896.0
+      },
+      "pods_started": {
+        "median": 49,
+        "min": 49,
+        "max": 49
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 7.0,
+        "min": 7.0,
+        "max": 7.0
+      },
+      "prewarms": {
+        "median": 1507,
+        "min": 1497,
+        "max": 1510
+      },
+      "wasted_pct": {
+        "median": 43.7,
+        "min": 43.6,
+        "max": 43.8
+      },
+      "skipped": {
+        "median": 774,
+        "min": 758,
+        "max": 775
+      },
+      "tool_cpu_core_s": {
+        "median": 87.6,
+        "min": 85.7,
+        "max": 87.9
+      },
+      "tool_mem_mib": {
+        "median": 676.4,
+        "min": 670.7,
+        "max": 680.4
+      },
+      "pulse_cpu_core_s": {
+        "median": 102.5,
+        "min": 102.1,
+        "max": 114.8
+      },
+      "node_cpu_busy_pct": {
+        "median": 7.6,
+        "min": 7.6,
+        "max": 8.0
+      },
+      "tool_pods_peak": {
+        "median": 14.0,
+        "min": 14.0,
+        "max": 14.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0506_C3_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate7-t1-lightgbm_adapt",
+        "p50_ms": 46.6,
+        "p95_ms": 756.7,
+        "p99_ms": 1398.1,
+        "mean_ms": 137.5,
+        "calls": 1096,
+        "cold_calls": 51,
+        "transport_failures": 15,
+        "cold_pct": 4.7,
+        "pod_s": 14896.0,
+        "pods_started": 49,
+        "startup_s": 2.0,
+        "concurrent_mean": 7.0,
+        "concurrent_max": 13.0,
+        "prewarms": 1510,
+        "prewarm_pings": 1510,
+        "skipped": 774,
+        "wasted": 660,
+        "wasted_pct": 43.7,
+        "tool_cpu_core_s": 87.6,
+        "tool_mem_mib": 670.7,
+        "pulse_cpu_core_s": 102.1,
+        "node_cpu_busy_pct": 7.6,
+        "tool_pods_peak": 14.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0825_C3_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate7-t2-lightgbm_adapt",
+        "p50_ms": 46.2,
+        "p95_ms": 1017.5,
+        "p99_ms": 1434.8,
+        "mean_ms": 144.8,
+        "calls": 1096,
+        "cold_calls": 59,
+        "transport_failures": 15,
+        "cold_pct": 5.5,
+        "pod_s": 14880.0,
+        "pods_started": 49,
+        "startup_s": 2.0,
+        "concurrent_mean": 7.0,
+        "concurrent_max": 13.0,
+        "prewarms": 1507,
+        "prewarm_pings": 1507,
+        "skipped": 758,
+        "wasted": 657,
+        "wasted_pct": 43.6,
+        "tool_cpu_core_s": 85.7,
+        "tool_mem_mib": 680.4,
+        "pulse_cpu_core_s": 102.5,
+        "node_cpu_busy_pct": 7.6,
+        "tool_pods_peak": 14.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_1143_C3_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate7-t3-lightgbm_adapt",
+        "p50_ms": 48.0,
+        "p95_ms": 1032.9,
+        "p99_ms": 1439.0,
+        "mean_ms": 147.6,
+        "calls": 1096,
+        "cold_calls": 61,
+        "transport_failures": 15,
+        "cold_pct": 5.6,
+        "pod_s": 14896.0,
+        "pods_started": 49,
+        "startup_s": 2.0,
+        "concurrent_mean": 7.0,
+        "concurrent_max": 13.0,
+        "prewarms": 1497,
+        "prewarm_pings": 1497,
+        "skipped": 775,
+        "wasted": 655,
+        "wasted_pct": 43.8,
+        "tool_cpu_core_s": 87.9,
+        "tool_mem_mib": 676.4,
+        "pulse_cpu_core_s": 114.8,
+        "node_cpu_busy_pct": 8.0,
+        "tool_pods_peak": 14.0
+      }
+    ]
+  },
+  "airline/C0-rate14": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 48.4,
+        "min": 48.2,
+        "max": 48.7
+      },
+      "p95_ms": {
+        "median": 1070.2,
+        "min": 1065.4,
+        "max": 1108.1
+      },
+      "p99_ms": {
+        "median": 1476.5,
+        "min": 1458.4,
+        "max": 1526.5
+      },
+      "cold_calls": {
+        "median": 147,
+        "min": 120,
+        "max": 151
+      },
+      "cold_pct": {
+        "median": 7.1,
+        "min": 5.8,
+        "max": 7.3
+      },
+      "transport_failures": {
+        "median": 112,
+        "min": 112,
+        "max": 116
+      },
+      "pod_s": {
+        "median": 17706.0,
+        "min": 17235.0,
+        "max": 17760.0
+      },
+      "pods_started": {
+        "median": 62,
+        "min": 56,
+        "max": 63
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 12.0,
+        "min": 12.0,
+        "max": 12.0
+      },
+      "prewarms": {
+        "median": null,
+        "min": null,
+        "max": null
+      },
+      "wasted_pct": {
+        "median": null,
+        "min": null,
+        "max": null
+      },
+      "skipped": {
+        "median": null,
+        "min": null,
+        "max": null
+      },
+      "tool_cpu_core_s": {
+        "median": 140.7,
+        "min": 134.5,
+        "max": 147.2
+      },
+      "tool_mem_mib": {
+        "median": 746.8,
+        "min": 744.0,
+        "max": 757.5
+      },
+      "pulse_cpu_core_s": {
+        "median": 5.1,
+        "min": 5.1,
+        "max": 5.2
+      },
+      "node_cpu_busy_pct": {
+        "median": 7.7,
+        "min": 7.5,
+        "max": 7.9
+      },
+      "tool_pods_peak": {
+        "median": 16.0,
+        "min": 16.0,
+        "max": 16.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0532_C0_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate14-t1",
+        "p50_ms": 48.2,
+        "p95_ms": 1065.4,
+        "p99_ms": 1476.5,
+        "mean_ms": 202.4,
+        "calls": 2179,
+        "cold_calls": 120,
+        "transport_failures": 112,
+        "cold_pct": 5.8,
+        "pod_s": 17235.0,
+        "pods_started": 56,
+        "startup_s": 2.0,
+        "concurrent_mean": 12.0,
+        "concurrent_max": 22.0,
+        "tool_cpu_core_s": 134.5,
+        "tool_mem_mib": 746.8,
+        "pulse_cpu_core_s": 5.1,
+        "node_cpu_busy_pct": 7.5,
+        "tool_pods_peak": 16.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0851_C0_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate14-t2",
+        "p50_ms": 48.4,
+        "p95_ms": 1070.2,
+        "p99_ms": 1458.4,
+        "mean_ms": 198.8,
+        "calls": 2179,
+        "cold_calls": 147,
+        "transport_failures": 112,
+        "cold_pct": 7.1,
+        "pod_s": 17760.0,
+        "pods_started": 62,
+        "startup_s": 2.0,
+        "concurrent_mean": 12.0,
+        "concurrent_max": 22.0,
+        "tool_cpu_core_s": 147.2,
+        "tool_mem_mib": 757.5,
+        "pulse_cpu_core_s": 5.1,
+        "node_cpu_busy_pct": 7.7,
+        "tool_pods_peak": 16.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_1209_C0_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate14-t3",
+        "p50_ms": 48.7,
+        "p95_ms": 1108.1,
+        "p99_ms": 1526.5,
+        "mean_ms": 201.2,
+        "calls": 2179,
+        "cold_calls": 151,
+        "transport_failures": 116,
+        "cold_pct": 7.3,
+        "pod_s": 17706.0,
+        "pods_started": 63,
+        "startup_s": 2.0,
+        "concurrent_mean": 12.0,
+        "concurrent_max": 22.0,
+        "tool_cpu_core_s": 140.7,
+        "tool_mem_mib": 744.0,
+        "pulse_cpu_core_s": 5.2,
+        "node_cpu_busy_pct": 7.9,
+        "tool_pods_peak": 16.0
+      }
+    ]
+  },
+  "airline/C3-lightgbm_adapt-rate14": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 46.9,
+        "min": 46.6,
+        "max": 47.2
+      },
+      "p95_ms": {
+        "median": 1023.5,
+        "min": 1011.1,
+        "max": 1068.9
+      },
+      "p99_ms": {
+        "median": 1337.1,
+        "min": 1181.8,
+        "max": 1360.4
+      },
+      "cold_calls": {
+        "median": 119,
+        "min": 112,
+        "max": 123
+      },
+      "cold_pct": {
+        "median": 5.8,
+        "min": 5.4,
+        "max": 6.0
+      },
+      "transport_failures": {
+        "median": 118,
+        "min": 117,
+        "max": 119
+      },
+      "pod_s": {
+        "median": 18096.0,
+        "min": 17995.0,
+        "max": 18339.0
+      },
+      "pods_started": {
+        "median": 50,
+        "min": 49,
+        "max": 53
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 11.9,
+        "min": 11.9,
+        "max": 11.9
+      },
+      "prewarms": {
+        "median": 2589,
+        "min": 2587,
+        "max": 2596
+      },
+      "wasted_pct": {
+        "median": 40.6,
+        "min": 40.5,
+        "max": 40.8
+      },
+      "skipped": {
+        "median": 1398,
+        "min": 1360,
+        "max": 1400
+      },
+      "tool_cpu_core_s": {
+        "median": 137.1,
+        "min": 130.2,
+        "max": 137.2
+      },
+      "tool_mem_mib": {
+        "median": 764.3,
+        "min": 755.3,
+        "max": 767.7
+      },
+      "pulse_cpu_core_s": {
+        "median": 170.9,
+        "min": 162.9,
+        "max": 176.1
+      },
+      "node_cpu_busy_pct": {
+        "median": 9.0,
+        "min": 8.8,
+        "max": 9.1
+      },
+      "tool_pods_peak": {
+        "median": 15.0,
+        "min": 15.0,
+        "max": 15.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0600_C3_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate14-t1-lightgbm_adapt",
+        "p50_ms": 46.6,
+        "p95_ms": 1011.1,
+        "p99_ms": 1360.4,
+        "mean_ms": 175.3,
+        "calls": 2179,
+        "cold_calls": 112,
+        "transport_failures": 119,
+        "cold_pct": 5.4,
+        "pod_s": 18096.0,
+        "pods_started": 50,
+        "startup_s": 2.0,
+        "concurrent_mean": 11.9,
+        "concurrent_max": 22.0,
+        "prewarms": 2589,
+        "prewarm_pings": 2589,
+        "skipped": 1400,
+        "wasted": 1048,
+        "wasted_pct": 40.5,
+        "tool_cpu_core_s": 130.2,
+        "tool_mem_mib": 764.3,
+        "pulse_cpu_core_s": 162.9,
+        "node_cpu_busy_pct": 8.8,
+        "tool_pods_peak": 15.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0919_C3_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate14-t2-lightgbm_adapt",
+        "p50_ms": 47.2,
+        "p95_ms": 1023.5,
+        "p99_ms": 1337.1,
+        "mean_ms": 180.3,
+        "calls": 2179,
+        "cold_calls": 119,
+        "transport_failures": 118,
+        "cold_pct": 5.8,
+        "pod_s": 18339.0,
+        "pods_started": 53,
+        "startup_s": 2.0,
+        "concurrent_mean": 11.9,
+        "concurrent_max": 22.0,
+        "prewarms": 2596,
+        "prewarm_pings": 2596,
+        "skipped": 1360,
+        "wasted": 1060,
+        "wasted_pct": 40.8,
+        "tool_cpu_core_s": 137.1,
+        "tool_mem_mib": 767.7,
+        "pulse_cpu_core_s": 170.9,
+        "node_cpu_busy_pct": 9.0,
+        "tool_pods_peak": 15.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_1238_C3_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate14-t3-lightgbm_adapt",
+        "p50_ms": 46.9,
+        "p95_ms": 1068.9,
+        "p99_ms": 1181.8,
+        "mean_ms": 181.1,
+        "calls": 2179,
+        "cold_calls": 123,
+        "transport_failures": 117,
+        "cold_pct": 6.0,
+        "pod_s": 17995.0,
+        "pods_started": 49,
+        "startup_s": 2.0,
+        "concurrent_mean": 11.9,
+        "concurrent_max": 22.0,
+        "prewarms": 2587,
+        "prewarm_pings": 2587,
+        "skipped": 1398,
+        "wasted": 1051,
+        "wasted_pct": 40.6,
+        "tool_cpu_core_s": 137.2,
+        "tool_mem_mib": 755.3,
+        "pulse_cpu_core_s": 176.1,
+        "node_cpu_busy_pct": 9.1,
+        "tool_pods_peak": 15.0
+      }
+    ]
+  }
+}

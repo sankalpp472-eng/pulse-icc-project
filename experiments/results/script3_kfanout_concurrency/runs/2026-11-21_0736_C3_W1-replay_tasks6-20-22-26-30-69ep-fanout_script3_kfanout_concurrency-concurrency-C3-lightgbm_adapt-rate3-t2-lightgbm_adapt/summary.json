@@ -1,0 +1,172 @@
+{
+  "episodes": 69,
+  "tool_calls": 454,
+  "transport_failures": 0,
+  "cold_calls": 19,
+  "cold_share": 0.042,
+  "latency_ms": {
+    "all": {
+      "p50": 46.9,
+      "p95": 158.3,
+      "p99": 1442.5,
+      "mean": 147.6
+    },
+    "cold": {
+      "p50": 1409.4,
+      "p95": 1559.6,
+      "max": 15560.6
+    },
+    "warm": {
+      "p50": 46.1,
+      "p95": 121.1,
+      "max": 164.2
+    }
+  },
+  "cold_start_time_added_s": 38.7,
+  "signals_agree": 450,
+  "pods_started": 42,
+  "pod_seconds_seen": 10748.0,
+  "pod_seconds_during_run": 10411.0,
+  "pod_seconds_after_run": 337.0,
+  "scaled_down_after_s": 90.9,
+  "peak_pods_per_tool": {
+    "get_reservation_details": 3,
+    "think": 2,
+    "transfer_to_human_agents": 2,
+    "cancel_reservation": 2,
+    "get_user_details": 2,
+    "search_direct_flight": 2,
+    "search_onestop_flight": 1,
+    "update_reservation_flights": 1,
+    "update_reservation_baggages": 1,
+    "book_reservation": 1,
+    "calculate": 1
+  },
+  "startup": {
+    "pods": 42,
+    "pods_pulling_images": 0,
+    "scheduling_s": {
+      "median": 0.0,
+      "mean": 0.024,
+      "p95": 0.0
+    },
+    "image_pull_s": {
+      "median": 0.0,
+      "mean": 0.0,
+      "p95": 0.0
+    },
+    "init_s": {
+      "median": 1.0,
+      "mean": 0.714,
+      "p95": 1.0
+    },
+    "readiness_s": {
+      "median": 1.0,
+      "mean": 0.786,
+      "p95": 1.0
+    },
+    "startup_s": {
+      "median": 2.0,
+      "mean": 1.524,
+      "p95": 2.0
+    }
+  },
+  "per_tool": {
+    "get_reservation_details": {
+      "calls": 196,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "get_user_details": {
+      "calls": 56,
+      "cold": 1,
+      "cold_share": 0.02
+    },
+    "search_direct_flight": {
+      "calls": 50,
+      "cold": 1,
+      "cold_share": 0.02
+    },
+    "update_reservation_flights": {
+      "calls": 48,
+      "cold": 2,
+      "cold_share": 0.04
+    },
+    "cancel_reservation": {
+      "calls": 40,
+      "cold": 1,
+      "cold_share": 0.03
+    },
+    "transfer_to_human_agents": {
+      "calls": 20,
+      "cold": 9,
+      "cold_share": 0.45
+    },
+    "search_onestop_flight": {
+      "calls": 17,
+      "cold": 1,
+      "cold_share": 0.06
+    },
+    "think": {
+      "calls": 17,
+      "cold": 1,
+      "cold_share": 0.06
+    },
+    "calculate": {
+      "calls": 9,
+      "cold": 2,
+      "cold_share": 0.22
+    },
+    "book_reservation": {
+      "calls": 1,
+      "cold": 1,
+      "cold_share": 1.0
+    }
+  },
+  "config": "C3",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": 69,
+    "traces": null,
+    "tasks": [
+      6,
+      20,
+      22,
+      26,
+      30
+    ],
+    "gap_scale": 1.0,
+    "rate": 3.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": false,
+    "predictor_url": "http://pulse-predictor:8000",
+    "fanout": true,
+    "workflow_id": "W1",
+    "hint_timing": "fair",
+    "hint_context": false,
+    "hint_timeout": 1.0,
+    "no_signals": false,
+    "label": "script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate3-t2-lightgbm_adapt",
+    "metrics_port": 9105,
+    "signals_matched": "60 of 60 traces"
+  },
+  "fanout": {
+    "enabled": true,
+    "groups": 49,
+    "calls_in_groups": 177,
+    "max_width": 7,
+    "cold_calls_in_groups": 0
+  },
+  "hints": {
+    "sent": 624,
+    "answered": 624
+  }
+}

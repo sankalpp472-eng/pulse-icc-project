@@ -1,0 +1,19 @@
+Context: arn:aws:eks:ap-south-1:436908790807:cluster/pulse-eks | image: 436908790807.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261121-0200-e18025b-dirty
+customresourcedefinition.apiextensions.k8s.io/prewarmrequests.pulse.iisc.ac.in unchanged
+Secret pulse-llm-keys: 2 keys/settings from .env
+secret/pulse-llm-keys created
+serviceaccount/pulse created
+clusterrole.rbac.authorization.k8s.io/pulse created
+clusterrolebinding.rbac.authorization.k8s.io/pulse created
+deployment.apps/pulse-predictor created
+service/pulse-predictor created
+deployment.apps/pulse-embed created
+service/pulse-embed created
+deployment.apps/pulse-controller created
+Waiting for deployment "pulse-predictor" rollout to finish: 0 of 1 updated replicas are available...
+deployment "pulse-predictor" successfully rolled out
+deployment "pulse-controller" successfully rolled out
+NAME                                READY   STATUS        RESTARTS   AGE   IP               NODE                                            NOMINATED NODE   READINESS GATES
+pulse-controller-5d69f4f4c6-pw9qz   1/1     Running       0          22s   192.168.77.102   ip-192-168-80-102.ap-south-1.compute.internal   <none>           <none>
+pulse-embed-8b8bcc585-w5qgq         0/1     Terminating   0          22s   <none>           ip-192-168-80-102.ap-south-1.compute.internal   <none>           <none>
+pulse-predictor-64fbc5987b-7vn89    1/1     Running       0          22s   192.168.72.223   ip-192-168-80-102.ap-south-1.compute.internal   <none>           <none>
