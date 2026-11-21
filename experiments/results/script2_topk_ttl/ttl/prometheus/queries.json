@@ -1,0 +1,67 @@
+{
+  "exported_at": 1795232761.6196969,
+  "step_s": 15,
+  "queries": {
+    "pod_cpu_cores": "sum by (pod, container) (rate(container_cpu_usage_seconds_total{namespace=\"default\",container!=\"\",container!=\"POD\"}[1m]))",
+    "pod_memory_bytes": "sum by (pod, container) (container_memory_working_set_bytes{namespace=\"default\",container!=\"\",container!=\"POD\"})",
+    "tool_pods": "count by (label_serving_knative_dev_service) (kube_pod_labels{namespace=\"default\",label_serving_knative_dev_service!=\"\"} * on (pod) group_left() (kube_pod_status_phase{namespace=\"default\",phase=\"Running\"} == 1))",
+    "pods_pending": "sum(kube_pod_status_phase{namespace=\"default\",phase=\"Pending\"})",
+    "node_cpu_busy": "1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))",
+    "node_memory_used_bytes": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+    "node_cpu_requested_cores": "sum by (node) (kube_pod_container_resource_requests{resource=\"cpu\"})",
+    "node_memory_requested_bytes": "sum by (node) (kube_pod_container_resource_requests{resource=\"memory\"})",
+    "predictor_p95_s": "histogram_quantile(0.95, sum by (le) (rate(predictor_request_seconds_bucket[1m])))",
+    "predictor_hints_per_s": "sum(rate(predictor_hints_total[1m]))",
+    "controller_warmups_per_s": "sum by (cold) (rate(pulse_controller_warmups_total[1m]))",
+    "controller_skips_per_s": "sum by (why) (rate(pulse_controller_skips_total[1m]))",
+    "controller_keepalive_pings_per_s": "sum(rate(pulse_controller_keepalive_pings_total[1m]))"
+  },
+  "runs": [
+    [
+      "airline/ttl30/t1",
+      1795206724.134,
+      1795208016.7966557
+    ],
+    [
+      "airline/ttl60/t1",
+      1795208056.448,
+      1795209378.1370502
+    ],
+    [
+      "airline/ttl120/t1",
+      1795209410.167,
+      1795210792.5660603
+    ],
+    [
+      "airline/ttl30/t2",
+      1795217654.196,
+      1795218946.576483
+    ],
+    [
+      "airline/ttl60/t2",
+      1795218986.562,
+      1795220309.0036683
+    ],
+    [
+      "airline/ttl120/t2",
+      1795220337.3,
+      1795221718.1543655
+    ],
+    [
+      "airline/ttl30/t3",
+      1795228602.812,
+      1795229894.7865658
+    ],
+    [
+      "airline/ttl60/t3",
+      1795229937.363,
+      1795231259.0054958
+    ],
+    [
+      "airline/ttl120/t3",
+      1795231287.339,
+      1795232668.977997
+    ]
+  ],
+  "errors": []
+}

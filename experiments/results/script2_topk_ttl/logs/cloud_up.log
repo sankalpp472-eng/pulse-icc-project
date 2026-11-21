@@ -1,0 +1,18 @@
+Context: arn:aws:eks:ap-south-1:375255020913:cluster/pulse-eks | image: 375255020913.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261120-2356-e18025b-dirty
+customresourcedefinition.apiextensions.k8s.io/prewarmrequests.pulse.iisc.ac.in unchanged
+No .env: the speculator and live runs will have no Groq keys
+serviceaccount/pulse created
+clusterrole.rbac.authorization.k8s.io/pulse created
+clusterrolebinding.rbac.authorization.k8s.io/pulse created
+deployment.apps/pulse-predictor created
+service/pulse-predictor created
+deployment.apps/pulse-embed created
+service/pulse-embed created
+deployment.apps/pulse-controller created
+Waiting for deployment "pulse-predictor" rollout to finish: 0 of 1 updated replicas are available...
+deployment "pulse-predictor" successfully rolled out
+deployment "pulse-controller" successfully rolled out
+NAME                               READY   STATUS        RESTARTS   AGE   IP               NODE                                            NOMINATED NODE   READINESS GATES
+pulse-controller-d6dc4999b-mrbv7   1/1     Running       0          15s   192.168.37.172   ip-192-168-37-192.ap-south-1.compute.internal   <none>           <none>
+pulse-embed-8b8bcc585-gzdh7        0/1     Terminating   0          15s   <none>           ip-192-168-37-192.ap-south-1.compute.internal   <none>           <none>
+pulse-predictor-869655b96d-g7d57   1/1     Running       0          16s   192.168.35.221   ip-192-168-37-192.ap-south-1.compute.internal   <none>           <none>

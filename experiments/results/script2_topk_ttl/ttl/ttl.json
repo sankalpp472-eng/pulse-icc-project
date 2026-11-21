@@ -1,0 +1,536 @@
+{
+  "airline/ttl30": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 61.3,
+        "min": 58.6,
+        "max": 69.8
+      },
+      "p95_ms": {
+        "median": 1426.4,
+        "min": 1390.6,
+        "max": 1473.8
+      },
+      "p99_ms": {
+        "median": 1641.9,
+        "min": 1641.7,
+        "max": 1761.5
+      },
+      "cold_calls": {
+        "median": 34,
+        "min": 33,
+        "max": 42
+      },
+      "cold_pct": {
+        "median": 11.6,
+        "min": 11.3,
+        "max": 14.3
+      },
+      "transport_failures": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "pod_s": {
+        "median": 9437.0,
+        "min": 9333.0,
+        "max": 9537.0
+      },
+      "pods_started": {
+        "median": 104,
+        "min": 102,
+        "max": 106
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 2.8,
+        "min": 2.8,
+        "max": 2.8
+      },
+      "prewarms": {
+        "median": 462,
+        "min": 460,
+        "max": 462
+      },
+      "wasted_pct": {
+        "median": 50.6,
+        "min": 50.4,
+        "max": 50.9
+      },
+      "skipped": {
+        "median": 218,
+        "min": 215,
+        "max": 218
+      },
+      "tool_cpu_core_s": {
+        "median": 90.2,
+        "min": 88.3,
+        "max": 91.0
+      },
+      "tool_mem_mib": {
+        "median": 439.7,
+        "min": 437.6,
+        "max": 449.7
+      },
+      "pulse_cpu_core_s": {
+        "median": 59.0,
+        "min": 51.2,
+        "max": 64.7
+      },
+      "node_cpu_busy_pct": {
+        "median": 8.8,
+        "min": 8.4,
+        "max": 9.0
+      },
+      "tool_pods_peak": {
+        "median": 15.0,
+        "min": 15.0,
+        "max": 16.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0202_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl30-t1-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S30-TTL_KEEPALIVE1",
+        "p50_ms": 58.6,
+        "p95_ms": 1426.4,
+        "p99_ms": 1641.7,
+        "mean_ms": 229.2,
+        "calls": 293,
+        "cold_calls": 33,
+        "transport_failures": 0,
+        "cold_pct": 11.3,
+        "pod_s": 9333.0,
+        "pods_started": 102,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 460,
+        "prewarm_pings": 460,
+        "skipped": 218,
+        "wasted": 234,
+        "wasted_pct": 50.9,
+        "tool_cpu_core_s": 91.0,
+        "tool_mem_mib": 437.6,
+        "pulse_cpu_core_s": 51.2,
+        "node_cpu_busy_pct": 8.4,
+        "tool_pods_peak": 15.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0504_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl30-t2-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S30-TTL_KEEPALIVE1",
+        "p50_ms": 61.3,
+        "p95_ms": 1473.8,
+        "p99_ms": 1761.5,
+        "mean_ms": 228.9,
+        "calls": 293,
+        "cold_calls": 34,
+        "transport_failures": 0,
+        "cold_pct": 11.6,
+        "pod_s": 9537.0,
+        "pods_started": 106,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 462,
+        "prewarm_pings": 462,
+        "skipped": 218,
+        "wasted": 233,
+        "wasted_pct": 50.4,
+        "tool_cpu_core_s": 90.2,
+        "tool_mem_mib": 439.7,
+        "pulse_cpu_core_s": 59.0,
+        "node_cpu_busy_pct": 8.8,
+        "tool_pods_peak": 15.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_0806_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl30-t3-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S30-TTL_KEEPALIVE1",
+        "p50_ms": 69.8,
+        "p95_ms": 1390.6,
+        "p99_ms": 1641.9,
+        "mean_ms": 237.0,
+        "calls": 293,
+        "cold_calls": 42,
+        "transport_failures": 0,
+        "cold_pct": 14.3,
+        "pod_s": 9437.0,
+        "pods_started": 104,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 462,
+        "prewarm_pings": 462,
+        "skipped": 215,
+        "wasted": 234,
+        "wasted_pct": 50.6,
+        "tool_cpu_core_s": 88.3,
+        "tool_mem_mib": 449.7,
+        "pulse_cpu_core_s": 64.7,
+        "node_cpu_busy_pct": 9.0,
+        "tool_pods_peak": 16.0
+      }
+    ]
+  },
+  "airline/ttl60": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 62.1,
+        "min": 58.3,
+        "max": 63.3
+      },
+      "p95_ms": {
+        "median": 1400.2,
+        "min": 1382.0,
+        "max": 1401.8
+      },
+      "p99_ms": {
+        "median": 1516.8,
+        "min": 1477.6,
+        "max": 1521.3
+      },
+      "cold_calls": {
+        "median": 24,
+        "min": 24,
+        "max": 24
+      },
+      "cold_pct": {
+        "median": 8.2,
+        "min": 8.2,
+        "max": 8.2
+      },
+      "transport_failures": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "pod_s": {
+        "median": 10072.0,
+        "min": 10039.0,
+        "max": 10139.0
+      },
+      "pods_started": {
+        "median": 74,
+        "min": 74,
+        "max": 75
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 1.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 2.8,
+        "min": 2.8,
+        "max": 2.8
+      },
+      "prewarms": {
+        "median": 454,
+        "min": 452,
+        "max": 454
+      },
+      "wasted_pct": {
+        "median": 48.7,
+        "min": 48.7,
+        "max": 48.9
+      },
+      "skipped": {
+        "median": 217,
+        "min": 216,
+        "max": 218
+      },
+      "tool_cpu_core_s": {
+        "median": 74.5,
+        "min": 72.7,
+        "max": 74.5
+      },
+      "tool_mem_mib": {
+        "median": 489.4,
+        "min": 489.3,
+        "max": 491.9
+      },
+      "pulse_cpu_core_s": {
+        "median": 59.7,
+        "min": 51.6,
+        "max": 65.7
+      },
+      "node_cpu_busy_pct": {
+        "median": 8.1,
+        "min": 7.8,
+        "max": 8.5
+      },
+      "tool_pods_peak": {
+        "median": 16.0,
+        "min": 16.0,
+        "max": 16.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0224_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl60-t1-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S60-TTL_KEEPALIVE1",
+        "p50_ms": 58.3,
+        "p95_ms": 1382.0,
+        "p99_ms": 1477.6,
+        "mean_ms": 175.1,
+        "calls": 293,
+        "cold_calls": 24,
+        "transport_failures": 0,
+        "cold_pct": 8.2,
+        "pod_s": 10072.0,
+        "pods_started": 74,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 452,
+        "prewarm_pings": 452,
+        "skipped": 218,
+        "wasted": 220,
+        "wasted_pct": 48.7,
+        "tool_cpu_core_s": 74.5,
+        "tool_mem_mib": 489.4,
+        "pulse_cpu_core_s": 51.6,
+        "node_cpu_busy_pct": 7.8,
+        "tool_pods_peak": 16.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0526_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl60-t2-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S60-TTL_KEEPALIVE1",
+        "p50_ms": 63.3,
+        "p95_ms": 1400.2,
+        "p99_ms": 1521.3,
+        "mean_ms": 187.1,
+        "calls": 293,
+        "cold_calls": 24,
+        "transport_failures": 0,
+        "cold_pct": 8.2,
+        "pod_s": 10039.0,
+        "pods_started": 74,
+        "startup_s": 1.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 454,
+        "prewarm_pings": 454,
+        "skipped": 217,
+        "wasted": 222,
+        "wasted_pct": 48.9,
+        "tool_cpu_core_s": 74.5,
+        "tool_mem_mib": 489.3,
+        "pulse_cpu_core_s": 59.7,
+        "node_cpu_busy_pct": 8.1,
+        "tool_pods_peak": 16.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_0829_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl60-t3-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S60-TTL_KEEPALIVE1",
+        "p50_ms": 62.1,
+        "p95_ms": 1401.8,
+        "p99_ms": 1516.8,
+        "mean_ms": 192.1,
+        "calls": 293,
+        "cold_calls": 24,
+        "transport_failures": 0,
+        "cold_pct": 8.2,
+        "pod_s": 10139.0,
+        "pods_started": 75,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 454,
+        "prewarm_pings": 454,
+        "skipped": 216,
+        "wasted": 221,
+        "wasted_pct": 48.7,
+        "tool_cpu_core_s": 72.7,
+        "tool_mem_mib": 491.9,
+        "pulse_cpu_core_s": 65.7,
+        "node_cpu_busy_pct": 8.5,
+        "tool_pods_peak": 16.0
+      }
+    ]
+  },
+  "airline/ttl120": {
+    "trials": 3,
+    "metrics": {
+      "p50_ms": {
+        "median": 57.1,
+        "min": 55.7,
+        "max": 60.1
+      },
+      "p95_ms": {
+        "median": 746.4,
+        "min": 667.6,
+        "max": 987.3
+      },
+      "p99_ms": {
+        "median": 1476.1,
+        "min": 1471.8,
+        "max": 1493.0
+      },
+      "cold_calls": {
+        "median": 18,
+        "min": 18,
+        "max": 19
+      },
+      "cold_pct": {
+        "median": 6.1,
+        "min": 6.1,
+        "max": 6.5
+      },
+      "transport_failures": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "pod_s": {
+        "median": 10715.0,
+        "min": 10660.0,
+        "max": 10758.0
+      },
+      "pods_started": {
+        "median": 45,
+        "min": 44,
+        "max": 46
+      },
+      "startup_s": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      },
+      "concurrent_mean": {
+        "median": 2.8,
+        "min": 2.8,
+        "max": 2.8
+      },
+      "prewarms": {
+        "median": 452,
+        "min": 451,
+        "max": 454
+      },
+      "wasted_pct": {
+        "median": 49.1,
+        "min": 49.0,
+        "max": 49.1
+      },
+      "skipped": {
+        "median": 221,
+        "min": 218,
+        "max": 223
+      },
+      "tool_cpu_core_s": {
+        "median": 56.9,
+        "min": 56.9,
+        "max": 59.3
+      },
+      "tool_mem_mib": {
+        "median": 512.5,
+        "min": 505.9,
+        "max": 512.8
+      },
+      "pulse_cpu_core_s": {
+        "median": 59.7,
+        "min": 51.2,
+        "max": 63.3
+      },
+      "node_cpu_busy_pct": {
+        "median": 7.3,
+        "min": 7.1,
+        "max": 7.6
+      },
+      "tool_pods_peak": {
+        "median": 16.0,
+        "min": 14.0,
+        "max": 16.0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_0246_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl120-t1-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S120-TTL_KEEPALIVE1",
+        "p50_ms": 55.7,
+        "p95_ms": 667.6,
+        "p99_ms": 1471.8,
+        "mean_ms": 150.8,
+        "calls": 293,
+        "cold_calls": 19,
+        "transport_failures": 0,
+        "cold_pct": 6.5,
+        "pod_s": 10660.0,
+        "pods_started": 44,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 451,
+        "prewarm_pings": 451,
+        "skipped": 223,
+        "wasted": 221,
+        "wasted_pct": 49.0,
+        "tool_cpu_core_s": 56.9,
+        "tool_mem_mib": 505.9,
+        "pulse_cpu_core_s": 51.2,
+        "node_cpu_busy_pct": 7.1,
+        "tool_pods_peak": 14.0
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_0549_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl120-t2-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S120-TTL_KEEPALIVE1",
+        "p50_ms": 57.1,
+        "p95_ms": 987.3,
+        "p99_ms": 1476.1,
+        "mean_ms": 150.9,
+        "calls": 293,
+        "cold_calls": 18,
+        "transport_failures": 0,
+        "cold_pct": 6.1,
+        "pod_s": 10758.0,
+        "pods_started": 46,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 452,
+        "prewarm_pings": 452,
+        "skipped": 221,
+        "wasted": 222,
+        "wasted_pct": 49.1,
+        "tool_cpu_core_s": 59.3,
+        "tool_mem_mib": 512.8,
+        "pulse_cpu_core_s": 59.7,
+        "node_cpu_busy_pct": 7.3,
+        "tool_pods_peak": 16.0
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_0851_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script2_topk_ttl-ttl-ttl120-t3-lightgbm_adapt-w20s-TTL_MODEfixed-TTL_S120-TTL_KEEPALIVE1",
+        "p50_ms": 60.1,
+        "p95_ms": 746.4,
+        "p99_ms": 1493.0,
+        "mean_ms": 155.1,
+        "calls": 293,
+        "cold_calls": 18,
+        "transport_failures": 0,
+        "cold_pct": 6.1,
+        "pod_s": 10715.0,
+        "pods_started": 45,
+        "startup_s": 2.0,
+        "concurrent_mean": 2.8,
+        "concurrent_max": 8.0,
+        "prewarms": 454,
+        "prewarm_pings": 454,
+        "skipped": 218,
+        "wasted": 223,
+        "wasted_pct": 49.1,
+        "tool_cpu_core_s": 56.9,
+        "tool_mem_mib": 512.5,
+        "pulse_cpu_core_s": 63.3,
+        "node_cpu_busy_pct": 7.6,
+        "tool_pods_peak": 16.0
+      }
+    ]
+  }
+}
