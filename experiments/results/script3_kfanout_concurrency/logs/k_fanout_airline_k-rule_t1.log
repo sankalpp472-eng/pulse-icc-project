@@ -1,0 +1,6 @@
+Deleting leftover run pod(s) of an earlier run: pod/pulse-run-1121-021602
+Run pulse-run-1121-030636 | replay C3 (lightgbm_adapt, ping controller) | airline | context arn:aws:eks:ap-south-1:436908790807:cluster/pulse-eks
+  predictor env: none | controller env: K_RULE=1
+  args: --label script3_kfanout_concurrency-k_fanout-k-rule-t1-lightgbm_adapt-K_RULE1 --tasks 6 20 22 26 30 --predictor-url http://pulse-predictor:8000 --fanout
+  running; log: infra/eks/logs/2026-11-21_030636_pulse-run-1121-030636.log
+Done (runner exit code 0). Result: results/cloud_runs/2026-11-21_0309_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-rule-t1-lightgbm_adapt-K_RULE1

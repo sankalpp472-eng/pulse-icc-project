@@ -1,0 +1,87 @@
+[01:01:08] ERROR: not installed: eksctl helm (experiments/team/README.md, Prerequisites)
+[01:04:59] gh (GitHub CLI) not installed: results will be committed and pushed, open the PR by hand
+[01:05:06] ERROR: Docker is not running (needed to build the runner and retail tool images)
+[01:25:18] gh (GitHub CLI) not installed: results will be committed and pushed, open the PR by hand
+[01:25:25] AWS account 436908790807 | region ap-south-1 | member nithish | script script3_kfanout_concurrency | trials 3
+[01:31:04] training lightgbm + markov: airline (held out: 6 11 20 21 22 26 30 38 45 46)
+[01:31:42] training lightgbm + markov: retail (held out: 3 14 19 21 23 26 28 29 38 42 44 48 50 51 57 67 68 72 73 82 94 98 106)
+  airline held-out tasks: [6, 11, 20, 21, 22, 26, 30, 38, 45, 46]
+  retail held-out tasks: [3, 14, 19, 21, 23, 26, 28, 29, 38, 42, 44, 48, 50, 51, 57, 67, 68, 72, 73, 82, 94, 98, 106]
+  airline model fingerprint a697978ccce97271... (as expected)
+  retail model fingerprint ac60a495efc54971... (as expected)
+[01:32:27] EKS cluster + Knative + airline tools (about 25 min the first time)
+[02:00:11] runner image (with the models just trained) -> your ECR
+[02:09:28] Pulse services (predictor, controller, embeddings) on the system node
+[02:10:13] retail tools (image -> your ECR)
+[02:12:57] Prometheus + Grafana (telemetry)
+[02:16:01] experiments: k_fanout concurrency
+[02:16:01]   run: k_fanout | airline | k-rule | trial 1   (log: results/team/script3_kfanout_concurrency/logs/k_fanout_airline_k-rule_t1.log)
+[03:01:36] gh (GitHub CLI) not installed: results will be committed and pushed, open the PR by hand
+[03:01:43] ERROR: Docker is not running (needed to build the runner and retail tool images)
+[03:03:06] gh (GitHub CLI) not installed: results will be committed and pushed, open the PR by hand
+[03:03:15] AWS account 436908790807 | region ap-south-1 | member nithish | script script3_kfanout_concurrency | trials 3
+[03:03:19] training lightgbm + markov: airline (held out: 6 11 20 21 22 26 30 38 45 46)
+[03:04:32] training lightgbm + markov: retail (held out: 3 14 19 21 23 26 28 29 38 42 44 48 50 51 57 67 68 72 73 82 94 98 106)
+  airline held-out tasks: [6, 11, 20, 21, 22, 26, 30, 38, 45, 46]
+  retail held-out tasks: [3, 14, 19, 21, 23, 26, 28, 29, 38, 42, 44, 48, 50, 51, 57, 67, 68, 72, 73, 82, 94, 98, 106]
+  airline model fingerprint a697978ccce97271... (as expected)
+  retail model fingerprint ac60a495efc54971... (as expected)
+[03:06:34] cluster ready (context arn:aws:eks:ap-south-1:436908790807:cluster/pulse-eks, image 436908790807.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261121-0200-e18025b-dirty)
+[03:06:34] experiments: k_fanout concurrency
+[03:06:34]   run: k_fanout | airline | k-rule | trial 1   (log: results/team/script3_kfanout_concurrency/logs/k_fanout_airline_k-rule_t1.log)
+[03:31:28]     done in 24 min: results/cloud_runs/2026-11-21_0309_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-rule-t1-lightgbm_adapt-K_RULE1
+[03:31:40]   run: k_fanout | airline | k-static | trial 1   (log: results/team/script3_kfanout_concurrency/logs/k_fanout_airline_k-static_t1.log)
+[03:54:32]     done in 22 min: results/cloud_runs/2026-11-21_0332_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-static-t1-lightgbm_adapt-K_RULE0
+[03:54:43]   run: concurrency | airline | C0-rate3 | trial 1   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C0-rate3_t1.log)
+[04:16:43]     done in 22 min: results/cloud_runs/2026-11-21_0355_C0_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate3-t1
+[04:16:53]   run: concurrency | airline | C3-lightgbm_adapt-rate3 | trial 1   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C3-lightgbm_adapt-rate3_t1.log)
+[04:39:17]     done in 22 min: results/cloud_runs/2026-11-21_0417_C3_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate3-t1-lightgbm_adapt
+[04:39:27]   run: concurrency | airline | C0-rate7 | trial 1   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C0-rate7_t1.log)
+[05:05:21]     done in 25 min: results/cloud_runs/2026-11-21_0439_C0_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate7-t1
+[05:05:32]   run: concurrency | airline | C3-lightgbm_adapt-rate7 | trial 1   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C3-lightgbm_adapt-rate7_t1.log)
+[05:31:48]     done in 26 min: results/cloud_runs/2026-11-21_0506_C3_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate7-t1-lightgbm_adapt
+[05:31:58]   run: concurrency | airline | C0-rate14 | trial 1   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C0-rate14_t1.log)
+[05:59:32]     done in 27 min: results/cloud_runs/2026-11-21_0532_C0_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate14-t1
+[05:59:44]   run: concurrency | airline | C3-lightgbm_adapt-rate14 | trial 1   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C3-lightgbm_adapt-rate14_t1.log)
+[06:27:41]     done in 27 min: results/cloud_runs/2026-11-21_0600_C3_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate14-t1-lightgbm_adapt
+[06:27:52]   run: k_fanout | airline | k-rule | trial 2   (log: results/team/script3_kfanout_concurrency/logs/k_fanout_airline_k-rule_t2.log)
+[06:50:43]     done in 22 min: results/cloud_runs/2026-11-21_0628_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-rule-t2-lightgbm_adapt-K_RULE1
+[06:50:54]   run: k_fanout | airline | k-static | trial 2   (log: results/team/script3_kfanout_concurrency/logs/k_fanout_airline_k-static_t2.log)
+[07:13:44]     done in 22 min: results/cloud_runs/2026-11-21_0651_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-static-t2-lightgbm_adapt-K_RULE0
+[07:13:55]   run: concurrency | airline | C0-rate3 | trial 2   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C0-rate3_t2.log)
+[07:35:46]     done in 21 min: results/cloud_runs/2026-11-21_0714_C0_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate3-t2
+[07:35:56]   run: concurrency | airline | C3-lightgbm_adapt-rate3 | trial 2   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C3-lightgbm_adapt-rate3_t2.log)
+[07:58:11]     done in 22 min: results/cloud_runs/2026-11-21_0736_C3_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate3-t2-lightgbm_adapt
+[07:58:22]   run: concurrency | airline | C0-rate7 | trial 2   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C0-rate7_t2.log)
+[08:24:09]     done in 25 min: results/cloud_runs/2026-11-21_0758_C0_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate7-t2
+[08:24:20]   run: concurrency | airline | C3-lightgbm_adapt-rate7 | trial 2   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C3-lightgbm_adapt-rate7_t2.log)
+[08:50:24]     done in 26 min: results/cloud_runs/2026-11-21_0825_C3_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate7-t2-lightgbm_adapt
+[08:50:36]   run: concurrency | airline | C0-rate14 | trial 2   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C0-rate14_t2.log)
+[09:18:23]     done in 27 min: results/cloud_runs/2026-11-21_0851_C0_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate14-t2
+[09:18:35]   run: concurrency | airline | C3-lightgbm_adapt-rate14 | trial 2   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C3-lightgbm_adapt-rate14_t2.log)
+[09:46:31]     done in 27 min: results/cloud_runs/2026-11-21_0919_C3_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate14-t2-lightgbm_adapt
+[09:46:42]   run: k_fanout | airline | k-rule | trial 3   (log: results/team/script3_kfanout_concurrency/logs/k_fanout_airline_k-rule_t3.log)
+[10:09:30]     done in 22 min: results/cloud_runs/2026-11-21_0947_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-rule-t3-lightgbm_adapt-K_RULE1
+[10:09:42]   run: k_fanout | airline | k-static | trial 3   (log: results/team/script3_kfanout_concurrency/logs/k_fanout_airline_k-static_t3.log)
+[10:32:34]     done in 22 min: results/cloud_runs/2026-11-21_1010_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script3_kfanout_concurrency-k_fanout-k-static-t3-lightgbm_adapt-K_RULE0
+[10:32:45]   run: concurrency | airline | C0-rate3 | trial 3   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C0-rate3_t3.log)
+[10:54:37]     done in 21 min: results/cloud_runs/2026-11-21_1033_C0_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate3-t3
+[10:54:49]   run: concurrency | airline | C3-lightgbm_adapt-rate3 | trial 3   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C3-lightgbm_adapt-rate3_t3.log)
+[11:16:54]     done in 22 min: results/cloud_runs/2026-11-21_1055_C3_W1-replay_tasks6-20-22-26-30-69ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate3-t3-lightgbm_adapt
+[11:17:05]   run: concurrency | airline | C0-rate7 | trial 3   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C0-rate7_t3.log)
+[11:42:42]     done in 25 min: results/cloud_runs/2026-11-21_1117_C0_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate7-t3
+[11:42:55]   run: concurrency | airline | C3-lightgbm_adapt-rate7 | trial 3   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C3-lightgbm_adapt-rate7_t3.log)
+[12:09:06]     done in 26 min: results/cloud_runs/2026-11-21_1143_C3_W1-replay_tasks6-20-22-26-30-161ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate7-t3-lightgbm_adapt
+[12:09:18]   run: concurrency | airline | C0-rate14 | trial 3   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C0-rate14_t3.log)
+[12:37:05]     done in 27 min: results/cloud_runs/2026-11-21_1209_C0_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C0-rate14-t3
+[12:37:17]   run: concurrency | airline | C3-lightgbm_adapt-rate14 | trial 3   (log: results/team/script3_kfanout_concurrency/logs/concurrency_airline_C3-lightgbm_adapt-rate14_t3.log)
+[13:05:26]     done in 28 min: results/cloud_runs/2026-11-21_1238_C3_W1-replay_tasks6-20-22-26-30-322ep-fanout_script3_kfanout_concurrency-concurrency-C3-lightgbm_adapt-rate14-t3-lightgbm_adapt
+[13:05:38] telemetry: k_fanout
+[13:06:12]   results/team/script3_kfanout_concurrency/k_fanout/k_fanout.md
+[13:06:12] telemetry: concurrency
+[13:07:22]   results/team/script3_kfanout_concurrency/concurrency/concurrency.md
+[13:07:22] packaging experiments/results/script3_kfanout_concurrency on exp/script3_kfanout_concurrency-nithish
+[13:07:29] nothing new to commit
+[13:07:35] published on exp/script3_kfanout_concurrency-nithish
+[13:07:35] deleting the cluster
+[13:20:36] finished (0 failed attempt(s) recorded in results/team/script3_kfanout_concurrency/manifest.tsv)

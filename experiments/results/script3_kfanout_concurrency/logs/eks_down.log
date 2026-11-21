@@ -1,0 +1,61 @@
+prewarmrequest.pulse.iisc.ac.in "book-reservation" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "calculate" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "cancel-reservation" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "get-reservation-details" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "get-user-details" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "search-direct-flight" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "search-onestop-flight" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "think" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "transfer-to-human-agents" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "update-reservation-baggages" deleted from default namespace
+prewarmrequest.pulse.iisc.ac.in "update-reservation-flights" deleted from default namespace
+2026-11-21 13:07:42 [ℹ]  deleting EKS cluster "pulse-eks"
+2026-11-21 13:07:43 [ℹ]  will drain 0 unmanaged nodegroup(s) in cluster "pulse-eks"
+2026-11-21 13:07:44 [ℹ]  deleted 0 Fargate profile(s)
+2026-11-21 13:07:45 [ℹ]  cleaning up AWS load balancers created by Kubernetes objects of Kind Service, Ingress, or Gateway
+2026-11-21 13:08:17 [ℹ]  
+2 sequential tasks: { 
+    3 parallel sub-tasks: { 
+        delete nodegroup "workers",
+        delete nodegroup "client",
+        delete nodegroup "system",
+    }, delete cluster control plane "pulse-eks" 
+}
+2026-11-21 13:08:18 [ℹ]  will delete stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-21 13:08:18 [ℹ]  waiting for stack "eksctl-pulse-eks-nodegroup-client" to get deleted
+2026-11-21 13:08:18 [ℹ]  will delete stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-21 13:08:18 [ℹ]  waiting for stack "eksctl-pulse-eks-nodegroup-workers" to get deleted
+2026-11-21 13:08:18 [ℹ]  will delete stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-21 13:08:18 [ℹ]  waiting for stack "eksctl-pulse-eks-nodegroup-system" to get deleted
+2026-11-21 13:08:18 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-21 13:08:18 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-21 13:08:18 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-21 13:08:48 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-21 13:08:48 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-21 13:08:48 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-21 13:09:21 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-21 13:09:36 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-21 13:09:38 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-21 13:09:55 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-21 13:10:47 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-21 13:10:59 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-21 13:11:41 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-21 13:11:50 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-21 13:12:43 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-21 13:12:53 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-21 13:12:57 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-21 13:14:05 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-system"
+2026-11-21 13:14:22 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-client"
+2026-11-21 13:14:31 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-21 13:16:06 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-21 13:17:47 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-nodegroup-workers"
+2026-11-21 13:17:47 [ℹ]  will delete stack "eksctl-pulse-eks-cluster"
+2026-11-21 13:17:47 [ℹ]  waiting for stack "eksctl-pulse-eks-cluster" to get deleted
+2026-11-21 13:17:47 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-21 13:18:17 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-21 13:18:52 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-21 13:19:29 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-21 13:20:35 [ℹ]  waiting for CloudFormation stack "eksctl-pulse-eks-cluster"
+2026-11-21 13:20:35 [✔]  all cluster resources were deleted
+
+Cluster deleted. In terminals where you sourced use_eks.sh, run: source infra/eks/use_local.sh
