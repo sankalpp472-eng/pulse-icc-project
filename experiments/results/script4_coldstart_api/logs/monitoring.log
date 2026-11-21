@@ -1,0 +1,49 @@
+context arn:aws:eks:ap-south-1:234612058031:cluster/pulse-eks | values: -f infra/monitoring/values.yaml -f infra/monitoring/values-eks.yaml
+Release "pulse-mon" does not exist. Installing it now.
+NAME: pulse-mon
+LAST DEPLOYED: Sat Nov 21 05:41:43 2026
+NAMESPACE: monitoring
+STATUS: deployed
+REVISION: 1
+NOTES:
+kube-prometheus-stack has been installed. Check its status by running:
+  kubectl --namespace monitoring get pods -l "release=pulse-mon"
+
+Get Grafana 'admin' user password by running:
+
+  kubectl --namespace monitoring get secrets pulse-mon-grafana -o jsonpath="{.data.admin-password}" | base64 -d ; echo
+
+Access Grafana local instance:
+
+  export POD_NAME=$(kubectl --namespace monitoring get pod -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=pulse-mon" -oname)
+  kubectl --namespace monitoring port-forward $POD_NAME 3000
+
+Get your grafana admin user password by running:
+
+  kubectl get secret --namespace monitoring -l app.kubernetes.io/component=admin-secret -o jsonpath="{.items[0].data.admin-password}" | base64 --decode ; echo
+
+
+Visit https://github.com/prometheus-operator/kube-prometheus for instructions on how to create & configure Alertmanager and Prometheus instances using the Operator.
+configmap/pulse-dashboard-cluster created
+configmap/pulse-dashboard-overview created
+configmap/pulse-dashboard-predictor created
+podmonitor.monitoring.coreos.com/knative-queue-proxy created
+podmonitor.monitoring.coreos.com/knative-serving created
+podmonitor.monitoring.coreos.com/pulse-controller created
+podmonitor.monitoring.coreos.com/pulse-predictors created
+podmonitor.monitoring.coreos.com/pulse-runners created
+configmap/config-observability patched
+deployment.apps/activator restarted
+deployment.apps/autoscaler restarted
+Waiting for deployment spec update to be observed...
+Waiting for deployment spec update to be observed...
+Waiting for deployment "activator" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "activator" rollout to finish: 1 old replicas are pending termination...
+deployment "activator" successfully rolled out
+deployment "autoscaler" successfully rolled out
+NAME     	NAMESPACE 	REVISION	UPDATED                                	STATUS  	CHART                       	APP VERSION
+pulse-mon	monitoring	1       	2026-11-21 05:41:43.578077059 +0000 UTC	deployed	kube-prometheus-stack-93.6.1	v0.95.2    
+
+Grafana: in the UI (Knative mode -> Monitoring tab), or
+  kubectl port-forward -n monitoring svc/pulse-mon-grafana 3000:80   ->  http://127.0.0.1:3000 (read-only without login)
+  admin password: kubectl get secret -n monitoring pulse-mon-grafana -o jsonpath='{.data.admin-password}' | base64 -d

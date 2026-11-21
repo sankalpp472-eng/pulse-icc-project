@@ -1,0 +1,4 @@
+Run pulse-run-1121-060708 | load C3 (markov, ping controller) | airline | context arn:aws:eks:ap-south-1:234612058031:cluster/pulse-eks
+  args: predictor --url http://pulse-predictor:8000 --config C3 --label script4_coldstart_api-predictor_api-markov-t1-markov --tasks 6 20 22 26 30 --rates 1 5 10 20 --duration 60
+  running; log: infra/eks/logs/2026-11-21_060708_pulse-run-1121-060708.log
+Done (runner exit code 0). Result: results/cloud_runs/2026-11-21_113730_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t1-markov

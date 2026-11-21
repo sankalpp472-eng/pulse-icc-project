@@ -1,0 +1,14 @@
+coldstart	airline	reps5	1	done	runs/2026-11-21_1114_C0_W1-coldstart_x5_script4_coldstart_api-coldstart-reps5-t1	1795239806	1795240377
+coldstart	retail	reps5	1	done	runs/2026-11-21_1123_C0_W3-coldstart_x5_script4_coldstart_api-coldstart-reps5-t1	1795240383	1795240944
+predictor_api	airline	lightgbm_adapt	1	done	runs/2026-11-21_113254_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t1-lightgbm_adapt	1795240950	1795241223
+predictor_api	airline	markov	1	done	runs/2026-11-21_113730_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t1-markov	1795241228	1795241497
+predictor_api	retail	lightgbm_adapt	1	done	runs/2026-11-21_114205_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t1-lightgbm_adapt	1795241503	1795241776
+predictor_api	retail	markov	1	done	runs/2026-11-21_114646_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t1-markov	1795241783	1795242058
+predictor_api	airline	lightgbm_adapt	2	done	runs/2026-11-21_115128_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t2-lightgbm_adapt	1795242063	1795242338
+predictor_api	airline	markov	2	done	runs/2026-11-21_115608_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t2-markov	1795242343	1795242617
+predictor_api	retail	lightgbm_adapt	2	done	runs/2026-11-21_120042_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t2-lightgbm_adapt	1795242623	1795242904
+predictor_api	retail	markov	2	done	runs/2026-11-21_120532_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t2-markov	1795242909	1795243197
+predictor_api	airline	lightgbm_adapt	3	done	runs/2026-11-21_121026_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t3-lightgbm_adapt	1795243202	1795243477
+predictor_api	airline	markov	3	done	runs/2026-11-21_121503_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t3-markov	1795243483	1795243755
+predictor_api	retail	lightgbm_adapt	3	done	runs/2026-11-21_121945_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t3-lightgbm_adapt	1795243760	1795244050
+predictor_api	retail	markov	3	done	runs/2026-11-21_122441_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t3-markov	1795244057	1795244332

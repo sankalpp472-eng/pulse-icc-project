@@ -1,0 +1,4 @@
+Run pulse-run-1121-055303 | coldstart C0 | retail | context arn:aws:eks:ap-south-1:234612058031:cluster/pulse-eks
+  args: --label script4_coldstart_api-coldstart-reps5-t1 --reps 5
+  running; log: infra/eks/logs/2026-11-21_055303_pulse-run-1121-055303.log
+Done (runner exit code 0). Result: results/cloud_runs/2026-11-21_1123_C0_W3-coldstart_x5_script4_coldstart_api-coldstart-reps5-t1

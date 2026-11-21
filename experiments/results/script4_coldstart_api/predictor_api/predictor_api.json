@@ -1,0 +1,646 @@
+{
+  "airline/lightgbm_adapt": {
+    "trials": 3,
+    "rates": {
+      "1": {
+        "p50": 8.2,
+        "p95": 8.9,
+        "p99": 11.8,
+        "max": 68.0,
+        "failures": 0
+      },
+      "5": {
+        "p50": 8.2,
+        "p95": 11.5,
+        "p99": 12.4,
+        "max": 14.9,
+        "failures": 0
+      },
+      "10": {
+        "p50": 8.4,
+        "p95": 12.2,
+        "p99": 13.1,
+        "max": 19.3,
+        "failures": 0
+      },
+      "20": {
+        "p50": 8.7,
+        "p95": 12.8,
+        "p99": 16.1,
+        "max": 24.1,
+        "failures": 0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_113254_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t1-lightgbm_adapt",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 8.1,
+            "p95": 8.7,
+            "p99": 11.8,
+            "max": 70.8
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 8.2,
+            "p95": 11.0,
+            "p99": 12.1,
+            "max": 12.5
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.02,
+            "p50": 8.5,
+            "p95": 12.2,
+            "p99": 13.2,
+            "max": 19.3
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 8.9,
+            "p95": 12.8,
+            "p99": 16.1,
+            "max": 24.1
+          }
+        }
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_115128_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t2-lightgbm_adapt",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 8.2,
+            "p95": 8.9,
+            "p99": 12.4,
+            "max": 67.3
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 8.2,
+            "p95": 11.9,
+            "p99": 12.7,
+            "max": 14.9
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.02,
+            "p50": 8.4,
+            "p95": 12.2,
+            "p99": 13.1,
+            "max": 21.7
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 8.5,
+            "p95": 12.6,
+            "p99": 13.7,
+            "max": 23.3
+          }
+        }
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_121026_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t3-lightgbm_adapt",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 8.3,
+            "p95": 8.9,
+            "p99": 9.0,
+            "max": 68.0
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 8.3,
+            "p95": 11.5,
+            "p99": 12.4,
+            "max": 16.4
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.02,
+            "p50": 8.4,
+            "p95": 12.2,
+            "p99": 12.8,
+            "max": 16.0
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 8.7,
+            "p95": 12.8,
+            "p99": 18.7,
+            "max": 41.3
+          }
+        }
+      }
+    ]
+  },
+  "airline/markov": {
+    "trials": 3,
+    "rates": {
+      "1": {
+        "p50": 7.7,
+        "p95": 8.3,
+        "p99": 11.7,
+        "max": 66.4,
+        "failures": 0
+      },
+      "5": {
+        "p50": 7.7,
+        "p95": 11.2,
+        "p99": 11.8,
+        "max": 14.5,
+        "failures": 0
+      },
+      "10": {
+        "p50": 8.4,
+        "p95": 11.8,
+        "p99": 13.1,
+        "max": 19.1,
+        "failures": 0
+      },
+      "20": {
+        "p50": 7.8,
+        "p95": 12.1,
+        "p99": 15.1,
+        "max": 28.9,
+        "failures": 0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_113730_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t1-markov",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 7.7,
+            "p95": 8.5,
+            "p99": 11.4,
+            "max": 66.4
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 7.7,
+            "p95": 11.2,
+            "p99": 12.0,
+            "max": 14.5
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.02,
+            "p50": 8.2,
+            "p95": 11.8,
+            "p99": 13.1,
+            "max": 18.2
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 7.7,
+            "p95": 12.1,
+            "p99": 15.1,
+            "max": 28.9
+          }
+        }
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_115608_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t2-markov",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 7.6,
+            "p95": 8.3,
+            "p99": 12.0,
+            "max": 66.0
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 7.6,
+            "p95": 11.1,
+            "p99": 11.7,
+            "max": 17.4
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.02,
+            "p50": 8.6,
+            "p95": 11.8,
+            "p99": 13.1,
+            "max": 21.7
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 7.8,
+            "p95": 12.1,
+            "p99": 16.7,
+            "max": 25.0
+          }
+        }
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_121503_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t3-markov",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 7.8,
+            "p95": 8.3,
+            "p99": 11.7,
+            "max": 66.9
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 7.7,
+            "p95": 11.3,
+            "p99": 11.8,
+            "max": 12.6
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.02,
+            "p50": 8.4,
+            "p95": 11.8,
+            "p99": 13.2,
+            "max": 19.1
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 7.9,
+            "p95": 12.1,
+            "p99": 14.1,
+            "max": 36.1
+          }
+        }
+      }
+    ]
+  },
+  "retail/lightgbm_adapt": {
+    "trials": 3,
+    "rates": {
+      "1": {
+        "p50": 8.5,
+        "p95": 10.2,
+        "p99": 13.8,
+        "max": 39.0,
+        "failures": 0
+      },
+      "5": {
+        "p50": 8.4,
+        "p95": 11.5,
+        "p99": 13.0,
+        "max": 13.8,
+        "failures": 0
+      },
+      "10": {
+        "p50": 8.5,
+        "p95": 12.3,
+        "p99": 13.4,
+        "max": 22.1,
+        "failures": 0
+      },
+      "20": {
+        "p50": 8.6,
+        "p95": 12.9,
+        "p99": 16.6,
+        "max": 26.1,
+        "failures": 0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_114205_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t1-lightgbm_adapt",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 8.7,
+            "p95": 10.2,
+            "p99": 13.7,
+            "max": 42.2
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 8.4,
+            "p95": 11.9,
+            "p99": 13.0,
+            "max": 13.8
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.01,
+            "p50": 8.5,
+            "p95": 12.2,
+            "p99": 13.3,
+            "max": 22.7
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 8.6,
+            "p95": 12.9,
+            "p99": 19.0,
+            "max": 36.7
+          }
+        }
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_120042_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t2-lightgbm_adapt",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 8.4,
+            "p95": 12.3,
+            "p99": 13.8,
+            "max": 37.3
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 8.3,
+            "p95": 11.0,
+            "p99": 12.2,
+            "max": 13.2
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.01,
+            "p50": 8.5,
+            "p95": 12.3,
+            "p99": 13.4,
+            "max": 21.7
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 8.6,
+            "p95": 12.7,
+            "p99": 15.2,
+            "max": 21.7
+          }
+        }
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_121945_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t3-lightgbm_adapt",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 8.5,
+            "p95": 9.0,
+            "p99": 14.3,
+            "max": 39.0
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 8.4,
+            "p95": 11.5,
+            "p99": 13.3,
+            "max": 18.7
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.01,
+            "p50": 8.7,
+            "p95": 12.7,
+            "p99": 15.7,
+            "max": 22.1
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 9.0,
+            "p95": 13.0,
+            "p99": 16.6,
+            "max": 26.1
+          }
+        }
+      }
+    ]
+  },
+  "retail/markov": {
+    "trials": 3,
+    "rates": {
+      "1": {
+        "p50": 7.7,
+        "p95": 9.3,
+        "p99": 14.7,
+        "max": 44.9,
+        "failures": 0
+      },
+      "5": {
+        "p50": 7.7,
+        "p95": 11.5,
+        "p99": 13.6,
+        "max": 16.4,
+        "failures": 0
+      },
+      "10": {
+        "p50": 8.4,
+        "p95": 11.9,
+        "p99": 13.4,
+        "max": 17.6,
+        "failures": 0
+      },
+      "20": {
+        "p50": 7.8,
+        "p95": 12.1,
+        "p99": 15.2,
+        "max": 28.6,
+        "failures": 0
+      }
+    },
+    "runs": [
+      {
+        "trial": "1",
+        "run": "2026-11-21_114646_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t1-markov",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 7.7,
+            "p95": 9.3,
+            "p99": 16.5,
+            "max": 44.7
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 7.6,
+            "p95": 11.5,
+            "p99": 13.6,
+            "max": 19.9
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.01,
+            "p50": 8.1,
+            "p95": 11.7,
+            "p99": 12.9,
+            "max": 17.6
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 8.2,
+            "p95": 12.1,
+            "p99": 15.2,
+            "max": 28.6
+          }
+        }
+      },
+      {
+        "trial": "2",
+        "run": "2026-11-21_120532_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t2-markov",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 7.7,
+            "p95": 12.1,
+            "p99": 14.7,
+            "max": 45.2
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 7.7,
+            "p95": 11.0,
+            "p99": 15.2,
+            "max": 16.4
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.01,
+            "p50": 8.5,
+            "p95": 11.9,
+            "p99": 13.7,
+            "max": 17.4
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 7.8,
+            "p95": 12.0,
+            "p99": 13.5,
+            "max": 22.2
+          }
+        }
+      },
+      {
+        "trial": "3",
+        "run": "2026-11-21_122441_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t3-markov",
+        "rates": {
+          "1": {
+            "requests": 60,
+            "failures": 0,
+            "rps": 1.02,
+            "p50": 7.7,
+            "p95": 8.4,
+            "p99": 10.3,
+            "max": 44.9
+          },
+          "5": {
+            "requests": 300,
+            "failures": 0,
+            "rps": 5.02,
+            "p50": 7.7,
+            "p95": 11.5,
+            "p99": 13.3,
+            "max": 14.9
+          },
+          "10": {
+            "requests": 600,
+            "failures": 0,
+            "rps": 10.01,
+            "p50": 8.4,
+            "p95": 11.9,
+            "p99": 13.4,
+            "max": 18.3
+          },
+          "20": {
+            "requests": 1200,
+            "failures": 0,
+            "rps": 20.01,
+            "p50": 7.8,
+            "p95": 12.3,
+            "p99": 17.1,
+            "max": 33.1
+          }
+        }
+      }
+    ]
+  }
+}

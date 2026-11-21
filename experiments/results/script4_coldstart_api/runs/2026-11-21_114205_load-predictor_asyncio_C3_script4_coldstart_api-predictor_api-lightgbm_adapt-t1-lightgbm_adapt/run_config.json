@@ -1,0 +1,31 @@
+{
+  "kind": "load",
+  "target": "predictor",
+  "engine": "asyncio",
+  "config": "C3",
+  "params": {
+    "url": "http://pulse-predictor:8000",
+    "rates": [
+      1.0,
+      5.0,
+      10.0,
+      20.0
+    ],
+    "duration": 60.0,
+    "burst": [
+      1,
+      5,
+      10
+    ],
+    "repeat": 1,
+    "pause": 0,
+    "tools": null,
+    "config": "C3",
+    "seed": 252,
+    "tasks": "3 14 19 21 23 26 28 29 38 42 44 48 50 51 57 67 68 72 73 82 94 98 106",
+    "predictor": "lightgbm_adapt"
+  },
+  "mcp_url_template": "http://retail-{svc}.default.svc.cluster.local/mcp",
+  "mcp_host_template": "",
+  "runner": "pod pulse-run-1121-061143"
+}

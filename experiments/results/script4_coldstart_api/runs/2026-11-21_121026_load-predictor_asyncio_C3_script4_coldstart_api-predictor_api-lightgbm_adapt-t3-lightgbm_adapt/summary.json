@@ -1,0 +1,106 @@
+{
+  "kind": "load",
+  "target": "predictor",
+  "engine": "asyncio",
+  "config": "C3",
+  "started": 1795243226.405,
+  "ended": 1795243468.513,
+  "requests": 2160,
+  "failures": 0,
+  "rps": 9.03,
+  "latency_ms": {
+    "all": {
+      "p50": 8.4,
+      "p95": 12.5,
+      "p99": 16.0,
+      "mean": 9.1,
+      "max": 68.0
+    }
+  },
+  "cold_share": null,
+  "peak_load": 20.0,
+  "by_kind": {
+    "hint": {
+      "requests": 2160,
+      "failures": 0,
+      "rps": 9.03,
+      "p50": 8.4,
+      "p95": 12.5,
+      "p99": 16.0,
+      "mean": 9.1,
+      "max": 68.0
+    }
+  },
+  "stages": [
+    {
+      "load": 1.0,
+      "requests": 60,
+      "failures": 0,
+      "rps": 1.02,
+      "p50": 8.3,
+      "p95": 8.9,
+      "p99": 9.0,
+      "mean": 9.3,
+      "max": 68.0,
+      "cold_share": 0.0
+    },
+    {
+      "load": 5.0,
+      "requests": 300,
+      "failures": 0,
+      "rps": 5.02,
+      "p50": 8.3,
+      "p95": 11.5,
+      "p99": 12.4,
+      "mean": 8.5,
+      "max": 16.4,
+      "cold_share": 0.0
+    },
+    {
+      "load": 10.0,
+      "requests": 600,
+      "failures": 0,
+      "rps": 10.02,
+      "p50": 8.4,
+      "p95": 12.2,
+      "p99": 12.8,
+      "mean": 9.1,
+      "max": 16.0,
+      "cold_share": 0.0
+    },
+    {
+      "load": 20.0,
+      "requests": 1200,
+      "failures": 0,
+      "rps": 20.01,
+      "p50": 8.7,
+      "p95": 12.8,
+      "p99": 18.7,
+      "mean": 9.2,
+      "max": 41.3,
+      "cold_share": 0.0
+    }
+  ],
+  "params": {
+    "url": "http://pulse-predictor:8000",
+    "rates": [
+      1.0,
+      5.0,
+      10.0,
+      20.0
+    ],
+    "duration": 60.0,
+    "burst": [
+      1,
+      5,
+      10
+    ],
+    "repeat": 1,
+    "pause": 0,
+    "tools": null,
+    "config": "C3",
+    "seed": 252,
+    "tasks": "6 20 22 26 30",
+    "predictor": "lightgbm_adapt"
+  }
+}
