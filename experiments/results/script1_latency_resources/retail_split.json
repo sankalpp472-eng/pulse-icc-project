@@ -1,0 +1,32 @@
+{
+ "domain": "retail",
+ "rule": "pulse/speculator/steps.py: de-duplicated runs, sorted task ids, random.Random(252).shuffle, first 20% held out",
+ "seed": 252,
+ "runs_kept": 1372,
+ "duplicates_dropped": 8,
+ "test_tasks": [
+  3,
+  14,
+  19,
+  21,
+  23,
+  26,
+  28,
+  29,
+  38,
+  42,
+  44,
+  48,
+  50,
+  51,
+  57,
+  67,
+  68,
+  72,
+  73,
+  82,
+  94,
+  98,
+  106
+ ]
+}
