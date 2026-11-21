@@ -1,0 +1,152 @@
+
+WARNING! Your credentials are stored unencrypted in '/home/ajinkya/.docker/config.json'.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/go/credential-store/
+
+Login Succeeded
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  7.715MB
+Step 1/13 : FROM python:3.11-slim
+ ---> db20d8506e2f
+Step 2/13 : RUN pip install --no-cache-dir "mcp>=2.3" "uvicorn>=0.30" "redis>=5"
+ ---> Using cache
+ ---> 9c5b136ed8ef
+Step 3/13 : RUN useradd -m app
+ ---> Using cache
+ ---> fe16fa7daaf4
+Step 4/13 : WORKDIR /home/app
+ ---> Using cache
+ ---> d288f597ff65
+Step 5/13 : COPY pulse/__init__.py pulse/paths.py pulse/
+ ---> Using cache
+ ---> eb643c66ff44
+Step 6/13 : COPY pulse/agent/__init__.py pulse/agent/mcp_server.py pulse/agent/
+ ---> Using cache
+ ---> 3ca82ec91e7a
+Step 7/13 : COPY pulse/agent/tau_airline/ pulse/agent/tau_airline/
+ ---> Using cache
+ ---> 8d2de797b6a5
+Step 8/13 : COPY pulse/agent/tau_retail/ pulse/agent/tau_retail/
+ ---> Using cache
+ ---> e3c0986db93e
+Step 9/13 : RUN printf 'import runpy\nrunpy.run_module("pulse.agent.mcp_server", run_name="__main__")\n' > mcp_server.py
+ ---> Using cache
+ ---> 74b329382ad7
+Step 10/13 : USER app
+ ---> Using cache
+ ---> 5f8a3b555ab3
+Step 11/13 : ENV PYTHONUNBUFFERED=1     PORT=8080     TOOLS=all
+ ---> Using cache
+ ---> bb20b7314a3d
+Step 12/13 : EXPOSE 8080
+ ---> Using cache
+ ---> 64c4f2761991
+Step 13/13 : CMD ["python", "mcp_server.py"]
+ ---> Using cache
+ ---> c05381f5110a
+Successfully built c05381f5110a
+Successfully tagged 234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261121-0540
+The push refers to repository [234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools]
+6fc242d221a6: Waiting
+466cc5ca5b89: Waiting
+b996986143e5: Waiting
+b09cffcce229: Waiting
+d95492831d21: Waiting
+707dfd8601ce: Waiting
+24ff04c92107: Waiting
+361db8171547: Waiting
+ee5aaeba9945: Waiting
+2dfa057d8fda: Waiting
+bd8dc2af3f30: Waiting
+b09cffcce229: Waiting
+d95492831d21: Waiting
+707dfd8601ce: Waiting
+24ff04c92107: Waiting
+361db8171547: Waiting
+ee5aaeba9945: Waiting
+2dfa057d8fda: Waiting
+bd8dc2af3f30: Waiting
+6fc242d221a6: Waiting
+466cc5ca5b89: Waiting
+b996986143e5: Waiting
+466cc5ca5b89: Layer already exists
+b996986143e5: Layer already exists
+b09cffcce229: Layer already exists
+d95492831d21: Layer already exists
+707dfd8601ce: Layer already exists
+24ff04c92107: Layer already exists
+361db8171547: Layer already exists
+ee5aaeba9945: Layer already exists
+2dfa057d8fda: Layer already exists
+bd8dc2af3f30: Layer already exists
+6fc242d221a6: Layer already exists
+retail-20261121-0540: digest: sha256:c05381f5110a8d77da6b8bcae09fb9c2acd1f4b5e8ec26d90d4feeed4f3a85c8 size: 2719
+retail tools image: 234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261121-0540
+Switched to context "arn:aws:eks:ap-south-1:234612058031:cluster/pulse-eks".
+deployment.apps/redis unchanged
+service/redis unchanged
+deployment "redis" successfully rolled out
+deployment "coredns" successfully rolled out
+pod/redis-seed created
+pod/redis-seed condition met
+seeded retail data into redis://redis.default.svc.cluster.local:6379/1: products=50, orders=1000, users=500
+pod "redis-seed" deleted from default namespace
+wrote infra/knative/tools-retail.yaml: 16 retail services, min-scale=0, concurrency=1, max-scale=10, image=234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261121-0540, db=redis://redis.default.svc.cluster.local:6379/1
+Warning: Kubernetes default value is insecure, Knative may default this to secure in a future release: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation, spec.template.spec.containers[0].securityContext.capabilities, spec.template.spec.containers[0].securityContext.runAsNonRoot, spec.template.spec.containers[0].securityContext.seccompProfile
+service.serving.knative.dev/retail-calculate created
+service.serving.knative.dev/retail-cancel-pending-order created
+service.serving.knative.dev/retail-exchange-delivered-order-items created
+service.serving.knative.dev/retail-find-user-id-by-email created
+service.serving.knative.dev/retail-find-user-id-by-name-zip created
+service.serving.knative.dev/retail-get-order-details created
+service.serving.knative.dev/retail-get-product-details created
+service.serving.knative.dev/retail-get-user-details created
+service.serving.knative.dev/retail-list-all-product-types created
+service.serving.knative.dev/retail-modify-pending-order-address created
+service.serving.knative.dev/retail-modify-pending-order-items created
+service.serving.knative.dev/retail-modify-pending-order-payment created
+service.serving.knative.dev/retail-modify-user-address created
+service.serving.knative.dev/retail-return-delivered-order-items created
+service.serving.knative.dev/retail-think created
+service.serving.knative.dev/retail-transfer-to-human-agents created
+service.serving.knative.dev/retail-calculate condition met
+service.serving.knative.dev/retail-cancel-pending-order condition met
+service.serving.knative.dev/retail-exchange-delivered-order-items condition met
+service.serving.knative.dev/retail-find-user-id-by-email condition met
+service.serving.knative.dev/retail-find-user-id-by-name-zip condition met
+service.serving.knative.dev/retail-get-order-details condition met
+service.serving.knative.dev/retail-get-product-details condition met
+service.serving.knative.dev/retail-get-user-details condition met
+service.serving.knative.dev/retail-list-all-product-types condition met
+service.serving.knative.dev/retail-modify-pending-order-address condition met
+service.serving.knative.dev/retail-modify-pending-order-items condition met
+service.serving.knative.dev/retail-modify-pending-order-payment condition met
+service.serving.knative.dev/retail-modify-user-address condition met
+service.serving.knative.dev/retail-return-delivered-order-items condition met
+service.serving.knative.dev/retail-think condition met
+service.serving.knative.dev/retail-transfer-to-human-agents condition met
+NAME                                    URL                                                                LATESTCREATED                                 LATESTREADY                                   READY   REASON
+retail-calculate                        http://retail-calculate.default.example.com                        retail-calculate-00001                        retail-calculate-00001                        True    
+retail-cancel-pending-order             http://retail-cancel-pending-order.default.example.com             retail-cancel-pending-order-00001             retail-cancel-pending-order-00001             True    
+retail-exchange-delivered-order-items   http://retail-exchange-delivered-order-items.default.example.com   retail-exchange-delivered-order-items-00001   retail-exchange-delivered-order-items-00001   True    
+retail-find-user-id-by-email            http://retail-find-user-id-by-email.default.example.com            retail-find-user-id-by-email-00001            retail-find-user-id-by-email-00001            True    
+retail-find-user-id-by-name-zip         http://retail-find-user-id-by-name-zip.default.example.com         retail-find-user-id-by-name-zip-00001         retail-find-user-id-by-name-zip-00001         True    
+retail-get-order-details                http://retail-get-order-details.default.example.com                retail-get-order-details-00001                retail-get-order-details-00001                True    
+retail-get-product-details              http://retail-get-product-details.default.example.com              retail-get-product-details-00001              retail-get-product-details-00001              True    
+retail-get-user-details                 http://retail-get-user-details.default.example.com                 retail-get-user-details-00001                 retail-get-user-details-00001                 True    
+retail-list-all-product-types           http://retail-list-all-product-types.default.example.com           retail-list-all-product-types-00001           retail-list-all-product-types-00001           True    
+retail-modify-pending-order-address     http://retail-modify-pending-order-address.default.example.com     retail-modify-pending-order-address-00001     retail-modify-pending-order-address-00001     True    
+retail-modify-pending-order-items       http://retail-modify-pending-order-items.default.example.com       retail-modify-pending-order-items-00001       retail-modify-pending-order-items-00001       True    
+retail-modify-pending-order-payment     http://retail-modify-pending-order-payment.default.example.com     retail-modify-pending-order-payment-00001     retail-modify-pending-order-payment-00001     True    
+retail-modify-user-address              http://retail-modify-user-address.default.example.com              retail-modify-user-address-00001              retail-modify-user-address-00001              True    
+retail-return-delivered-order-items     http://retail-return-delivered-order-items.default.example.com     retail-return-delivered-order-items-00001     retail-return-delivered-order-items-00001     True    
+retail-think                            http://retail-think.default.example.com                            retail-think-00001                            retail-think-00001                            True    
+retail-transfer-to-human-agents         http://retail-transfer-to-human-agents.default.example.com         retail-transfer-to-human-agents-00001         retail-transfer-to-human-agents-00001         True    
+
+Agent settings for these tools:
+  TOOL_BACKEND=mcp
+  MCP_URL_TEMPLATE=http://<Kourier's load balancer>/mcp   (source infra/eks/use_eks.sh sets it)
+  MCP_HOST_TEMPLATE=retail-{svc}.default.example.com

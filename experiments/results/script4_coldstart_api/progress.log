@@ -1,0 +1,47 @@
+[05:21:05] gh (GitHub CLI) not installed: results will be committed and pushed, open the PR by hand
+[05:21:06] AWS account 234612058031 | region ap-south-1 | member ajinkya-gawali | script script4_coldstart_api | trials 3
+[05:21:08] training lightgbm + markov: airline (held out: 6 11 20 21 22 26 30 38 45 46)
+[05:21:12] training lightgbm + markov: retail (held out: 3 14 19 21 23 26 28 29 38 42 44 48 50 51 57 67 68 72 73 82 94 98 106)
+  airline held-out tasks: [6, 11, 20, 21, 22, 26, 30, 38, 45, 46]
+  retail held-out tasks: [3, 14, 19, 21, 23, 26, 28, 29, 38, 42, 44, 48, 50, 51, 57, 67, 68, 72, 73, 82, 94, 98, 106]
+  airline model fingerprint a697978ccce97271... (as expected)
+  retail model fingerprint ac60a495efc54971... (as expected)
+[05:21:23] EKS cluster + Knative + airline tools (about 25 min the first time)
+[05:40:04] runner image (with the models just trained) -> your ECR
+[05:40:29] Pulse services (predictor, controller, embeddings) on the system node
+[05:40:48] retail tools (image -> your ECR)
+[05:41:29] Prometheus + Grafana (telemetry)
+[05:43:26] experiments: coldstart predictor_api
+[05:43:26]   run: coldstart | airline | reps5 | trial 1   (log: results/team/script4_coldstart_api/logs/coldstart_airline_reps5_t1.log)
+[05:52:57]     done in 9 min: results/cloud_runs/2026-11-21_1114_C0_W1-coldstart_x5_script4_coldstart_api-coldstart-reps5-t1
+[05:53:03]   run: coldstart | retail | reps5 | trial 1   (log: results/team/script4_coldstart_api/logs/coldstart_retail_reps5_t1.log)
+[06:02:24]     done in 9 min: results/cloud_runs/2026-11-21_1123_C0_W3-coldstart_x5_script4_coldstart_api-coldstart-reps5-t1
+[06:02:30]   run: predictor_api | airline | lightgbm_adapt | trial 1   (log: results/team/script4_coldstart_api/logs/predictor_api_airline_lightgbm_adapt_t1.log)
+[06:07:03]     done in 4 min: results/cloud_runs/2026-11-21_113254_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t1-lightgbm_adapt
+[06:07:08]   run: predictor_api | airline | markov | trial 1   (log: results/team/script4_coldstart_api/logs/predictor_api_airline_markov_t1.log)
+[06:11:37]     done in 4 min: results/cloud_runs/2026-11-21_113730_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t1-markov
+[06:11:43]   run: predictor_api | retail | lightgbm_adapt | trial 1   (log: results/team/script4_coldstart_api/logs/predictor_api_retail_lightgbm_adapt_t1.log)
+[06:16:16]     done in 4 min: results/cloud_runs/2026-11-21_114205_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t1-lightgbm_adapt
+[06:16:23]   run: predictor_api | retail | markov | trial 1   (log: results/team/script4_coldstart_api/logs/predictor_api_retail_markov_t1.log)
+[06:20:58]     done in 4 min: results/cloud_runs/2026-11-21_114646_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t1-markov
+[06:21:03]   run: predictor_api | airline | lightgbm_adapt | trial 2   (log: results/team/script4_coldstart_api/logs/predictor_api_airline_lightgbm_adapt_t2.log)
+[06:25:38]     done in 4 min: results/cloud_runs/2026-11-21_115128_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t2-lightgbm_adapt
+[06:25:43]   run: predictor_api | airline | markov | trial 2   (log: results/team/script4_coldstart_api/logs/predictor_api_airline_markov_t2.log)
+[06:30:17]     done in 4 min: results/cloud_runs/2026-11-21_115608_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t2-markov
+[06:30:23]   run: predictor_api | retail | lightgbm_adapt | trial 2   (log: results/team/script4_coldstart_api/logs/predictor_api_retail_lightgbm_adapt_t2.log)
+[06:35:04]     done in 4 min: results/cloud_runs/2026-11-21_120042_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t2-lightgbm_adapt
+[06:35:09]   run: predictor_api | retail | markov | trial 2   (log: results/team/script4_coldstart_api/logs/predictor_api_retail_markov_t2.log)
+[06:39:57]     done in 4 min: results/cloud_runs/2026-11-21_120532_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t2-markov
+[06:40:02]   run: predictor_api | airline | lightgbm_adapt | trial 3   (log: results/team/script4_coldstart_api/logs/predictor_api_airline_lightgbm_adapt_t3.log)
+[06:44:37]     done in 4 min: results/cloud_runs/2026-11-21_121026_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t3-lightgbm_adapt
+[06:44:43]   run: predictor_api | airline | markov | trial 3   (log: results/team/script4_coldstart_api/logs/predictor_api_airline_markov_t3.log)
+[06:49:15]     done in 4 min: results/cloud_runs/2026-11-21_121503_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t3-markov
+[06:49:20]   run: predictor_api | retail | lightgbm_adapt | trial 3   (log: results/team/script4_coldstart_api/logs/predictor_api_retail_lightgbm_adapt_t3.log)
+[06:54:10]     done in 4 min: results/cloud_runs/2026-11-21_121945_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-lightgbm_adapt-t3-lightgbm_adapt
+[06:54:17]   run: predictor_api | retail | markov | trial 3   (log: results/team/script4_coldstart_api/logs/predictor_api_retail_markov_t3.log)
+[06:58:52]     done in 4 min: results/cloud_runs/2026-11-21_122441_load-predictor_asyncio_C3_script4_coldstart_api-predictor_api-markov-t3-markov
+[06:58:58] telemetry: coldstart
+[06:59:08]   results/team/script4_coldstart_api/coldstart/coldstart.md
+[06:59:08] telemetry: predictor_api
+[06:59:46]   results/team/script4_coldstart_api/predictor_api/predictor_api.md
+[06:59:46] packaging experiments/results/script4_coldstart_api on exp/script4_coldstart_api-ajinkya-gawali

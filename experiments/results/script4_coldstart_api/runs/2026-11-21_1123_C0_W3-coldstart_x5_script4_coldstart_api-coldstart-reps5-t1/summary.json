@@ -1,0 +1,206 @@
+{
+  "domain": "retail",
+  "rounds": 5,
+  "tools": 16,
+  "calls_ok": 80,
+  "calls": 80,
+  "cold_ms": {
+    "median": 1501.2,
+    "p95": 3068.3
+  },
+  "warm_ms": {
+    "median": 43.8
+  },
+  "startup": {
+    "pods": 80,
+    "pods_pulling_images": 0,
+    "scheduling_s": {
+      "median": 0.0,
+      "mean": 0.062,
+      "p95": 1.0
+    },
+    "image_pull_s": {
+      "median": 0.0,
+      "mean": 0.0,
+      "p95": 0.0
+    },
+    "init_s": {
+      "median": 1.0,
+      "mean": 0.675,
+      "p95": 1.0
+    },
+    "readiness_s": {
+      "median": 1.0,
+      "mean": 0.738,
+      "p95": 2.0
+    },
+    "startup_s": {
+      "median": 1.0,
+      "mean": 1.475,
+      "p95": 2.0
+    }
+  },
+  "per_tool": {
+    "calculate": {
+      "rounds": 5,
+      "cold_ms": 1458.4,
+      "warm_ms": 41.8,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "cancel_pending_order": {
+      "rounds": 5,
+      "cold_ms": 1533.7,
+      "warm_ms": 43.2,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 1.0
+    },
+    "exchange_delivered_order_items": {
+      "rounds": 5,
+      "cold_ms": 1468.0,
+      "warm_ms": 42.5,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 0.0,
+      "readiness_s": 1.0,
+      "startup_s": 1.0
+    },
+    "find_user_id_by_email": {
+      "rounds": 5,
+      "cold_ms": 1701.7,
+      "warm_ms": 56.0,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "find_user_id_by_name_zip": {
+      "rounds": 5,
+      "cold_ms": 1468.2,
+      "warm_ms": 51.5,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 1.0
+    },
+    "get_order_details": {
+      "rounds": 5,
+      "cold_ms": 1595.5,
+      "warm_ms": 49.4,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 0.0,
+      "startup_s": 1.0
+    },
+    "get_product_details": {
+      "rounds": 5,
+      "cold_ms": 1545.1,
+      "warm_ms": 46.6,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 0.0,
+      "startup_s": 1.0
+    },
+    "get_user_details": {
+      "rounds": 5,
+      "cold_ms": 1508.1,
+      "warm_ms": 51.4,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 0.5,
+      "readiness_s": 0.5,
+      "startup_s": 1.0
+    },
+    "list_all_product_types": {
+      "rounds": 5,
+      "cold_ms": 1486.5,
+      "warm_ms": 47.9,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 0.0,
+      "startup_s": 1.0
+    },
+    "modify_pending_order_address": {
+      "rounds": 5,
+      "cold_ms": 1488.3,
+      "warm_ms": 42.3,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 1.0
+    },
+    "modify_pending_order_items": {
+      "rounds": 5,
+      "cold_ms": 1474.8,
+      "warm_ms": 39.2,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 0.0,
+      "startup_s": 1.0
+    },
+    "modify_pending_order_payment": {
+      "rounds": 5,
+      "cold_ms": 1569.4,
+      "warm_ms": 41.4,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 1.0
+    },
+    "modify_user_address": {
+      "rounds": 5,
+      "cold_ms": 1497.9,
+      "warm_ms": 42.5,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 1.0
+    },
+    "return_delivered_order_items": {
+      "rounds": 5,
+      "cold_ms": 1495.8,
+      "warm_ms": 40.0,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 0.0,
+      "startup_s": 1.0
+    },
+    "think": {
+      "rounds": 5,
+      "cold_ms": 1473.0,
+      "warm_ms": 43.3,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 1.0
+    },
+    "transfer_to_human_agents": {
+      "rounds": 5,
+      "cold_ms": 1641.5,
+      "warm_ms": 42.3,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 0.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    }
+  },
+  "duration_s": 536.9
+}

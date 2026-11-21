@@ -1,0 +1,69 @@
+{
+  "started": "2026-11-21T11:14:14",
+  "workload": "W1",
+  "domain": "airline",
+  "task_ids": [],
+  "models": {},
+  "config": "C0",
+  "knative": {
+    "version": "1.23.0",
+    "tool_min_scale": [
+      "0"
+    ],
+    "tool_window": [
+      "60s"
+    ],
+    "tool_container_concurrency": [
+      "1"
+    ],
+    "tool_max_scale": [
+      "10"
+    ],
+    "tool_target_utilization": [
+      "100"
+    ],
+    "autoscaler_overrides": {
+      "allow-zero-initial-scale": "true"
+    },
+    "ingress": "http://{svc}.default.svc.cluster.local/mcp",
+    "host_template": ""
+  },
+  "tools": [
+    "book_reservation",
+    "calculate",
+    "cancel_reservation",
+    "get_reservation_details",
+    "get_user_details",
+    "list_all_airports",
+    "search_direct_flight",
+    "search_onestop_flight",
+    "send_certificate",
+    "think",
+    "transfer_to_human_agents",
+    "update_reservation_baggages",
+    "update_reservation_flights",
+    "update_reservation_passengers"
+  ],
+  "tool_images": [
+    "docker.io/sankalps2003/pulse-mcp-tools:0.4"
+  ],
+  "database": "redis",
+  "cluster": {
+    "context": "",
+    "nodes": 4,
+    "kubernetes": "v1.34.12-eks-91f89a9"
+  },
+  "measurement": {
+    "cold_if_latency_over_s": 1.0,
+    "pod_poll_interval_s": 1.0
+  },
+  "code": {
+    "git_commit": "6bf0501",
+    "uncommitted_changes": true,
+    "image": "234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261121-0540-6bf0501-dirty"
+  },
+  "runner": "pod pulse-run-1121-054326",
+  "experiment": "coldstart",
+  "reps": 5,
+  "seed": 252
+}

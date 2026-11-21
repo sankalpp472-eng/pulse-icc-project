@@ -1,0 +1,101 @@
+staged 152 files (82M)
+
+WARNING! Your credentials are stored unencrypted in '/home/ajinkya/.docker/config.json'.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/go/credential-store/
+
+Login Succeeded
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  84.86MB
+Step 1/14 : FROM python:3.11-slim
+ ---> db20d8506e2f
+Step 2/14 : ARG KUBECTL_VERSION=v1.37.1
+ ---> Using cache
+ ---> 9a37d15ed66a
+Step 3/14 : RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libgomp1     && rm -rf /var/lib/apt/lists/*     && curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"     && chmod +x /usr/local/bin/kubectl
+ ---> Using cache
+ ---> 6d9db78dfac7
+Step 4/14 : COPY requirements.txt /tmp/requirements.txt
+ ---> Using cache
+ ---> 7dce10893229
+Step 5/14 : RUN pip install --no-cache-dir -r /tmp/requirements.txt
+ ---> Using cache
+ ---> 43b9318c8edc
+Step 6/14 : RUN useradd -m app
+ ---> Using cache
+ ---> 5525cd779f71
+Step 7/14 : WORKDIR /app
+ ---> Using cache
+ ---> c51f61ae3c13
+Step 8/14 : COPY app/ /app/
+ ---> 2029cef6f4be
+Step 9/14 : RUN chmod +x /app/cloud_entry.sh
+ ---> Running in 5ae21e1b87c6
+ ---> Removed intermediate container 5ae21e1b87c6
+ ---> a7deda965ad9
+Step 10/14 : USER app
+ ---> Running in 19bfe1387865
+ ---> Removed intermediate container 19bfe1387865
+ ---> d25241f7c2b5
+Step 11/14 : ARG GIT_COMMIT=""
+ ---> Running in e5302940604f
+ ---> Removed intermediate container e5302940604f
+ ---> 080181587219
+Step 12/14 : ARG GIT_DIRTY="0"
+ ---> Running in dcdd924b3218
+ ---> Removed intermediate container dcdd924b3218
+ ---> 62fd64356fe7
+Step 13/14 : ARG IMAGE_TAG=""
+ ---> Running in c48c268c9e9a
+ ---> Removed intermediate container c48c268c9e9a
+ ---> a55e2dfa3e9a
+Step 14/14 : ENV PYTHONUNBUFFERED=1     PYTHONIOENCODING=utf-8     TZ=IST-5:30     PULSE_GIT_COMMIT=${GIT_COMMIT}     PULSE_GIT_DIRTY=${GIT_DIRTY}     PULSE_IMAGE=${IMAGE_TAG}     TOOL_BACKEND=mcp     MCP_URL_TEMPLATE=http://{svc}.default.svc.cluster.local/mcp     MCP_HOST_TEMPLATE=     PYTHONPATH=/app
+ ---> Running in 4f61f0ccaa62
+ ---> Removed intermediate container 4f61f0ccaa62
+ ---> 197b3c980f70
+Successfully built 197b3c980f70
+Successfully tagged 234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261121-0540-6bf0501-dirty
+The push refers to repository [234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner]
+361db8171547: Waiting
+1ff2db7dcef8: Waiting
+ee5aaeba9945: Waiting
+6fc242d221a6: Waiting
+d24998fa522a: Waiting
+af07cb3a4603: Waiting
+58fa1140df13: Waiting
+250c630abb23: Waiting
+24ff04c92107: Waiting
+20a5316b8078: Waiting
+5e087f93cf9a: Waiting
+1ff2db7dcef8: Waiting
+ee5aaeba9945: Waiting
+6fc242d221a6: Waiting
+d24998fa522a: Waiting
+af07cb3a4603: Waiting
+58fa1140df13: Waiting
+250c630abb23: Waiting
+24ff04c92107: Waiting
+20a5316b8078: Waiting
+5e087f93cf9a: Waiting
+361db8171547: Waiting
+5e087f93cf9a: Layer already exists
+361db8171547: Layer already exists
+1ff2db7dcef8: Layer already exists
+ee5aaeba9945: Layer already exists
+6fc242d221a6: Waiting
+d24998fa522a: Layer already exists
+af07cb3a4603: Waiting
+58fa1140df13: Layer already exists
+250c630abb23: Layer already exists
+24ff04c92107: Layer already exists
+20a5316b8078: Waiting
+20a5316b8078: Waiting
+6fc242d221a6: Layer already exists
+af07cb3a4603: Waiting
+20a5316b8078: Pushed
+af07cb3a4603: Pushed
+20261121-0540-6bf0501-dirty: digest: sha256:197b3c980f70a4d60e4891c15ea4ea4691136e93c480e80af00306ecbcbdc169 size: 2709
+Image: 234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261121-0540-6bf0501-dirty  (saved to infra/cloud/.image-ecr)

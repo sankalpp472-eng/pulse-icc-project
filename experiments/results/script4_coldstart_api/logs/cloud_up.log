@@ -1,0 +1,20 @@
+Context: arn:aws:eks:ap-south-1:234612058031:cluster/pulse-eks | image: 234612058031.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261121-0540-6bf0501-dirty
+customresourcedefinition.apiextensions.k8s.io/prewarmrequests.pulse.iisc.ac.in unchanged
+Secret pulse-llm-keys: 6 keys/settings from .env
+secret/pulse-llm-keys created
+Warning: resource serviceaccounts/pulse is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
+serviceaccount/pulse configured
+clusterrole.rbac.authorization.k8s.io/pulse created
+clusterrolebinding.rbac.authorization.k8s.io/pulse created
+deployment.apps/pulse-predictor created
+service/pulse-predictor created
+deployment.apps/pulse-embed created
+service/pulse-embed created
+deployment.apps/pulse-controller created
+Waiting for deployment "pulse-predictor" rollout to finish: 0 of 1 updated replicas are available...
+deployment "pulse-predictor" successfully rolled out
+deployment "pulse-controller" successfully rolled out
+NAME                                READY   STATUS        RESTARTS   AGE   IP              NODE                                            NOMINATED NODE   READINESS GATES
+pulse-controller-56d9444846-ml68w   1/1     Running       0          12s   192.168.5.189   ip-192-168-10-130.ap-south-1.compute.internal   <none>           <none>
+pulse-embed-6798584769-5ssqs        0/1     Terminating   0          12s   <none>          ip-192-168-10-130.ap-south-1.compute.internal   <none>           <none>
+pulse-predictor-77949df887-krgjz    1/1     Running       0          13s   192.168.30.25   ip-192-168-10-130.ap-south-1.compute.internal   <none>           <none>

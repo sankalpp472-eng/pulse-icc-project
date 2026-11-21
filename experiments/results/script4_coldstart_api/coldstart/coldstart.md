@@ -1,0 +1,46 @@
+# coldstart
+
+## airline
+
+Median cold 1556.6 ms, warm 47.2 ms (14 tool rows).
+
+| tool | cold ms | warm ms | scheduling s | image pull s | init s | readiness s |
+|---|---|---|---|---|---|---|
+| book_reservation | 1858.9 | 41.6 | 0.0 | 0.0 | 1.0 | 1.0 |
+| calculate | 1811.5 | 45.8 | 0.0 | 0.0 | 1.0 | 1.0 |
+| cancel_reservation | 1433.4 | 49.4 | 0.0 | 0.0 | 1.0 | 1.0 |
+| get_reservation_details | 1504.5 | 46.5 | 0.0 | 0.0 | 1.0 | 0.0 |
+| get_user_details | 1894.9 | 46.4 | 0.0 | 0.0 | 1.0 | 1.0 |
+| list_all_airports | 1638.9 | 46.7 | 0.0 | 0.0 | 1.0 | 1.0 |
+| search_direct_flight | 1514.9 | 46.0 | 0.0 | 0.0 | 1.0 | 1.0 |
+| search_onestop_flight | 1936.8 | 46.2 | 0.0 | 0.0 | 1.0 | 1.0 |
+| send_certificate | 1485.5 | 51.1 | 0.0 | 0.0 | 1.0 | 1.0 |
+| think | 1923.6 | 44.4 | 0.0 | 0.0 | 1.0 | 1.0 |
+| transfer_to_human_agents | 1586.3 | 47.7 | 0.0 | 0.0 | 1.0 | 1.0 |
+| update_reservation_baggages | 1432.3 | 48.1 | 0.0 | 0.0 | 1.0 | 1.0 |
+| update_reservation_flights | 1482.3 | 42.9 | 0.0 | 0.0 | 1.0 | 1.0 |
+| update_reservation_passengers | 1467.0 | 47.7 | 0.0 | 0.0 | 1.0 | 1.0 |
+
+## retail
+
+Median cold 1501.2 ms, warm 43.8 ms (16 tool rows).
+
+| tool | cold ms | warm ms | scheduling s | image pull s | init s | readiness s |
+|---|---|---|---|---|---|---|
+| calculate | 1458.4 | 41.8 | 0.0 | 0.0 | 1.0 | 1.0 |
+| cancel_pending_order | 1533.7 | 43.2 | 0.0 | 0.0 | 1.0 | 1.0 |
+| exchange_delivered_order_items | 1468.0 | 42.5 | 0.0 | 0.0 | 0.0 | 1.0 |
+| find_user_id_by_email | 1701.7 | 56.0 | 0.0 | 0.0 | 1.0 | 1.0 |
+| find_user_id_by_name_zip | 1468.2 | 51.5 | 0.0 | 0.0 | 1.0 | 1.0 |
+| get_order_details | 1595.5 | 49.4 | 0.0 | 0.0 | 1.0 | 0.0 |
+| get_product_details | 1545.1 | 46.6 | 0.0 | 0.0 | 1.0 | 0.0 |
+| get_user_details | 1508.1 | 51.4 | 0.0 | 0.0 | 0.5 | 0.5 |
+| list_all_product_types | 1486.5 | 47.9 | 0.0 | 0.0 | 1.0 | 0.0 |
+| modify_pending_order_address | 1488.3 | 42.3 | 0.0 | 0.0 | 1.0 | 1.0 |
+| modify_pending_order_items | 1474.8 | 39.2 | 0.0 | 0.0 | 1.0 | 0.0 |
+| modify_pending_order_payment | 1569.4 | 41.4 | 0.0 | 0.0 | 1.0 | 1.0 |
+| modify_user_address | 1497.9 | 42.5 | 0.0 | 0.0 | 1.0 | 1.0 |
+| return_delivered_order_items | 1495.8 | 40.0 | 0.0 | 0.0 | 1.0 | 0.0 |
+| think | 1473.0 | 43.3 | 0.0 | 0.0 | 1.0 | 1.0 |
+| transfer_to_human_agents | 1641.5 | 42.3 | 0.0 | 0.0 | 0.0 | 1.0 |
+

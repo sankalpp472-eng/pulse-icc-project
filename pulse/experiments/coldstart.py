@@ -9,8 +9,8 @@ start-up with another tool's. The new pod of each cold call is matched to its st
 
 Unlike pulse/agent/check_tools.py (laptop -> load balancer -> tool) the calls go pod -> tool, so the time is the
 tool's, not the internet's. Arguments: valid-looking ones for airline (check_tools.ARGS), recorded read-only calls
-for retail; an error reply is fine, the round trip is what is timed. The Redis data is reset at the end (some
-airline write tools change it).
+for retail; an error reply is fine, the round trip is what is timed. The Redis data is reset before each round
+and at the end (some airline write tools change it; send_certificate has only 3 slots per user).
 
 Writes a run folder (common.run_dir): coldstart.csv (one row per round and tool), pods.csv, summary.json
 (per tool: median cold / warm ms and start-up breakdown), run_config.json.
@@ -78,6 +78,10 @@ def main():
     rows, t_start = [], time.time()
     for rnd in range(1, a.reps + 1):
         wait_all_zero(watcher)
+        try:      # each round starts from the seed data (send_certificate fails after 3 certificates per user)
+            common.reset_db()
+        except Exception as e:
+            print(f"could not reset the database: {type(e).__name__}: {e}")
         order = list(names)
         rng.shuffle(order)
         for name in order:

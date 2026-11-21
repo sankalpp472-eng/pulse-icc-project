@@ -1,0 +1,186 @@
+{
+  "domain": "airline",
+  "rounds": 5,
+  "tools": 14,
+  "calls_ok": 70,
+  "calls": 70,
+  "cold_ms": {
+    "median": 1556.6,
+    "p95": 2944.3
+  },
+  "warm_ms": {
+    "median": 47.2
+  },
+  "startup": {
+    "pods": 70,
+    "pods_pulling_images": 0,
+    "scheduling_s": {
+      "median": 0.0,
+      "mean": 0.014,
+      "p95": 0.0
+    },
+    "image_pull_s": {
+      "median": 0.0,
+      "mean": 0.0,
+      "p95": 0.0
+    },
+    "init_s": {
+      "median": 1.0,
+      "mean": 0.814,
+      "p95": 1.0
+    },
+    "readiness_s": {
+      "median": 1.0,
+      "mean": 0.929,
+      "p95": 2.0
+    },
+    "startup_s": {
+      "median": 2.0,
+      "mean": 1.757,
+      "p95": 2.0
+    }
+  },
+  "per_tool": {
+    "book_reservation": {
+      "rounds": 5,
+      "cold_ms": 1858.9,
+      "warm_ms": 41.6,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "calculate": {
+      "rounds": 5,
+      "cold_ms": 1811.5,
+      "warm_ms": 45.8,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "cancel_reservation": {
+      "rounds": 5,
+      "cold_ms": 1433.4,
+      "warm_ms": 49.4,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 1.0
+    },
+    "get_reservation_details": {
+      "rounds": 5,
+      "cold_ms": 1504.5,
+      "warm_ms": 46.5,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 0.0,
+      "startup_s": 1.0
+    },
+    "get_user_details": {
+      "rounds": 5,
+      "cold_ms": 1894.9,
+      "warm_ms": 46.4,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "list_all_airports": {
+      "rounds": 5,
+      "cold_ms": 1638.9,
+      "warm_ms": 46.7,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "search_direct_flight": {
+      "rounds": 5,
+      "cold_ms": 1514.9,
+      "warm_ms": 46.0,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "search_onestop_flight": {
+      "rounds": 5,
+      "cold_ms": 1936.8,
+      "warm_ms": 46.2,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "send_certificate": {
+      "rounds": 5,
+      "cold_ms": 1485.5,
+      "warm_ms": 51.1,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "think": {
+      "rounds": 5,
+      "cold_ms": 1923.6,
+      "warm_ms": 44.4,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "transfer_to_human_agents": {
+      "rounds": 5,
+      "cold_ms": 1586.3,
+      "warm_ms": 47.7,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "update_reservation_baggages": {
+      "rounds": 5,
+      "cold_ms": 1432.3,
+      "warm_ms": 48.1,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "update_reservation_flights": {
+      "rounds": 5,
+      "cold_ms": 1482.3,
+      "warm_ms": 42.9,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    },
+    "update_reservation_passengers": {
+      "rounds": 5,
+      "cold_ms": 1467.0,
+      "warm_ms": 47.7,
+      "scheduling_s": 0.0,
+      "image_pull_s": 0.0,
+      "init_s": 1.0,
+      "readiness_s": 1.0,
+      "startup_s": 2.0
+    }
+  },
+  "duration_s": 515.2
+}
