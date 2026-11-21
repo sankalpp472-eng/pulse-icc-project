@@ -1,0 +1,88 @@
+{
+  "status": "ok",
+  "model_file": "models/action_model_retail.pkl",
+  "model_source": "file",
+  "model_version": null,
+  "model_uri": null,
+  "models_in_file": [
+    "gbt",
+    "ngram"
+  ],
+  "workflows": [
+    "W3"
+  ],
+  "adapter": {
+    "open_episodes": 10,
+    "learned_episodes": 36,
+    "learned_steps": 329,
+    "weights_l1": 97.291,
+    "lr": 0.05,
+    "session_timeout_s": 300.0
+  },
+  "predictor": "lightgbm_adapt",
+  "policy": {
+    "name": "adaptive",
+    "top_k": 2,
+    "top_k_max": 3,
+    "p_min": 0.05,
+    "ttl_s": 60,
+    "ttl": {
+      "mode": "step",
+      "step_s": 20,
+      "ahead_s": 75
+    },
+    "lookahead": {
+      "on": false,
+      "theta_next": 0.4,
+      "min_respond": 0.5
+    }
+  },
+  "crd": {
+    "mode": "k8s",
+    "written": 573,
+    "created": 14,
+    "updated": 559,
+    "failed": 0,
+    "last_error": null
+  },
+  "calibration": {
+    "bins": [
+      {
+        "p": "0-0.1",
+        "candidates": 113,
+        "hit_rate": 0.133
+      },
+      {
+        "p": "0.1-0.2",
+        "candidates": 111,
+        "hit_rate": 0.117
+      },
+      {
+        "p": "0.2-0.3",
+        "candidates": 47,
+        "hit_rate": 0.277
+      },
+      {
+        "p": "0.3-0.45",
+        "candidates": 47,
+        "hit_rate": 0.234
+      },
+      {
+        "p": "0.45-0.6",
+        "candidates": 43,
+        "hit_rate": 0.488
+      },
+      {
+        "p": "0.6-0.8",
+        "candidates": 76,
+        "hit_rate": 0.697
+      },
+      {
+        "p": "0.8-1",
+        "candidates": 69,
+        "hit_rate": 0.783
+      }
+    ],
+    "open_episodes": 10
+  }
+}

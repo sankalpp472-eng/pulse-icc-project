@@ -1,0 +1,47 @@
+{
+  "airline_heldout": [
+    6,
+    11,
+    20,
+    21,
+    22,
+    26,
+    30,
+    38,
+    45,
+    46
+  ],
+  "retail_heldout": [
+    3,
+    14,
+    19,
+    21,
+    23,
+    26,
+    28,
+    29,
+    38,
+    42,
+    44,
+    48,
+    50,
+    51,
+    57,
+    67,
+    68,
+    72,
+    73,
+    82,
+    94,
+    98,
+    106
+  ],
+  "fingerprints": {
+    "airline": "a697978ccce9727138c72f46dc3cca8d1f2ff06a4fabfa71afb1bf7056383006",
+    "retail": "ac60a495efc549715d9c3f3db9bbd9bb06564846a29a9b9c9cd69fcb59302f62"
+  },
+  "fingerprints_expected": {
+    "airline": "a697978ccce9727138c72f46dc3cca8d1f2ff06a4fabfa71afb1bf7056383006",
+    "retail": "ac60a495efc549715d9c3f3db9bbd9bb06564846a29a9b9c9cd69fcb59302f62"
+  }
+}

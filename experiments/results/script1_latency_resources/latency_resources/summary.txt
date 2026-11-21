@@ -1,0 +1,21 @@
+# latency_resources
+
+## airline
+
+| arm | trials | p50_ms | p95_ms | p99_ms | cold_calls | cold_pct | transport_failures | pod_s | pods_started | startup_s | concurrent_mean | prewarms | wasted_pct | skipped | tool_cpu_core_s | tool_mem_mib | pulse_cpu_core_s | node_cpu_busy_pct | tool_pods_peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C0 | 3 | 94.7 | 1820.0 | 2303.9 | 87 | 29.7 | 0 | 9935.0 | 77 | 2.0 | 2.9 | None | None | None | 74.5 | 474.0 | 6.3 | 8.4 | 15.0 |
+| C3-markov | 3 | 65.3 | 252.2 | 1567.9 | 9 | 3.1 | 0 | 12093.0 | 55 | 2.0 | 2.8 | 831 | 52.7 | 2 | 64.7 | 597.0 | 140.0 | 9.1 | 14.0 |
+| C3-lightgbm_adapt | 3 | 66.4 | 625.0 | 1891.1 | 24 | 8.2 | 0 | 10511.0 | 59 | 2.0 | 2.8 | 450 | 48.7 | 212 | 64.2 | 511.3 | 98.3 | 8.7 | 11.0 |
+| C1 | 3 | 66.2 | 218.1 | 247.0 | 0 | 0.0 | 0 | 16984.0 | 14 | None | 2.8 | None | None | None | 43.8 | 926.7 | 6.1 | 6.8 | 14.0 |
+
+## retail
+
+| arm | trials | p50_ms | p95_ms | p99_ms | cold_calls | cold_pct | transport_failures | pod_s | pods_started | startup_s | concurrent_mean | prewarms | wasted_pct | skipped | tool_cpu_core_s | tool_mem_mib | pulse_cpu_core_s | node_cpu_busy_pct | tool_pods_peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| C0 | 3 | 100.8 | 2168.7 | 2976.4 | 97 | 29.1 | 0 | 12138.0 | 93 | 2.0 | 3.2 | None | None | None | 86.7 | 474.0 | 8.3 | 9.2 | 16.0 |
+| C3-markov | 3 | 66.6 | 1558.8 | 1904.7 | 24 | 7.2 | 0 | 15151.0 | 88 | 2.0 | 3.1 | 984 | 50.8 | 37 | 96.3 | 595.9 | 221.1 | 11.2 | 15.0 |
+| C3-lightgbm_adapt | 3 | 66.6 | 1471.8 | 1856.8 | 32 | 9.6 | 0 | 15025.0 | 97 | 2.0 | 3.1 | 554 | 45.3 | 0 | 99.0 | 593.9 | 141.4 | 10.6 | 15.0 |
+| C1 | 3 | 63.7 | 204.6 | 255.4 | 0 | 0.0 | 0 | 22017.0 | 16 | None | 3.0 | None | None | None | 53.8 | 972.4 | 8.1 | 7.4 | 16.0 |
+
+

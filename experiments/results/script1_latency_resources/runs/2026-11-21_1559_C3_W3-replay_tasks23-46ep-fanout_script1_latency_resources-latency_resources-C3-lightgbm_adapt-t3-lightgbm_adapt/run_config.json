@@ -1,0 +1,470 @@
+{
+  "started": "2026-11-21T15:59:39",
+  "workload": "W3 retail (tau-bench, every task), replay of recorded traces",
+  "domain": "retail",
+  "task_ids": [
+    3,
+    14,
+    19,
+    21,
+    23,
+    26,
+    28,
+    29,
+    38,
+    42,
+    44,
+    48,
+    50,
+    51,
+    57,
+    67,
+    68,
+    72,
+    73,
+    82,
+    94,
+    98,
+    106
+  ],
+  "models": {
+    "note": "replay: no LLM calls; traces recorded by gpt-4o and claude-3.5-sonnet (tau-bench), sampled gaps",
+    "trace_models": [
+      "claude-3.5-sonnet",
+      "gpt-4o"
+    ]
+  },
+  "config": "C3",
+  "knative": {
+    "version": "1.23.0",
+    "tool_min_scale": [
+      "0"
+    ],
+    "tool_window": [
+      "60s"
+    ],
+    "tool_container_concurrency": [
+      "1"
+    ],
+    "tool_max_scale": [
+      "10"
+    ],
+    "tool_target_utilization": [
+      "100"
+    ],
+    "autoscaler_overrides": {
+      "allow-zero-initial-scale": "true"
+    },
+    "ingress": "http://retail-{svc}.default.svc.cluster.local/mcp",
+    "host_template": ""
+  },
+  "tools": [
+    {
+      "service": "retail-calculate",
+      "revision": "retail-calculate-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-cancel-pending-order",
+      "revision": "retail-cancel-pending-order-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-exchange-delivered-order-items",
+      "revision": "retail-exchange-delivered-order-items-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-find-user-id-by-email",
+      "revision": "retail-find-user-id-by-email-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-find-user-id-by-name-zip",
+      "revision": "retail-find-user-id-by-name-zip-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-get-order-details",
+      "revision": "retail-get-order-details-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-get-product-details",
+      "revision": "retail-get-product-details-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-get-user-details",
+      "revision": "retail-get-user-details-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-list-all-product-types",
+      "revision": "retail-list-all-product-types-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-modify-pending-order-address",
+      "revision": "retail-modify-pending-order-address-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-modify-pending-order-items",
+      "revision": "retail-modify-pending-order-items-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-modify-pending-order-payment",
+      "revision": "retail-modify-pending-order-payment-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-modify-user-address",
+      "revision": "retail-modify-user-address-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-return-delivered-order-items",
+      "revision": "retail-return-delivered-order-items-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-think",
+      "revision": "retail-think-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    },
+    {
+      "service": "retail-transfer-to-human-agents",
+      "revision": "retail-transfer-to-human-agents-00011",
+      "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903",
+      "min_scale": "0",
+      "window": "60s",
+      "container_concurrency": 1,
+      "max_scale": "10",
+      "target_utilization": "100",
+      "redis": true,
+      "requests": {
+        "cpu": "50m",
+        "memory": "96Mi"
+      },
+      "limits": {
+        "memory": "256Mi"
+      }
+    }
+  ],
+  "tool_images": [
+    "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-tools:retail-20261120-1903"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "cluster": {
+    "context": "",
+    "nodes": 4,
+    "kubernetes": "v1.34.12-eks-91f89a9"
+  },
+  "measurement": {
+    "cold_if_latency_over_s": 1.0,
+    "pod_poll_interval_s": 1.0
+  },
+  "code": {
+    "git_commit": "e18025b",
+    "uncommitted_changes": true,
+    "image": "780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261120-2255-e18025b-dirty"
+  },
+  "runner": "pod pulse-run-1121-155900",
+  "replay": {
+    "episodes": 46,
+    "traces": null,
+    "tasks": [
+      3,
+      14,
+      19,
+      21,
+      23,
+      26,
+      28,
+      29,
+      38,
+      42,
+      44,
+      48,
+      50,
+      51,
+      57,
+      67,
+      68,
+      72,
+      73,
+      82,
+      94,
+      98,
+      106
+    ],
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": false,
+    "predictor_url": "http://pulse-predictor:8000",
+    "fanout": {
+      "enabled": true,
+      "groups": 29,
+      "calls_in_groups": 92,
+      "max_width": 5
+    },
+    "workflow_id": "W3",
+    "hint_timing": "fair",
+    "hint_context": false,
+    "hint_timeout": 1.0,
+    "no_signals": false,
+    "label": "script1_latency_resources-latency_resources-C3-lightgbm_adapt-t3-lightgbm_adapt",
+    "metrics_port": 9105,
+    "signals_matched": "275 of 275 traces",
+    "traces_source": [
+      "data/tau-bench/historical_trajectories/gpt-4o-retail.json",
+      "data/tau-bench/historical_trajectories/sonnet-35-new-retail.json"
+    ],
+    "planned_calls": 333,
+    "start_span_s": 1318.43
+  },
+  "prewarm": {
+    "predictor_url": "http://pulse-predictor:8000",
+    "workflow_id": "W3",
+    "predictor": {
+      "model": "lightgbm_adapt",
+      "prewarm_policy": "adaptive",
+      "ttl_s": 60,
+      "policy": {
+        "name": "adaptive",
+        "top_k": 2,
+        "top_k_max": 3,
+        "p_min": 0.05,
+        "ttl_s": 60,
+        "ttl": {
+          "mode": "step",
+          "step_s": 20,
+          "ahead_s": 75
+        },
+        "lookahead": {
+          "on": false,
+          "theta_next": 0.4,
+          "min_respond": 0.5
+        }
+      },
+      "model_file": "models/action_model_retail.pkl",
+      "model_version": null
+    },
+    "crd_mode": "k8s",
+    "mechanism": "Option A: controller sends k = desiredReplicas MCP pings per PrewarmRequest (one if the tool already has k pods); kept warm for max(TTL, Knative idle window) (keep-alive pings)",
+    "hints": "sent at the recorded start of every LLM step of the trace",
+    "hint_signals": "275 of 275 traces",
+    "hint_context": false,
+    "hint_timing": "fair",
+    "hint_timeout_s": 1.0,
+    "health": {
+      "models_in_file": [
+        "gbt",
+        "ngram"
+      ]
+    }
+  }
+}
