@@ -1,0 +1,142 @@
+{
+  "exported_at": 1795259967.4989884,
+  "step_s": 15,
+  "queries": {
+    "pod_cpu_cores": "sum by (pod, container) (rate(container_cpu_usage_seconds_total{namespace=\"default\",container!=\"\",container!=\"POD\"}[1m]))",
+    "pod_memory_bytes": "sum by (pod, container) (container_memory_working_set_bytes{namespace=\"default\",container!=\"\",container!=\"POD\"})",
+    "tool_pods": "count by (label_serving_knative_dev_service) (kube_pod_labels{namespace=\"default\",label_serving_knative_dev_service!=\"\"} * on (pod) group_left() (kube_pod_status_phase{namespace=\"default\",phase=\"Running\"} == 1))",
+    "pods_pending": "sum(kube_pod_status_phase{namespace=\"default\",phase=\"Pending\"})",
+    "node_cpu_busy": "1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))",
+    "node_memory_used_bytes": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+    "node_cpu_requested_cores": "sum by (node) (kube_pod_container_resource_requests{resource=\"cpu\"})",
+    "node_memory_requested_bytes": "sum by (node) (kube_pod_container_resource_requests{resource=\"memory\"})",
+    "predictor_p95_s": "histogram_quantile(0.95, sum by (le) (rate(predictor_request_seconds_bucket[1m])))",
+    "predictor_hints_per_s": "sum(rate(predictor_hints_total[1m]))",
+    "controller_warmups_per_s": "sum by (cold) (rate(pulse_controller_warmups_total[1m]))",
+    "controller_skips_per_s": "sum by (why) (rate(pulse_controller_skips_total[1m]))",
+    "controller_keepalive_pings_per_s": "sum(rate(pulse_controller_keepalive_pings_total[1m]))"
+  },
+  "runs": [
+    [
+      "airline/C0/t1",
+      1795197266.412,
+      1795198587.2072597
+    ],
+    [
+      "airline/C3-markov/t1",
+      1795198636.943,
+      1795199959.1795006
+    ],
+    [
+      "airline/C3-lightgbm_adapt/t1",
+      1795199988.466,
+      1795201310.343143
+    ],
+    [
+      "airline/C1/t1",
+      1795201360.267,
+      1795202593.591481
+    ],
+    [
+      "airline/C0/t2",
+      1795202666.554,
+      1795203988.7629323
+    ],
+    [
+      "airline/C3-markov/t2",
+      1795204027.514,
+      1795205349.2452948
+    ],
+    [
+      "airline/C3-lightgbm_adapt/t2",
+      1795205383.2,
+      1795206705.097291
+    ],
+    [
+      "airline/C1/t2",
+      1795206755.187,
+      1795207988.583751
+    ],
+    [
+      "airline/C0/t3",
+      1795208057.771,
+      1795209379.0376227
+    ],
+    [
+      "airline/C3-markov/t3",
+      1795237728.898,
+      1795239051.1678832
+    ],
+    [
+      "airline/C3-lightgbm_adapt/t3",
+      1795239100.44,
+      1795240421.4001129
+    ],
+    [
+      "airline/C1/t3",
+      1795240466.24,
+      1795241699.483867
+    ],
+    [
+      "retail/C0/t1",
+      1795241786.743,
+      1795243268.165633
+    ],
+    [
+      "retail/C3-markov/t1",
+      1795243316.072,
+      1795244797.2613
+    ],
+    [
+      "retail/C3-lightgbm_adapt/t1",
+      1795244849.439,
+      1795246326.7035556
+    ],
+    [
+      "retail/C1/t1",
+      1795246377.88,
+      1795247766.0542178
+    ],
+    [
+      "retail/C0/t2",
+      1795247844.05,
+      1795249326.4718597
+    ],
+    [
+      "retail/C3-markov/t2",
+      1795249375.521,
+      1795250854.364438
+    ],
+    [
+      "retail/C3-lightgbm_adapt/t2",
+      1795250901.473,
+      1795252378.1686003
+    ],
+    [
+      "retail/C1/t2",
+      1795252444.832,
+      1795253832.3918839
+    ],
+    [
+      "retail/C0/t3",
+      1795253916.751,
+      1795255399.544197
+    ],
+    [
+      "retail/C3-markov/t3",
+      1795255444.451,
+      1795256925.704791
+    ],
+    [
+      "retail/C3-lightgbm_adapt/t3",
+      1795256982.377,
+      1795258459.476972
+    ],
+    [
+      "retail/C1/t3",
+      1795258512.394,
+      1795259900.812927
+    ]
+  ],
+  "errors": []
+}

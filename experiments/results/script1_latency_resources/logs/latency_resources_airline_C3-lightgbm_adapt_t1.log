@@ -1,0 +1,4 @@
+Run pulse-run-1121-000925 | replay C3 (lightgbm_adapt, ping controller) | airline | context arn:aws:eks:ap-south-1:780583773848:cluster/pulse-eks
+  args: --label script1_latency_resources-latency_resources-C3-lightgbm_adapt-t1-lightgbm_adapt --tasks 6 20 22 26 30 --predictor-url http://pulse-predictor:8000 --fanout
+  running; log: infra/eks/logs/2026-11-21_000925_pulse-run-1121-000925.log
+Done (runner exit code 0). Result: results/cloud_runs/2026-11-21_0009_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C3-lightgbm_adapt-t1-lightgbm_adapt

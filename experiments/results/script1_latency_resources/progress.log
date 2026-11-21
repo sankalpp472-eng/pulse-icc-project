@@ -1,0 +1,80 @@
+[23:23:32] AWS account 780583773848 | region ap-south-1 | member sankalp | script script1_latency_resources | trials 3
+[23:23:36] training lightgbm + markov: airline (held out: 6 11 20 21 22 26 30 38 45 46)
+[23:23:43] training lightgbm + markov: retail (held out: 3 14 19 21 23 26 28 29 38 42 44 48 50 51 57 67 68 72 73 82 94 98 106)
+  airline held-out tasks: [6, 11, 20, 21, 22, 26, 30, 38, 45, 46]
+  retail held-out tasks: [3, 14, 19, 21, 23, 26, 28, 29, 38, 42, 44, 48, 50, 51, 57, 67, 68, 72, 73, 82, 94, 98, 106]
+  airline model fingerprint a697978ccce97271... (as expected)
+  retail model fingerprint ac60a495efc54971... (as expected)
+[23:24:10] cluster ready (context arn:aws:eks:ap-south-1:780583773848:cluster/pulse-eks, image 780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261120-2255-e18025b-dirty)
+[23:24:16] experiments: latency_resources
+[23:24:16]   run: latency_resources | airline | C0 | trial 1   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C0_t1.log)
+[23:46:29]     done in 22 min: results/cloud_runs/2026-11-20_2324_C0_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C0-t1
+[23:46:37]   run: latency_resources | airline | C3-markov | trial 1   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C3-markov_t1.log)
+[00:09:18]     done in 22 min: results/cloud_runs/2026-11-20_2347_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C3-markov-t1-markov
+[00:09:24]   run: latency_resources | airline | C3-lightgbm_adapt | trial 1   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C3-lightgbm_adapt_t1.log)
+[00:32:03]     done in 22 min: results/cloud_runs/2026-11-21_0009_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C3-lightgbm_adapt-t1-lightgbm_adapt
+[00:32:10]   run: latency_resources | airline | C1 | trial 1   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C1_t1.log)
+[00:53:06]     done in 20 min: results/cloud_runs/2026-11-21_0032_C1_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C1-t1
+[00:53:15]   run: latency_resources | airline | C0 | trial 2   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C0_t2.log)
+[01:16:32]     done in 23 min: results/cloud_runs/2026-11-21_0053_C0_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C0-t2
+[01:16:39]   run: latency_resources | airline | C3-markov | trial 2   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C3-markov_t2.log)
+[01:39:12]     done in 22 min: results/cloud_runs/2026-11-21_0117_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C3-markov-t2-markov
+[01:39:19]   run: latency_resources | airline | C3-lightgbm_adapt | trial 2   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C3-lightgbm_adapt_t2.log)
+[02:01:57]     done in 22 min: results/cloud_runs/2026-11-21_0139_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C3-lightgbm_adapt-t2-lightgbm_adapt
+[02:02:04]   run: latency_resources | airline | C1 | trial 2   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C1_t2.log)
+[02:23:01]     done in 20 min: results/cloud_runs/2026-11-21_0202_C1_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C1-t2
+[02:23:08]   run: latency_resources | airline | C0 | trial 3   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C0_t3.log)
+[02:46:23]     done in 23 min: results/cloud_runs/2026-11-21_0223_C0_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C0-t3
+[02:46:30]   run: latency_resources | airline | C3-markov | trial 3   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C3-markov_t3.log)
+[09:36:19] ERROR: Docker is not running (needed to build the runner and retail tool images)
+[10:37:12] AWS account 780583773848 | region ap-south-1 | member sankalp | script script1_latency_resources | trials 3
+[10:37:32] training lightgbm + markov: airline (held out: 6 11 20 21 22 26 30 38 45 46)
+[10:37:42] training lightgbm + markov: retail (held out: 3 14 19 21 23 26 28 29 38 42 44 48 50 51 57 67 68 72 73 82 94 98 106)
+  airline held-out tasks: [6, 11, 20, 21, 22, 26, 30, 38, 45, 46]
+  retail held-out tasks: [3, 14, 19, 21, 23, 26, 28, 29, 38, 42, 44, 48, 50, 51, 57, 67, 68, 72, 73, 82, 94, 98, 106]
+  airline model fingerprint a697978ccce97271... (as expected)
+  retail model fingerprint ac60a495efc54971... (as expected)
+[10:38:14] cluster ready (context arn:aws:eks:ap-south-1:780583773848:cluster/pulse-eks, image 780583773848.dkr.ecr.ap-south-1.amazonaws.com/pulse-runner:20261120-2255-e18025b-dirty)
+[10:38:14] experiments: latency_resources
+[10:38:14]   skip (done): latency_resources airline C0 t1
+[10:38:14]   skip (done): latency_resources airline C3-markov t1
+[10:38:14]   skip (done): latency_resources airline C3-lightgbm_adapt t1
+[10:38:14]   skip (done): latency_resources airline C1 t1
+[10:38:14]   skip (done): latency_resources airline C0 t2
+[10:38:14]   skip (done): latency_resources airline C3-markov t2
+[10:38:14]   skip (done): latency_resources airline C3-lightgbm_adapt t2
+[10:38:15]   skip (done): latency_resources airline C1 t2
+[10:38:15]   skip (done): latency_resources airline C0 t3
+[10:38:15]   run: latency_resources | airline | C3-markov | trial 3   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C3-markov_t3.log)
+[11:00:58]     done in 22 min: results/cloud_runs/2026-11-21_1038_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C3-markov-t3-markov
+[11:01:08]   run: latency_resources | airline | C3-lightgbm_adapt | trial 3   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C3-lightgbm_adapt_t3.log)
+[11:23:45]     done in 22 min: results/cloud_runs/2026-11-21_1101_C3_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C3-lightgbm_adapt-t3-lightgbm_adapt
+[11:23:53]   run: latency_resources | airline | C1 | trial 3   (log: results/team/script1_latency_resources/logs/latency_resources_airline_C1_t3.log)
+[11:45:03]     done in 21 min: results/cloud_runs/2026-11-21_1124_C1_W1-replay_tasks6-20-22-26-30-46ep-fanout_script1_latency_resources-latency_resources-C1-t3
+[11:45:09]   run: latency_resources | retail | C0 | trial 1   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C0_t1.log)
+[12:11:10]     done in 26 min: results/cloud_runs/2026-11-21_1146_C0_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C0-t1
+[12:11:17]   run: latency_resources | retail | C3-markov | trial 1   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C3-markov_t1.log)
+[12:36:46]     done in 25 min: results/cloud_runs/2026-11-21_1211_C3_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C3-markov-t1-markov
+[12:36:53]   run: latency_resources | retail | C3-lightgbm_adapt | trial 1   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C3-lightgbm_adapt_t1.log)
+[13:02:06]     done in 25 min: results/cloud_runs/2026-11-21_1237_C3_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C3-lightgbm_adapt-t1-lightgbm_adapt
+[13:02:12]   run: latency_resources | retail | C1 | trial 1   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C1_t1.log)
+[13:25:58]     done in 23 min: results/cloud_runs/2026-11-21_1302_C1_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C1-t1
+[13:26:05]   run: latency_resources | retail | C0 | trial 2   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C0_t2.log)
+[13:52:10]     done in 26 min: results/cloud_runs/2026-11-21_1326_C0_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C0-t2
+[13:52:17]   run: latency_resources | retail | C3-markov | trial 2   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C3-markov_t2.log)
+[14:17:33]     done in 25 min: results/cloud_runs/2026-11-21_1352_C3_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C3-markov-t2-markov
+[14:17:40]   run: latency_resources | retail | C3-lightgbm_adapt | trial 2   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C3-lightgbm_adapt_t2.log)
+[14:43:08]     done in 25 min: results/cloud_runs/2026-11-21_1418_C3_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C3-lightgbm_adapt-t2-lightgbm_adapt
+[14:43:14]   run: latency_resources | retail | C1 | trial 2   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C1_t2.log)
+[15:07:19]     done in 24 min: results/cloud_runs/2026-11-21_1444_C1_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C1-t2
+[15:07:27]   run: latency_resources | retail | C0 | trial 3   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C0_t3.log)
+[15:33:17]     done in 25 min: results/cloud_runs/2026-11-21_1508_C0_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C0-t3
+[15:33:24]   run: latency_resources | retail | C3-markov | trial 3   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C3-markov_t3.log)
+[15:58:51]     done in 25 min: results/cloud_runs/2026-11-21_1534_C3_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C3-markov-t3-markov
+[15:59:00]   run: latency_resources | retail | C3-lightgbm_adapt | trial 3   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C3-lightgbm_adapt_t3.log)
+[16:24:22]     done in 25 min: results/cloud_runs/2026-11-21_1559_C3_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C3-lightgbm_adapt-t3-lightgbm_adapt
+[16:24:29]   run: latency_resources | retail | C1 | trial 3   (log: results/team/script1_latency_resources/logs/latency_resources_retail_C1_t3.log)
+[16:48:18]     done in 23 min: results/cloud_runs/2026-11-21_1625_C1_W3-replay_tasks23-46ep-fanout_script1_latency_resources-latency_resources-C1-t3
+[16:48:26] telemetry: latency_resources
+[16:49:38]   results/team/script1_latency_resources/latency_resources/latency_resources.md
+[16:49:38] packaging experiments/results/script1_latency_resources on exp/script1_latency_resources-sankalp

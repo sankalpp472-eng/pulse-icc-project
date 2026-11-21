@@ -1,0 +1,191 @@
+{
+  "episodes": 46,
+  "tool_calls": 333,
+  "transport_failures": 0,
+  "cold_calls": 0,
+  "cold_share": 0.0,
+  "latency_ms": {
+    "all": {
+      "p50": 60.5,
+      "p95": 196.6,
+      "p99": 217.3,
+      "mean": 82.8
+    },
+    "cold": {
+      "p50": null,
+      "p95": null,
+      "max": null
+    },
+    "warm": {
+      "p50": 60.5,
+      "p95": 196.6,
+      "max": 220.2
+    }
+  },
+  "cold_start_time_added_s": 0.0,
+  "signals_agree": 333,
+  "pods_started": 16,
+  "pod_seconds_seen": 22017.0,
+  "pod_seconds_during_run": 22017.0,
+  "pod_seconds_after_run": 0.0,
+  "scaled_down_after_s": null,
+  "peak_pods_per_tool": {
+    "calculate": 1,
+    "think": 1,
+    "modify_pending_order_payment": 1,
+    "transfer_to_human_agents": 1,
+    "get_user_details": 1,
+    "exchange_delivered_order_items": 1,
+    "return_delivered_order_items": 1,
+    "modify_pending_order_items": 1,
+    "modify_pending_order_address": 1,
+    "get_product_details": 1,
+    "list_all_product_types": 1,
+    "cancel_pending_order": 1,
+    "find_user_id_by_email": 1,
+    "modify_user_address": 1,
+    "get_order_details": 1,
+    "find_user_id_by_name_zip": 1
+  },
+  "startup": {
+    "pods": 0
+  },
+  "per_tool": {
+    "get_order_details": {
+      "calls": 106,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "find_user_id_by_name_zip": {
+      "calls": 48,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "get_user_details": {
+      "calls": 48,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "get_product_details": {
+      "calls": 35,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "return_delivered_order_items": {
+      "calls": 23,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "find_user_id_by_email": {
+      "calls": 17,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "modify_pending_order_items": {
+      "calls": 13,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "exchange_delivered_order_items": {
+      "calls": 8,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "modify_pending_order_address": {
+      "calls": 8,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "list_all_product_types": {
+      "calls": 6,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "think": {
+      "calls": 6,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "calculate": {
+      "calls": 6,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "cancel_pending_order": {
+      "calls": 4,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "transfer_to_human_agents": {
+      "calls": 3,
+      "cold": 0,
+      "cold_share": 0.0
+    },
+    "modify_user_address": {
+      "calls": 2,
+      "cold": 0,
+      "cold_share": 0.0
+    }
+  },
+  "config": "C1",
+  "tool_window": [
+    "60s"
+  ],
+  "database": "redis (shared, reset once at start)",
+  "replay": {
+    "episodes": 46,
+    "traces": null,
+    "tasks": [
+      3,
+      14,
+      19,
+      21,
+      23,
+      26,
+      28,
+      29,
+      38,
+      42,
+      44,
+      48,
+      50,
+      51,
+      57,
+      67,
+      68,
+      72,
+      73,
+      82,
+      94,
+      98,
+      106
+    ],
+    "gap_scale": 1.0,
+    "rate": 2.0,
+    "think_median": 1.5,
+    "think_sigma": 0.5,
+    "user_turn_median": 8.0,
+    "user_turn_sigma": 0.5,
+    "seed": 252,
+    "repeat": 1,
+    "sequential": false,
+    "predictor_url": null,
+    "fanout": true,
+    "workflow_id": "W3",
+    "hint_timing": "fair",
+    "hint_context": false,
+    "hint_timeout": 1.0,
+    "no_signals": false,
+    "label": "script1_latency_resources-latency_resources-C1-t1",
+    "metrics_port": 9105,
+    "signals_matched": null
+  },
+  "fanout": {
+    "enabled": true,
+    "groups": 29,
+    "calls_in_groups": 92,
+    "max_width": 5,
+    "cold_calls_in_groups": 0
+  },
+  "hints": null
+}
