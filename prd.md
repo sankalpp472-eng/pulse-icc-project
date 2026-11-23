@@ -45,7 +45,7 @@ In real-world applications such as customer support bots calling CRM/ticketing A
 - The agent runtime emits prediction hints early enough during LLM planning for prewarming to complete before tool invocation.
 - Container image versions are pinned, and node image-cache states are explicitly tracked to isolate control-plane latency.
 - The Kubernetes cluster has adequate CPU/memory headroom so scheduling reflects true control-plane reconciliation rather than resource starvation.
-- Trace store tables record structural, timing, and resource metrics while completely scrubbing raw prompts and credentials.
+- Trace store tables record structural, timing, and resource metrics while completely scrubbing raw prompts and credentials. This covers the trace store and the predictor audit log. Predictors that read the conversation (`speculator`, `pulse_v3`) receive recent message text in `/predict`, and UI recordings keep it for exact replay, so live runs with a human customer are not recorded unless the operator opts in (`PULSE_RECORD_HUMAN=1`).
 
 # 3. Stakeholders and usage scenarios
 
