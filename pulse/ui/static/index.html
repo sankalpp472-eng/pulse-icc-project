@@ -45,9 +45,7 @@
       <button data-tab="setup">Setup</button>
       <button data-tab="demo" class="on">Live demo</button>
       <button data-tab="exp">Experiments</button>
-      <button data-tab="results">Results</button>
       <button data-tab="mon">Monitoring</button>
-      <button data-tab="models">Models</button>
       <button data-tab="about">How it works</button>
     </nav>
 
@@ -309,7 +307,7 @@
               <option value="auto">follow: running run / episode, else last 15 min</option>
               <option value="last15">last 15 min</option>
               <option value="last60">last hour</option>
-              <option value="result" disabled>a result run (Results → Grafana)</option>
+              <option value="result" disabled hidden>a result run</option>
             </select>
             <a id="mOpen" href="/grafana/" target="_blank" class="small">open in Grafana ↗</a>
           </div>
@@ -424,14 +422,16 @@
         <div class="card-head"><h3>Pulse in the current cluster</h3><span class="pill" id="sClusterPred">…</span></div>
         <div class="form-grid">
           <label>Predictor <select id="sPredictor"></select></label>
-          <label>θ <input type="number" id="sTheta" min="0.05" max="0.9" step="0.05" value="0.3"></label>
+          <label>k (tools per step) <input type="number" id="sTopK" min="1" max="5" step="1" value="2"></label>
+          <label>floor (P ≥) <input type="number" id="sPMin" min="0" max="0.9" step="0.05" value="0.1"></label>
         </div>
         <div class="actions">
           <button data-act="cloud_up">Deploy Pulse's services</button>
           <button data-act="set_predictor">Switch predictor</button>
           <button data-act="monitoring_install">Install Prometheus + Grafana</button>
         </div>
-        <p class="muted small">Deploys the predictor, the prewarm controller and the embedding server (needs the image from the
+        <p class="muted small">Prewarm policy: top-k, the k most likely tools of each step with P ≥ the floor (Deploy and
+          Switch predictor both apply it). Deploys the predictor, the prewarm controller and the embedding server (needs the image from the
           step above). In-cluster experiment runs (Experiments → Where: inside the cluster) use them.</p>
       </div>
 
@@ -466,7 +466,7 @@
         </div>
         <p class="muted small">Optional (the predictors use local model files without it). Steps 1–3 create the S3 model
           registry in your AWS account; <i>Terraform apply</i> then fills in the registry URIs itself (or type them,
-          or <i>Fill in from Terraform</i>). They are saved to .env and used at once: the Models tab lists the versions.</p>
+          or <i>Fill in from Terraform</i>). They are saved to .env and used at once.</p>
       </div>
 
       <div class="card">
@@ -500,7 +500,7 @@
         <p><b>The cloud around it:</b></p>
         <ul>
           <li><b>Load tests</b> (Experiments → Load test): Locust and asyncio drive the predictor, the tools or whole episodes harder and harder.</li>
-          <li><b>Model registry + retraining</b> (Models tab): pulse-v3's model and the lightgbm + markov model are versioned in S3. Retraining (here or as a Kubernetes Job) publishes a new version that becomes the latest only if it beats the current one on held-out tasks.</li>
+          <li><b>Model registry + retraining</b>: pulse-v3's model and the lightgbm + markov model are versioned in S3. Retraining (here or as a Kubernetes Job) publishes a new version that becomes the latest only if it beats the current one on held-out tasks.</li>
           <li><b>Infrastructure as code</b>: Terraform makes the S3 registry, ECR, the CI roles and, optionally, the EKS cluster.</li>
           <li><b>CI/CD + GitOps</b>: GitHub Actions test the code and build the image; Argo CD makes the cluster follow Git (top bar: commit, sync status).</li>
         </ul>

@@ -66,7 +66,10 @@ spec:
           env:
             - {name: PREDICTOR, value: lightgbm}
             - {name: CRD_MODE, value: k8s}
-            - {name: THETA, value: "__THETA__"}
+            - {name: THETA, value: "__THETA__"}                       # used only with PREWARM_POLICY=theta
+            - {name: PREWARM_POLICY, value: "__POLICY__"}             # topk: the TOP_K most likely tools, each P >= P_MIN
+            - {name: TOP_K, value: "__TOP_K__"}
+            - {name: P_MIN, value: "__P_MIN__"}
             - {name: PULSE_EMBED_BASE, value: "http://pulse-embed:8091/v1"}   # pulse_v3's embeddings (pulse-embed below)
             - {name: PULSE_DATA_DIR, value: /tmp/pulse-data}           # pulse_v3's embedding cache, and models
             - {name: PULSE_REGISTRY_CACHE, value: /tmp/registry}       # from S3: writable (the image is read-only)

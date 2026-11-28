@@ -5,7 +5,8 @@
 #
 #   bash infra/cloud/cloud_up.sh                     # EKS, image from build_image.sh
 #   TARGET=kind bash infra/cloud/cloud_up.sh         # local kind cluster
-#   THETA=0.5 bash infra/cloud/cloud_up.sh           # another prewarm threshold
+#   TOP_K=3 P_MIN=0.1 bash infra/cloud/cloud_up.sh   # prewarm policy: top-k (default TOP_K=2, P_MIN=0.1)
+#   PREWARM_POLICY=theta THETA=0.5 bash infra/cloud/cloud_up.sh   # the old threshold policy instead
 #   PREDICTOR=markov bash infra/cloud/cloud_up.sh    # lightgbm (default) | markov | speculator | pulse_v3
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -42,7 +43,8 @@ elif [ -n "${PULSE_MODEL_URI:-}${ACTION_MODEL_URI:-}" ]; then
   echo "ConfigMap pulse-config: the model registry (${PULSE_MODEL_URI:-no pulse-v3} · ${ACTION_MODEL_URI:-no action})"
 fi
 
-sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__THETA__|${THETA:-0.3}|g" -e "s|value: lightgbm}|value: ${PREDICTOR:-lightgbm}}|" \
+sed -e "s|__IMAGE__|$IMAGE|g" -e "s|__THETA__|${THETA:-0.3}|g" -e "s|__POLICY__|${PREWARM_POLICY:-topk}|g" \
+  -e "s|__TOP_K__|${TOP_K:-2}|g" -e "s|__P_MIN__|${P_MIN:-0.1}|g" -e "s|value: lightgbm}|value: ${PREDICTOR:-lightgbm}}|" \
   "$HERE/pulse-cloud.yaml" | kubectl apply -f -
 kubectl delete deploy/pulse-speculator svc/pulse-speculator --ignore-not-found >/dev/null   # replaced by PREDICTOR=speculator
 for d in pulse-predictor pulse-controller pulse-embed; do kubectl rollout status deploy/$d --timeout=600s; done

@@ -93,14 +93,14 @@ async function loadSetup() {
   const reg = s.registry || {};
   for (const [id, v] of [["#sRegPulse", reg.pulse_v3], ["#sRegAction", reg.action]])
     if (document.activeElement !== $(id)) $(id).value = v || "";
-  $("#sRegState").textContent = reg.pulse_v3 || reg.action ? "in use (Models tab)" : "not set: the predictors use local model files";
+  $("#sRegState").textContent = reg.pulse_v3 || reg.action ? "in use" : "not set: the predictors use local model files";
   $("#sClusterPred").textContent = s.cluster.knative ? `${s.cluster.context} · predictor ${s.cluster.predictor || "not deployed"}`
     : "switch the top bar to Knative";
   if (!$("#sPredictor").options.length) $("#sPredictor").innerHTML = s.predictors.map((p) => `<option>${p}</option>`).join("");
 }
 function setupParams(btn) {
   return { region: $("#sRegion").value.trim(), terraform: $("#sTerraform").checked, target: btn.dataset.target,
-           predictor: $("#sPredictor").value, theta: Number($("#sTheta").value), github_repo: $("#sRepo").value.trim(),
+           predictor: $("#sPredictor").value, top_k: Number($("#sTopK").value), p_min: Number($("#sPMin").value), github_repo: $("#sRepo").value.trim(),
            family: $("#sFamily").value, version: $("#sVersion").value.trim(), revision: $("#sRevision").value.trim(),
            latest: $("#sPubLatest").checked };
 }
@@ -145,7 +145,7 @@ $("#sRegSave").onclick = async () => {
   if (!Object.keys(values).length) return toast("Type at least one registry URI (s3://…), or use Fill in from Terraform");
   try {
     await api("/api/setup/env", { values });
-    toast("Model registry saved and in use: see the Models tab", 5000);
+    toast("Model registry saved and in use", 5000);
     loadSetup();
     loadModels();
   } catch (err) { toast(err.message, 7000); }

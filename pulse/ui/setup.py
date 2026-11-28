@@ -231,6 +231,17 @@ def status(cluster) -> dict:
     }
 
 
+def _topk(p: dict) -> tuple[int, float]:
+    """The Setup card's prewarm policy for the cluster's predictor: top-k, each tool with P >= p_min."""
+    try:
+        k, p_min = int(p.get("top_k") or 2), float(p.get("p_min") if p.get("p_min") not in (None, "") else 0.1)
+    except (TypeError, ValueError):
+        raise ValueError("k must be a whole number and the floor a probability")
+    if not 1 <= k <= 5 or not 0 <= p_min < 1:
+        raise ValueError("k must be 1-5 and the floor between 0 and 1")
+    return k, p_min
+
+
 def _need_bash():
     b = backend.bash()
     if not b:
@@ -302,8 +313,11 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
     if name == "cloud_up":
         pred = p.get("predictor") if p.get("predictor") in PREDICTORS else "lightgbm"
         target = "kind" if (cluster.context or "").startswith("kind-") else "ecr"
-        return [(f"{title}: predictor {pred} (infra/cloud/cloud_up.sh)", [_need_bash(), "infra/cloud/cloud_up.sh"],
-                 {**env, "TARGET": target, "PREDICTOR": pred, "THETA": str(float(p.get("theta") or 0.3))})]
+        k, p_min = _topk(p)
+        return [(f"{title}: predictor {pred}, top-{k} (P >= {p_min:g}) (infra/cloud/cloud_up.sh)",
+                 [_need_bash(), "infra/cloud/cloud_up.sh"],
+                 {**env, "TARGET": target, "PREDICTOR": pred, "PREWARM_POLICY": "topk", "TOP_K": str(k),
+                  "P_MIN": str(p_min)})]
     if name == "set_predictor":
         pred = p.get("predictor")
         if pred not in PREDICTORS:
@@ -311,8 +325,10 @@ def build(name: str, p: dict, cluster) -> list[tuple]:
         domain = cluster.domain if cluster.mode == "knative" else "airline"     # the top bar's domain
         if domain == "retail" and pred == "speculator":
             raise ValueError("the speculator knows the airline tools only: pick lightgbm, markov or pulse_v3 for retail")
-        return [(f"pulse-predictor -> {pred} ({domain})",
-                 ["kubectl", "set", "env", "deploy/pulse-predictor", f"PREDICTOR={pred}", f"DOMAIN={domain}"], env),
+        k, p_min = _topk(p)
+        return [(f"pulse-predictor -> {pred} ({domain}), top-{k} (P >= {p_min:g})",
+                 ["kubectl", "set", "env", "deploy/pulse-predictor", f"PREDICTOR={pred}", f"DOMAIN={domain}",
+                  "PREWARM_POLICY=topk", f"TOP_K={k}", f"P_MIN={p_min:g}"], env),
                 ("wait for the new predictor", ["kubectl", "rollout", "status", "deploy/pulse-predictor",
                                                 "--timeout=300s"], env)]
     if name == "monitoring_install":
