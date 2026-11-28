@@ -104,18 +104,45 @@ function setupParams(btn) {
            family: $("#sFamily").value, version: $("#sVersion").value.trim(), revision: $("#sRevision").value.trim(),
            latest: $("#sPubLatest").checked };
 }
+// Actions that cost money or delete something are confirmed in the page: the first click arms the button, a second
+// click within CONFIRM_MS runs it. (The browser's confirm() could be suppressed and return false silently, and the
+// click then started nothing and said nothing: issue #28.) Every outcome is written to the Log panel.
+const CONFIRM_MS = 8000;
+const setupLog = (msg) => {
+  const log = $("#sLog");
+  log.textContent = (/^No job yet\.?$/.test(log.textContent) ? "" : log.textContent + "\n") + msg;
+  log.scrollTop = log.scrollHeight;
+};
+function disarm(b) {
+  clearTimeout(b._armed);
+  b._armed = null;
+  b.textContent = b._label;
+  b.classList.remove("danger");
+}
 $("#tab-setup").addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-act]");
   if (!b) return;
   const act = b.dataset.act, info = (SETUP && SETUP.actions[act]) || {};
-  if (info.confirm && !confirm(info.confirm)) return;
+  const title = info.title || act;
+  if (info.confirm && !b._armed) {
+    b._label = b._label || b.textContent;
+    b.textContent = "Click again to confirm";
+    b.classList.add("danger");
+    b._armed = setTimeout(() => { disarm(b); setupLog(`${title}: not confirmed, nothing started.`); }, CONFIRM_MS);
+    setupLog(`${info.confirm} Click "${b._label}" again within ${CONFIRM_MS / 1000} s to go ahead.`);
+    return;
+  }
+  if (b._armed) disarm(b);
   try {
     await api("/api/setup/run", { action: act, params: setupParams(b) });
     runAfter = 0;
     $("#xLog").textContent = "";
     $("#sLog").textContent = "";
-    toast(`${info.title || act}: started (log below)`);
-  } catch (err) { toast(err.message, 8000); }
+    toast(`${title}: started (log below)`);
+  } catch (err) {
+    setupLog(`✗ ${title}: not started: ${err.message}`);
+    toast(err.message, 8000);
+  }
 });
 $("#sRefresh").onclick = loadSetup;
 $("#sStop").onclick = () => api("/api/run/stop", {});
@@ -540,14 +567,15 @@ function renderEvent(ev) {
     case "call": {
       const el = stepEl(ev.step);
       const c = document.createElement("div");
-      c.className = "call" + (ev.cold ? " cold" : "");
+      c.className = "call" + (ev.failed ? " failed" : ev.cold ? " cold" : "");
       c.innerHTML = `<span class="name">${esc(ev.tool)}</span>
         <span class="meta">${ev.parallel > 1 ? `<span class="badge par">∥ ${ev.parallel}</span>` : ""}
           ${ev.prewarmed ? `<span class="badge hit" title="served warm by a pod the predictor prewarmed">prewarmed ✓</span>` : ""}
           ${ev.prewarm_late ? `<span class="badge late" title="the predictor prewarmed this tool, but the pod was not ready in time">prewarm late</span>` : ""}
           ${ev.prewarm_k && !ev.prewarmed && !ev.prewarm_late ? `<span class="muted small" title="this step called the tool more often than the pods prewarmed">beyond the ×${ev.prewarm_k} prewarmed</span>` : ""}
           ${ev.wait_ms > 0 ? `<span class="muted small" title="time this call waited for a pod to start">waited ${ev.wait_ms} ms${ev.prewarm_late ? " (prewarm landed late)" : ""}</span>` : ""}
-          <span class="badge ${ev.cold ? "cold" : "warm"}">${ev.cold ? "cold" : "warm"}</span>
+          ${ev.failed ? `<span class="badge failed" title="the call did not run (tool unreachable, timed out, or its database was down): not counted as cold, nor in the latency">failed</span>`
+            : `<span class="badge ${ev.cold ? "cold" : "warm"}">${ev.cold ? "cold" : "warm"}</span>`}
           <b>${fmt(ev.latency_ms)} ms</b></span>
         <span class="args">${esc(JSON.stringify(ev.args))}</span>
         <span class="res">↳ ${esc(ev.result)}</span>`;
@@ -572,8 +600,8 @@ function renderEvent(ev) {
           <span class="muted small">same customer messages, think and reply times and tool calls; only prewarming differs</span>`, "replay-offer");
         b.querySelector("button").onclick = () => raceRecording(s.recording);
       }
-      add(`<div class="stats">${stat(s.calls, "tool calls")}${stat(s.cold, "cold calls")}${stat(s.prewarmed_hits, "served by a prewarm")}${s.prewarm_late ? stat(s.prewarm_late, "prewarms too late") : ""}` +
-        `${stat(fmt(s.mean_ms), "mean latency ms")}${stat(fmt(s.cold_wait_s, 1), "s lost to cold starts")}` +
+      add(`<div class="stats">${stat(s.calls, "tool calls")}${s.failed ? stat(s.failed, "failed calls") : ""}${stat(s.cold, "cold calls")}${stat(s.prewarmed_hits, "served by a prewarm")}${s.prewarm_late ? stat(s.prewarm_late, "prewarms too late") : ""}` +
+        `${stat(fmt(s.mean_ms), s.failed ? "mean latency ms (calls that ran)" : "mean latency ms")}${stat(fmt(s.cold_wait_s, 1), "s lost to cold starts")}` +
         `${s.pod_seconds != null ? stat(fmt(s.pod_seconds), "pod-seconds (incl. scale-down)") : s.pod_seconds_pending ? stat("…", "pod-seconds: counted once the pods scale down (History)") : ""}${stat(s.hints_answered + "/" + s.hints_sent, "hints answered")}` +
         `${s.llm_wait_s ? stat(fmt(s.llm_wait_s, 0), "s waiting on LLM rate limits") : ""}</div>`, "step");
       break;
@@ -995,9 +1023,9 @@ function renderHistory(h) {
   $("#historyTbl tbody").innerHTML = h.map((s) => `<tr><td>${s.kind === "recorded" ? "replay of live run" : esc(s.kind)}${s.user && s.kind === "live" ? " · " + esc(s.user) : ""}</td>
     <td>${esc(s.task || "free")}${s.kind === "replay" && s.trial != null ? " #" + (s.trial + 1) : ""}</td><td>${esc(prewarmLabel(s))}</td><td>${esc(s.cluster)}</td>
     <td><b>${secs(s.e2e_s)}</b></td><td>${secs(s.tool_wait_s)}</td>
-    <td>${s.calls}</td><td>${s.cold}</td><td title="${s.prewarm_requested_calls != null ? `${s.prewarm_requested_calls} calls were to a tool the predictor prewarmed; ${s.prewarmed_hits} of them were served warm by a prewarmed pod${s.prewarm_late ? `, ${s.prewarm_late} prewarm(s) came too late` : ""}` : ""}">${s.prewarmed_hits}</td><td>${fmt(s.mean_ms)} ms</td><td>${fmt(s.cold_wait_s, 1)} s</td>
+    <td>${s.calls}</td><td class="${s.failed ? "bad" : ""}">${s.failed ?? "–"}</td><td>${s.cold}</td><td title="${s.prewarm_requested_calls != null ? `${s.prewarm_requested_calls} calls were to a tool the predictor prewarmed; ${s.prewarmed_hits} of them were served warm by a prewarmed pod${s.prewarm_late ? `, ${s.prewarm_late} prewarm(s) came too late` : ""}` : ""}">${s.prewarmed_hits}</td><td>${s.mean_ms != null ? fmt(s.mean_ms) + " ms" : "–"}</td><td>${fmt(s.cold_wait_s, 1)} s</td>
     <td title="${s.pod_seconds_pending ? "counting: waiting for this episode's tool pods to scale down (idle window)" : s.pod_seconds_after != null ? `${fmt(s.pod_seconds_during)} during the episode + ${fmt(s.pod_seconds_after)} until its pods scaled down${s.scaled_down_after_s != null ? ` (${fmt(s.scaled_down_after_s)} s after the end` + (s.pod_seconds_note && s.pod_seconds_note !== "scaled down" ? `; ${s.pod_seconds_note}` : "") + ")" : ""}` : ""}">${s.pod_seconds_pending ? "…" : fmt(s.pod_seconds)}</td><td>${s.hint_rtt_p50_ms != null ? fmt(s.hint_rtt_p50_ms, 1) + " ms" : "–"}</td></tr>`).join("") ||
-    `<tr><td colspan="13" class="muted">None yet.</td></tr>`;
+    `<tr><td colspan="14" class="muted">None yet.</td></tr>`;
 }
 
 // ------------------------------------------------------------------ end-to-end clock + C0 vs C3 card
@@ -1026,7 +1054,8 @@ function renderRace(history, s) {
       $(`#sub${id}`).textContent = `running · tool wait ${secs(s.tool_wait_s)}`;
     } else if (h) {
       $(`#e2e${id}`).textContent = secs(h.e2e_s);
-      $(`#sub${id}`).textContent = `tool wait ${secs(h.tool_wait_s)} · ${h.cold} cold of ${h.calls} calls`;
+      $(`#sub${id}`).textContent = `tool wait ${secs(h.tool_wait_s)} · ${h.cold} cold of ${h.calls} calls` +
+        (h.failed ? ` · ${h.failed} failed` : "");
     } else {
       $(`#e2e${id}`).textContent = "–";
       $(`#sub${id}`).textContent = sub;
@@ -1064,6 +1093,11 @@ async function poll() {
     state = s;
     const c = s.cluster;
     clusterSeg.set(c.mode);
+    if (s.cluster_lost) toast(s.cluster_lost.charAt(0).toUpperCase() + s.cluster_lost.slice(1), 8000);
+    if (c.context !== poll.ctx) {                          // a cluster created or deleted (here or in a terminal): #28
+      if (poll.ctx !== undefined && $("#tab-setup").classList.contains("on")) loadSetup();
+      poll.ctx = c.context;
+    }
     if (c.domain && c.domain !== shownDomain) { shownDomain = c.domain; domainSeg.set(c.domain); domainForm(c.domain); }
     if (tasksDomain && demoDomain() !== tasksDomain && !busyNow()) loadTasks(demoDomain());
     $("#ctxName").textContent = c.context ? `(${c.context.replace(/^.*@/, "")})` : "";

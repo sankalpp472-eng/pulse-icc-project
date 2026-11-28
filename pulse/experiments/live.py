@@ -154,8 +154,8 @@ def main():
         cfg["prewarm"] = {"predictor_url": a.predictor_url, "workflow_id": a.workflow_id,
                           "predictor": predictor_info(health),
                           "crd_mode": health.get("crd", {}).get("mode"), "hint_inputs": hints.USE_CONTEXT,
-                          "mechanism": "Option A: controller sends an MCP ping per PrewarmRequest; "
-                                       "TTL = Knative idle window",
+                          "mechanism": "controller sends an MCP ping per PrewarmRequest and keeps the tool warm for "
+                                       "max(TTL, Knative idle window) (keep-alive pings)",
                           "hints": "sent by the agent before every LLM step (agent/hints.py)"}
     detail = (tasks_tag(ids) if a.tasks or RETAIL else a.set) +(f"-x{a.repeats}" if a.repeats > 1 else "")
     out_dir = run_dir(cfg["config"], "live", f"{detail}_{llm.DEFAULT_MODEL.split('/')[-1]}", a.label)

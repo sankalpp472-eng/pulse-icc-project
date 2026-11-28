@@ -1,5 +1,5 @@
 """
-Prewarm controller, Option A: "warm-up request + Knative's idle window as the TTL".
+Prewarm controller: "warm-up request + keep-alive for the TTL, then Knative's idle window scales it down".
 
 Watches PrewarmRequest objects (infra/prewarm/prewarmrequest-crd.yaml), written by the predictor
 (pulse/predictor/crd_writer.py with CRD_MODE=k8s). For every NEW or REFRESHED request (spec.requestedAt
@@ -13,9 +13,24 @@ spec.desiredReplicas = k (the predictor's fan-out width): if the tool has fewer 
 out at once. With containerConcurrency 1 (pulse/agent/gen_services.py) each needs its own pod, so
 Knative starts k pods for the coming burst of k parallel calls. Otherwise one ping.
 
-It never evicts anything: Knative scales the tool back to zero after its idle window
-(autoscaling.knative.dev/window) without traffic, so that window IS the TTL. A sweeper marks
-objects Evicted once their tool is back at zero pods, for the record (NFR-8 / E7).
+TTL (FR-7, issue #37): the prewarmed tool stays warm for spec.ttlSeconds after the warm-up answered (readyAt),
+then is released. Knative scales a tool to zero once it has had no request for its idle window W
+(autoscaling.knative.dev/window), so:
+
+    TTL > W   the controller keeps the tool alive with keep-alive pings (one every W/2) until readyAt + TTL - W.
+              The last one starts the final idle window, so the pod scales down at about readyAt + TTL.
+    TTL <= W  no keep-alive is needed or possible: the pod lives for the window, about readyAt + W.
+              Knative does not scale a tool down earlier than its window (a deleted pod is started again),
+              so W is a floor. To sweep TTLs below the default 60 s (E7: 30/60/120 s), deploy the tools
+              with a window at or below the smallest TTL (WINDOW=20s bash infra/knative/deploy.sh 0).
+
+So the effective TTL is max(TTL, W), shown as status.effectiveTtlSeconds, next to status.requestedTtlSeconds
+and status.windowSeconds. A new prediction for the tool (new requestedAt) starts the TTL again. Real tool calls
+are not affected: they keep the tool warm as usual, the TTL only bounds how long a PREDICTION keeps it warm.
+The keep-alive holds one pod; extra fan-out pods (desiredReplicas k > 1) follow Knative's own scale-down.
+
+The controller never deletes pods. A sweeper marks objects Evicted once their tool is back at zero pods, with
+how long it stayed warm (warm_for_s), for NFR-8 / E7.
 
 Run from the project root, with the agent's Python (needs `kubernetes`), next to the predictor:
 
@@ -30,6 +45,7 @@ Settings (environment):
   MCP_URL_TEMPLATE   ingress URL for a tool (default http://127.0.0.1:31080/mcp; EKS: set by infra/eks/use_eks.sh)
   MCP_HOST_TEMPLATE  Host header           (default {svc}.default.example.com; empty = no Host header)
   MAX_REQUEST_AGE_S  ignore requests older than this, e.g. left over from an earlier run (default 30)
+  TTL_KEEPALIVE      1 = honour spec.ttlSeconds with keep-alive pings (default); 0 = the window alone (old behaviour)
   CONTROLLER_LOG     one JSON line per action (default results/controller.jsonl)
   CONTROLLER_METRICS_PORT  Prometheus /metrics on this port (default 9102; 0 = off), see infra/monitoring/
 """
@@ -50,6 +66,8 @@ from prometheus_client import Counter, Histogram, start_http_server
 
 GROUP, VERSION, PLURAL = "pulse.iisc.ac.in", "v1alpha1", "prewarmrequests"
 from pulse import paths  # noqa: E402
+
+MAX_REPLICAS = 5     # desiredReplicas upper bound: keep equal to `maximum` in infra/prewarm/prewarmrequest-crd.yaml and K_CAP in predictor/action_model.py
 NS = os.getenv("CRD_NAMESPACE", "default")
 URL_TPL = os.getenv("MCP_URL_TEMPLATE", "http://127.0.0.1:31080/mcp")
 HOST_TPL = os.getenv("MCP_HOST_TEMPLATE", "{svc}.default.example.com")
@@ -57,6 +75,7 @@ MAX_AGE_S = float(os.getenv("MAX_REQUEST_AGE_S", "30"))
 LOG = Path(os.getenv("CONTROLLER_LOG") or paths.RESULTS / "controller.jsonl")
 PING = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}).encode()
 METRICS_PORT = int(os.getenv("CONTROLLER_METRICS_PORT", "9102"))
+TTL_KEEPALIVE = os.getenv("TTL_KEEPALIVE", "1") != "0"
 
 # ---- Prometheus metrics (FR-11): what the controller did, as counters the dashboards can rate()
 WARMUPS = Counter("pulse_controller_warmups_total", "Warm-ups done (PrewarmRequests acted on)", ["tool", "cold"])
@@ -65,6 +84,8 @@ PING_SECONDS = Histogram("pulse_controller_ping_seconds", "Warm-up ping round tr
                          ["cold"], buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 12, 20, 60))
 FAILURES = Counter("pulse_controller_failures_total", "Warm-ups that failed", ["tool"])
 EVICTIONS = Counter("pulse_controller_evictions_total", "Tools seen back at zero pods after a warm-up", ["tool"])
+KEEPALIVES = Counter("pulse_controller_keepalive_pings_total", "Keep-alive pings sent to hold a tool for its TTL",
+                     ["tool"])
 WARM_SECONDS = Histogram("pulse_controller_warm_seconds", "Time from a warm-up's readyAt to the tool's scale-down",
                          buckets=(30, 60, 75, 90, 120, 180, 300, 600))
 
@@ -79,6 +100,29 @@ def parse_iso(s: str | None) -> float | None:
     return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
 
 
+def to_iso(t: float) -> str:
+    return datetime.fromtimestamp(t, timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def effective_ttl(ttl_s: int | None, window_s: int | None, keepalive: bool = True) -> int | None:
+    """How long a prewarmed tool stays warm after its warm-up: max(TTL, window) with keep-alive, else the window."""
+    if not keepalive or not ttl_s:
+        return window_s
+    return max(int(ttl_s), window_s or 0)
+
+
+def keepalive_due(hold: dict, now: float) -> tuple[bool, bool]:
+    """(ping now?, is it the last one?) for a tool held until hold["until"] (= readyAt + TTL).
+
+    The last ping goes out at until - window, so the window that follows ends at about `until`; before that,
+    one ping every window/2 keeps Knative from seeing a whole window without traffic."""
+    last_at = hold["until"] - hold["window"]
+    due = min(hold["last_ping"] + hold["window"] / 2, last_at)
+    if now < due:
+        return False, False
+    return True, due >= last_at
+
+
 class Controller:
     def __init__(self):
         if os.getenv("KUBERNETES_SERVICE_HOST"):       # running in the cluster (infra/cloud/)
@@ -89,6 +133,7 @@ class Controller:
         self.core = client.CoreV1Api()
         self.pool = ThreadPoolExecutor(max_workers=8)
         self.in_flight: set[str] = set()
+        self.holds: dict[str, dict] = {}       # svc -> tool held warm until its TTL ends (keep-alive pings)
         self.lock = threading.Lock()
         LOG.parent.mkdir(parents=True, exist_ok=True)
 
@@ -142,12 +187,15 @@ class Controller:
             # desiredReplicas = the predictor's fan-out width k. With containerConcurrency 1 every in-flight
             # request needs its own pod, so k pings at once make Knative start k pods. A tool that already
             # has k pods gets one ping, which just restarts its idle window.
-            k = max(1, int(spec.get("desiredReplicas") or 1))
+            k = min(MAX_REPLICAS, max(1, int(spec.get("desiredReplicas") or 1)))   # same cap as the CRD schema (#34)
             n = k if before < k else 1
-            ttl = self.window_s(svc)
+            window = self.window_s(svc)
+            want = int(spec.get("ttlSeconds") or 0) or None
+            ttl = effective_ttl(want, window, TTL_KEEPALIVE)
             sent = now_iso()
-            self.set_status(name, phase="Warming", lastRequestedAt=requested, lastPingAt=sent,
-                            wasCold=cold, effectiveTtlSeconds=ttl, message=f"{n} warm-up ping(s) sent")
+            self.set_status(name, phase="Warming", lastRequestedAt=requested, lastPingAt=sent, wasCold=cold,
+                            requestedTtlSeconds=want, windowSeconds=window, effectiveTtlSeconds=ttl,
+                            message=f"{n} warm-up ping(s) sent")
             with ThreadPoolExecutor(max_workers=n) as pool:
                 results = list(pool.map(lambda _: self.ping(svc, spec["tool"]), range(n)))
             codes = [c for c, _ in results]
@@ -155,18 +203,30 @@ class Controller:
             bad = [c for c in codes if c in (404, 502, 503, 504)]   # ... but these come from the ingress/activator
             if bad:
                 raise RuntimeError(f"ingress answered HTTP {bad[0]} to {len(bad)} of {n} pings")
-            ready = now_iso()
-            expires = datetime.fromtimestamp(parse_iso(ready) + (ttl or 0), timezone.utc).isoformat(
-                timespec="milliseconds").replace("+00:00", "Z") if ttl else None
+            ready_t = time.time()
+            ready = to_iso(ready_t)
+            expires = to_iso(ready_t + ttl) if ttl else None
+            held = bool(window) and ttl is not None and ttl > window      # keep-alive pings needed
+            with self.lock:                     # a refreshed prediction starts the TTL again
+                if held:
+                    self.holds[svc] = {"name": name, "tool": spec["tool"], "until": ready_t + ttl,
+                                       "window": window, "last_ping": ready_t, "pings": 0}
+                else:
+                    self.holds.pop(svc, None)
+            note = ""
+            if want and window and want < window:
+                note = f"; TTL {want} s is below the {window} s idle window, so the pod stays {window} s"
+            elif held:
+                note = f"; held for TTL {ttl} s with keep-alive pings (window {window} s)"
             self.set_status(name, phase="Ready", readyAt=ready, pingLatencyMs=ms, expiresAt=expires,
-                            evictedAt=None, message=f"{n} ping(s) answered (HTTP {codes[0]})")
+                            evictedAt=None, message=f"{n} ping(s) answered (HTTP {codes[0]}){note}")
             WARMUPS.labels(spec["tool"], str(cold).lower()).inc()
             PINGS.labels(spec["tool"]).inc(n)
             PING_SECONDS.labels(str(cold).lower()).observe(ms / 1000)
             self.log(event="warmed", tool=spec["tool"], service=svc, was_cold=cold, ping_ms=ms, http=codes[0],
                      desired_replicas=k, pings=n, pods_before=before, pods_after=self.pods(svc),
                      probability=spec.get("probability"), episode=spec.get("episodeId"), requested_at=requested,
-                     effective_ttl_s=ttl)
+                     effective_ttl_s=ttl, requested_ttl_s=want, window_s=window, held=held)
         except Exception as e:
             FAILURES.labels(spec.get("tool", "")).inc()
             self.set_status(name, phase="Failed", message=f"{type(e).__name__}: {e}"[:300])
@@ -191,6 +251,34 @@ class Controller:
         self.pool.submit(self.warm, obj)
 
     # ------------------------------------------------------------------ loops
+    def keepalive(self):
+        """Hold prewarmed tools for their TTL: a ping every window/2, the last at TTL end - window (FR-7)."""
+        while True:
+            time.sleep(1)
+            now = time.time()
+            with self.lock:
+                due = [(svc, h, last) for svc, h in self.holds.items()
+                       for ping, last in [keepalive_due(h, now)] if ping and svc not in self.in_flight]
+                for svc, h, last in due:
+                    h["last_ping"] = now
+                    h["pings"] += 1
+                    if last:
+                        del self.holds[svc]
+            for svc, h, last in due:
+                self.pool.submit(self._keepalive_ping, svc, h, last)
+
+    def _keepalive_ping(self, svc: str, h: dict, last: bool):
+        try:
+            code, ms = self.ping(svc, h["tool"])
+            KEEPALIVES.labels(h["tool"]).inc()
+            if last:
+                self.set_status(h["name"], message=f"TTL over: released after {h['pings']} keep-alive ping(s); "
+                                                   f"Knative scales the tool down after its {h['window']} s window")
+            self.log(event="keepalive", tool=h["tool"], service=svc, http=code, ping_ms=ms, last=last,
+                     ttl_ends_at=to_iso(h["until"]))
+        except Exception as e:
+            self.log(event="keepalive_failed", tool=h["tool"], service=svc, error=f"{type(e).__name__}: {e}")
+
     def sweep(self):
         """Mark Ready objects Evicted once Knative has scaled their tool back to zero."""
         while True:
@@ -198,7 +286,8 @@ class Controller:
             try:
                 for obj in self.crd.list_namespaced_custom_object(GROUP, VERSION, NS, PLURAL)["items"]:
                     st = obj.get("status") or {}
-                    if st.get("phase") == "Ready" and self.pods(obj["spec"]["service"]) == 0:
+                    if st.get("phase") == "Ready" and obj["spec"]["service"] not in self.holds \
+                            and self.pods(obj["spec"]["service"]) == 0:
                         at = now_iso()
                         self.set_status(obj["metadata"]["name"], phase="Evicted", evictedAt=at,
                                         message="Knative scaled the tool to zero (idle window passed)")
@@ -208,15 +297,16 @@ class Controller:
                             WARM_SECONDS.observe(parse_iso(at) - ready)
                         self.log(event="evicted", tool=obj["spec"]["tool"], service=obj["spec"]["service"],
                                  warm_for_s=round(parse_iso(at) - ready, 1) if ready else None,
-                                 effective_ttl_s=st.get("effectiveTtlSeconds"))
+                                 effective_ttl_s=st.get("effectiveTtlSeconds"),
+                                 requested_ttl_s=st.get("requestedTtlSeconds"))
             except Exception as e:   # keep sweeping even if one round fails
                 print(f"sweep error: {type(e).__name__}: {e}")
 
     def run(self):
         ctx = "in-cluster" if os.getenv("KUBERNETES_SERVICE_HOST") else config.list_kube_config_contexts()[1]["name"]
         from pulse.net import bind_host
-        print(f"prewarm controller (Option A) | context {ctx} | "
-              f"namespace {NS} | ingress {URL_TPL} | log {LOG}")
+        print(f"prewarm controller | TTL {'spec.ttlSeconds (keep-alive)' if TTL_KEEPALIVE else 'idle window only'} | "
+              f"context {ctx} | namespace {NS} | ingress {URL_TPL} | log {LOG}")
         if METRICS_PORT:
             try:
                 start_http_server(METRICS_PORT, addr=bind_host())     # this machine only on a laptop (pulse/net.py)
@@ -224,6 +314,7 @@ class Controller:
             except OSError as e:     # e.g. a second controller on the same laptop: run without metrics
                 print(f"metrics port {METRICS_PORT} not available ({e}); no /metrics")
         threading.Thread(target=self.sweep, daemon=True).start()
+        threading.Thread(target=self.keepalive, daemon=True).start()
         while True:      # the watch times out every few minutes; just start it again
             try:
                 for ev in watch.Watch().stream(self.crd.list_namespaced_custom_object, GROUP, VERSION, NS,

@@ -15,6 +15,7 @@ simulated cluster (ui/sim_cluster.py: the session itself applies the predictor's
 import asyncio
 import json
 import math
+import os
 import queue
 import random
 import threading
@@ -51,7 +52,7 @@ class SimTools:
             self.sim.release(pod)
         lat = time.perf_counter() - t0
         # cold = the same rule as the runners (slower than 1 s); a shorter wait = a prewarm that almost made it
-        return {"out": out, "latency_s": lat, "cold": lat > COLD_LATENCY_S, "wait_s": wait}
+        return {"out": out, "latency_s": lat, "cold": lat > COLD_LATENCY_S, "wait_s": wait, "failed": False}
 
 
 class KnativeTools:
@@ -65,24 +66,29 @@ class KnativeTools:
         self.schemas = self.mcp.schemas
 
     def run(self, name: str, args: dict) -> dict:
+        from pulse.agent.tools import call_failed
         out, lat, _ = asyncio.run(self.mcp.acall(name, args))
-        return {"out": out, "latency_s": lat, "cold": lat > COLD_LATENCY_S, "wait_s": None}
+        failed = call_failed(out)                  # issue #27: a call that did not run is failed, not cold
+        return {"out": out, "latency_s": lat, "cold": not failed and lat > COLD_LATENCY_S, "wait_s": None,
+                "failed": failed}
 
 
 # ====================================================================== prewarm tags
-def prewarm_tags(names: list[str], cold: list[bool], asked: dict[str, int]) -> list[dict]:
+def prewarm_tags(names: list[str], cold: list[bool], asked: dict[str, int],
+                 failed: list[bool] | None = None) -> list[dict]:
     """How prewarming served each call of one step (issue #21). The predictor asked for k pods of a tool; a step
     may call that tool more often than k (parallel lookups). Per tool, at most k calls are covered by the prewarm:
       prewarmed     served warm, covered by a prewarmed pod (a hit)   -> Cold + Prewarmed never exceeds Calls
       prewarm_late  covered, but the pod was not ready in time: the call was cold anyway
       neither       the tool was not prewarmed, or the call was beyond the k pods asked for
-    Parallel calls are not ordered, so the warm calls take the covered slots first."""
+    Parallel calls are not ordered, so the warm calls take the covered slots first. A failed call (issue #27) did
+    not run, so it is never a hit nor late and takes no slot."""
     out = [{"prewarmed": False, "prewarm_late": False, "prewarm_k": asked.get(n, 0)} for n in names]
     for tool in set(names):
         k = asked.get(tool, 0)
         if not k:
             continue
-        idx = [i for i, n in enumerate(names) if n == tool]
+        idx = [i for i, n in enumerate(names) if n == tool and not (failed and failed[i])]
         slots = min(k, len(idx))
         hits = [i for i in idx if not cold[i]][:slots]
         late = [i for i in idx if cold[i]][:slots - len(hits)]
@@ -224,10 +230,11 @@ class Session(threading.Thread):
                 self.tool_wait += max(lats) if parallel and len(calls) > 1 else sum(lats)
             self.step_t0 = None                    # after the add, so the live counter never dips
         outs = []
-        tags = prewarm_tags([n for n, _ in calls], [r["cold"] for r in results], self.prewarmed.get(step, {}))
+        tags = prewarm_tags([n for n, _ in calls], [r["cold"] for r in results], self.prewarmed.get(step, {}),
+                            [r.get("failed", False) for r in results])
         for (name, args), r, tag in zip(calls, results, tags):
             rec = {"step": step, "tool": name, "args": args, "latency_ms": round(r["latency_s"] * 1000, 1),
-                   "cold": r["cold"], "wait_ms": None if r["wait_s"] is None else round(r["wait_s"] * 1000),
+                   "cold": r["cold"], "failed": r.get("failed", False), "wait_ms": None if r["wait_s"] is None else round(r["wait_s"] * 1000),
                    **tag, "parallel": len(calls) if parallel and len(calls) > 1 else 1,
                    "result": r["out"][:300]}
             self.calls.append(rec)
@@ -266,9 +273,16 @@ class Session(threading.Thread):
         r = self.rec
         if not (r and self.record_dir and any(s["kind"] == "tool" for s in r["steps"])):
             return
+        if r.get("user") == "human" and os.getenv("PULSE_RECORD_HUMAN") != "1":
+            # a recording keeps the conversation text (that is what makes a replay exact); a person typing as the
+            # customer may type something private, so those runs are not saved unless the operator opts in (#35)
+            self.emit("info", text="Not recorded: the customer was a person, and a recording stores the conversation "
+                                   "text (set PULSE_RECORD_HUMAN=1 to record such runs).")
+            return
         r.update(state=self.state, live_e2e_s=round(self.t_end - self.t_start, 2) if self.t_start and self.t_end else None,
                  live_tool_wait_s=round(self.tool_wait, 2),
                  live_cold=sum(c["cold"] for c in self.calls), live_calls=len(self.calls),
+                 live_failed=sum(c.get("failed", False) for c in self.calls),
                  config="C3" if self.cfg.get("predictor") else "C0", policy=self.cfg.get("policy_label"),
                  domain=self.domain,
                  cluster="simulated" if self.sim else self.cluster.context)
@@ -286,21 +300,24 @@ class Session(threading.Thread):
         return KnativeTools(self.cluster.tool_env(self.domain), self.domain)
 
     def summary(self) -> dict:
-        n = len(self.calls)
-        lat = sorted(c["latency_ms"] for c in self.calls)
-        cold = [c for c in self.calls if c["cold"]]
+        # issue #27: failed calls (the call did not run) are counted apart; latency and cold share are over the calls
+        # that ran, so a run where every call failed does not look like a run with cold starts
+        ok = [c for c in self.calls if not c.get("failed")]
+        n, n_ok = len(self.calls), len(ok)
+        lat = sorted(c["latency_ms"] for c in ok)
+        cold = [c for c in ok if c["cold"]]
         rtt = sorted(self.hints["rtt_ms"])
         # pod time the episode caused: during the episode, plus the idle window its pods still live through
         # before they scale down (issue #15: the table used to stop at the end of the episode)
         during = round(self.sim.live_pod_seconds() - self.pod_s0, 1) if self.sim else None
         after = round(self.sim.pending_pod_seconds(), 1) if self.sim else None
-        return {"calls": n, "cold": len(cold), "cold_share": round(len(cold) / n, 3) if n else None,
+        return {"calls": n, "failed": n - n_ok, "cold": len(cold), "cold_share": round(len(cold) / n_ok, 3) if n_ok else None,
                 "prewarmed_hits": sum(c["prewarmed"] for c in self.calls),     # served warm by a prewarm (<= calls - cold)
                 "prewarm_late": sum(c.get("prewarm_late", False) for c in self.calls),
                 "prewarm_requested_calls": sum(c.get("prewarm_k", 0) > 0 for c in self.calls),
                 "cold_wait_s": round(sum(c["latency_ms"] for c in cold) / 1000, 2),
-                "mean_ms": round(sum(lat) / n, 1) if n else None,
-                "p95_ms": lat[min(n - 1, int(0.95 * n))] if n else None,
+                "mean_ms": round(sum(lat) / n_ok, 1) if n_ok else None,
+                "p95_ms": lat[min(n_ok - 1, int(0.95 * n_ok))] if n_ok else None,
                 "hints_sent": self.hints["sent"], "hints_answered": self.hints["answered"],
                 "hint_rtt_p50_ms": rtt[len(rtt) // 2] if rtt else None,
                 "pod_seconds": round(during + after, 1) if self.sim else None,

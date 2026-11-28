@@ -83,6 +83,15 @@ class LocalToolBackend:
         return hashlib.sha256(json.dumps(self.data, sort_keys=True).encode()).hexdigest()
 
 
+FAILED_PREFIXES = ("Error: MCP call to ", "Error: DatabaseUnavailable:")
+
+
+def call_failed(out: str) -> bool:
+    """True if the call did not run (the tool's server was unreachable, timed out, or its database was down), as
+    opposed to a tool that ran and answered with an error (e.g. "Error: user not found")."""
+    return out.startswith(FAILED_PREFIXES)
+
+
 def describe_error(e: BaseException) -> str:
     """'Type: message' of the error that actually happened. The MCP client runs in anyio task groups, which wrap
     it in ExceptionGroup("unhandled errors in a TaskGroup"): unwrap to the innermost errors so the cause shows."""

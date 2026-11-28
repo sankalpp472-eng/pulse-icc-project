@@ -81,9 +81,14 @@ def state(session_after: int = 0, run_after: int = 0, events_after: int = 0):
         S["history"].insert(0, s.events[-1]["summary"])
     if "bgload" in services.procs and not (s and s.is_alive()):     # background load ends with its episode
         services.stop("bgload")
+    if cluster.lost and cluster.mode == "knative" and not busy():    # the cluster was deleted (#28): use the simulator
+        services.stop("controller")
+        cluster.mode = "sim"
+        services.match_cluster()
     pods = sim.snapshot() if cluster.mode == "sim" else cluster.pods
     events = sim.events if cluster.mode == "sim" else cluster.events
-    return {"cluster": cluster.info(), "services": services.status(),
+    lost, cluster.lost = (cluster.lost, None) if cluster.mode == "sim" else (None, cluster.lost)
+    return {"cluster": cluster.info(), "cluster_lost": lost, "services": services.status(),
             "pods": pods, "pod_seconds": round(sim.live_pod_seconds(), 1) if cluster.mode == "sim" else None,
             "sim_min_scale": sim.min_scale,
             "events": events[events_after:], "events_n": len(events),

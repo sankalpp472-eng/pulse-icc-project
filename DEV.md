@@ -19,7 +19,9 @@ What each part of the code does and how the parts fit together. For installing a
 3. **Prewarm.** The controller watches `PrewarmRequest`s and sends the tool k concurrent MCP `ping`s through the
    ingress. With one request per pod (containerConcurrency 1), Knative starts k pods.
 4. **Call.** The agent's real call finds a warm pod, or one that is already starting.
-5. **Scale down.** Knative's idle window (60 s) is the TTL; unused pods scale back to zero.
+5. **Scale down.** The controller keeps a prewarmed tool warm for the predictor's TTL (`TTL_S`, 60 s) with keep-alive
+   pings, then Knative scales unused pods back to zero after its idle window (60 s). The window is the shortest
+   possible TTL: to sweep shorter TTLs, deploy the tools with a shorter window (`WINDOW=20s`).
 
 **Configurations compared:** C0 scale-to-zero without prewarming (the cold baseline), C1 always warm
 (min-scale 1: the latency floor and resource ceiling), C3 scale-to-zero with predictor and controller (Pulse).
